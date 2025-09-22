@@ -51,3 +51,4 @@ class TokenData(BaseModel):
     exp: int  # Expires at
     iss: str  # Issuer
     jti: Optional[str] = None  # JWT ID
+

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, JSON
+from sqlalchemy import Column, String, Boolean, DateTime, JSON, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime, timedelta
@@ -11,8 +11,8 @@ class Subscription(Base):
     __tablename__ = "subscriptions"
 
     subscription_id = Column(UUID(as_uuid=True), primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), nullable=True, index=True)
-    plan_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("profiles.id"), nullable=True, index=True)
+    plan_id = Column(UUID(as_uuid=True), ForeignKey("plans.plan_id"), nullable=True, index=True)
     start_date = Column(DateTime, nullable=False, default=datetime.utcnow)
     end_date = Column(DateTime, nullable=True)  # تاريخ انتهاء الاشتراك
     auto_renew = Column(Boolean, default=True)
@@ -21,8 +21,8 @@ class Subscription(Base):
 
     # Relationships
     plan = relationship("Plan", back_populates="subscriptions")
-    usage_tracking = relationship("UsageTracking", back_populates="subscription")
-    billing = relationship("Billing", back_populates="subscription")
+    # Note: usage_tracking and billing relationships removed due to missing foreign key constraints
+    # They can be added back after running add_missing_foreign_keys.sql
 
     def __repr__(self):
         return f"<Subscription(subscription_id={self.subscription_id}, user_id={self.user_id}, plan_id={self.plan_id}, status='{self.status}')>"

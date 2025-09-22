@@ -54,3 +54,4 @@ def setup_supabase_auth():
 
 if __name__ == "__main__":
     setup_supabase_auth()
+

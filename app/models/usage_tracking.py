@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, DateTime
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -17,7 +17,8 @@ class UsageTracking(Base):
     last_reset = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    subscription = relationship("Subscription", back_populates="usage_tracking")
+    # Note: subscription relationship removed due to missing foreign key constraints
+    # Can be added back after running add_missing_foreign_keys.sql
 
     def __repr__(self):
         return f"<UsageTracking(usage_id={self.usage_id}, subscription_id={self.subscription_id}, feature='{self.feature}', used_count={self.used_count})>"

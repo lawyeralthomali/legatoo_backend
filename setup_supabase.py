@@ -66,3 +66,4 @@ ENVIRONMENT=development
 
 if __name__ == "__main__":
     setup_supabase()
+

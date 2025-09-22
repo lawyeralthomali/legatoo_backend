@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Numeric, DateTime
+from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -18,7 +18,8 @@ class Billing(Base):
     payment_method = Column(String, nullable=True)  # Card, Bank Transfer...
 
     # Relationships
-    subscription = relationship("Subscription", back_populates="billing")
+    # Note: subscription relationship removed due to missing foreign key constraints
+    # Can be added back after running add_missing_foreign_keys.sql
 
     def __repr__(self):
         return f"<Billing(invoice_id={self.invoice_id}, subscription_id={self.subscription_id}, amount={self.amount}, status='{self.status}')>"
