@@ -7,7 +7,7 @@ from ..db.database import get_db
 from ..utils.auth import get_current_user, TokenData
 from ..utils.subscription import get_subscription_status
 from ..services.subscription_service import SubscriptionServiceNew
-from ..models.plan import Plan
+from ..services.plan_service import PlanService
 from ..models.subscription import Subscription
 from ..models.billing import Billing
 from ..schemas.subscription import (
@@ -37,7 +37,7 @@ async def get_available_plans(
     db: AsyncSession = Depends(get_db)
 ):
     """Get all available subscription plans"""
-    plans = await SubscriptionServiceNew.get_plans(db, active_only=active_only)
+    plans = await PlanService.get_plans(db, active_only=active_only)
     
     return [
         {
@@ -69,7 +69,7 @@ async def subscribe_to_plan(
 ):
     """Subscribe to a plan"""
     # Check if plan exists
-    plan = await SubscriptionServiceNew.get_plan(db, plan_id)
+    plan = await PlanService.get_plan(db, plan_id)
     if not plan:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

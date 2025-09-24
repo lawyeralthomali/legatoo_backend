@@ -5,15 +5,15 @@ from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime, timedelta
 
-from ..models.plan import Plan
 from ..models.subscription import Subscription, StatusType
 from ..models.usage_tracking import UsageTracking
 from ..models.billing import Billing
+from .plan_service import PlanService
 
 
 class SubscriptionServiceNew:
     """Enhanced subscription service with plan-based system"""
-
+//يجيب الاشتراك الحالي النشط للمستخدم.
     @staticmethod
     async def get_user_subscription(
         db: AsyncSession, 
@@ -55,6 +55,10 @@ class SubscriptionServiceNew:
         duration_days: int = None
     ) -> Subscription:
         """Create a new subscription for a user"""
+        # Validate plan exists
+        if not await PlanService.validate_plan_exists(db, plan_id):
+            raise ValueError(f"Plan {plan_id} does not exist or is not active")
+        
         # Deactivate any existing active subscriptions
         await db.execute(
             update(Subscription)
@@ -75,23 +79,6 @@ class SubscriptionServiceNew:
         
         return subscription
 
-    @staticmethod
-    async def get_plan(db: AsyncSession, plan_id: UUID) -> Optional[Plan]:
-        """Get plan by ID"""
-        result = await db.execute(
-            select(Plan).where(Plan.plan_id == plan_id)
-        )
-        return result.scalar_one_or_none()
-
-    @staticmethod
-    async def get_plans(db: AsyncSession, active_only: bool = True) -> List[Plan]:
-        """Get all plans"""
-        query = select(Plan)
-        if active_only:
-            query = query.where(Plan.is_active == True)
-        
-        result = await db.execute(query.order_by(Plan.price))
-        return result.scalars().all()
 
     @staticmethod
     async def check_feature_access(
@@ -225,6 +212,9 @@ class SubscriptionServiceNew:
         for feature in features:
             feature_usage[feature] = await SubscriptionServiceNew.get_feature_usage(db, user_id, feature)
         
+        # Get plan information using PlanService
+        plan = await PlanService.get_plan(db, subscription.plan_id)
+        
         return {
             'has_subscription': True,
             'subscription_id': str(subscription.subscription_id),
@@ -233,12 +223,12 @@ class SubscriptionServiceNew:
             'is_expired': subscription.is_expired,
             'days_remaining': subscription.days_remaining,
             'plan': {
-                'plan_id': str(subscription.plan.plan_id),
-                'plan_name': subscription.plan.plan_name,
-                'plan_type': subscription.plan.plan_type,
-                'price': float(subscription.plan.price),
-                'billing_cycle': subscription.plan.billing_cycle
-            },
+                'plan_id': str(plan.plan_id),
+                'plan_name': plan.plan_name,
+                'plan_type': plan.plan_type,
+                'price': float(plan.price),
+                'billing_cycle': plan.billing_cycle
+            } if plan else None,
             'features': feature_usage,
             'start_date': subscription.start_date,
             'end_date': subscription.end_date
