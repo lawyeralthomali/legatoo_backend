@@ -1,5 +1,5 @@
-from sqlalchemy import Column, String, DateTime, Text, Enum
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, DateTime, Text
+from sqlalchemy.dialects.postgresql import UUID, ENUM
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..db.database import Base
@@ -10,6 +10,10 @@ class AccountType(enum.Enum):
     """Account type enumeration"""
     PERSONAL = "personal"
     BUSINESS = "business"
+
+
+# Create the PostgreSQL enum type
+account_type_enum = ENUM('personal', 'business', name='account_type_enum', create_type=False)
 
 
 class Profile(Base):
@@ -23,7 +27,7 @@ class Profile(Base):
     last_name = Column(Text, nullable=False)
     avatar_url = Column(Text, nullable=True)
     phone_number = Column(Text, nullable=True)
-    account_type = Column(Enum(AccountType), default=AccountType.PERSONAL) 
+    account_type = Column(account_type_enum, default="personal") 
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

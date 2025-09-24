@@ -43,7 +43,7 @@ class ProfileService:
                 last_name=profile_data.last_name,
                 phone_number=profile_data.phone_number,
                 avatar_url=profile_data.avatar_url,
-                account_type=AccountType(profile_data.account_type.value)
+                account_type=profile_data.account_type.value
             )
             
             self.db.add(profile)
@@ -120,7 +120,7 @@ class ProfileService:
             if profile_update.phone_number is not None:
                 update_data["phone_number"] = profile_update.phone_number
             if profile_update.account_type is not None:
-                update_data["account_type"] = AccountType(profile_update.account_type.value)
+                update_data["account_type"] = profile_update.account_type.value
             
             if not update_data:
                 return ProfileResponse.from_orm(existing_profile)
