@@ -5,11 +5,19 @@ from uuid import UUID
 
 from ..db.database import get_db
 from ..utils.auth import get_current_user, TokenData
-from ..utils.subscription_new import get_subscription_status
-from ..services.subscription_service_new import SubscriptionServiceNew
+from ..utils.subscription import get_subscription_status
+from ..services.subscription_service import SubscriptionServiceNew
 from ..models.plan import Plan
-from ..models.subscription_new import Subscription
+from ..models.subscription import Subscription
 from ..models.billing import Billing
+from ..schemas.subscription import (
+    SubscriptionResponse, 
+    SubscriptionStatusResponse,
+    PlanResponse,
+    BillingResponse,
+    FeatureUsageResponse,
+    UsageTrackingResponse
+)
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 

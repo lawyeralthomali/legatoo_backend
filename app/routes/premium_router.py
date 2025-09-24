@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 
 from ..db.database import get_db
 from ..utils.auth import get_current_user, TokenData
-from ..utils.subscription_new import (
+from ..utils.subscription import (
     verify_active_subscription,
     verify_feature_access,
     get_subscription_status,

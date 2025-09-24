@@ -21,6 +21,21 @@ CREATE TABLE IF NOT EXISTS public.plans (
     is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
 
+-- Create enum types
+CREATE TYPE subscription_status_enum AS ENUM ('active', 'expired', 'cancelled');
+CREATE TYPE account_type_enum AS ENUM ('personal', 'business');
+
+-- Create profiles table (if not exists)
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id UUID PRIMARY KEY,                   -- References auth.users.id
+    full_name TEXT NOT NULL,
+    avatar_url TEXT,
+    bio TEXT,
+    account_type account_type_enum DEFAULT 'personal',
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
 -- Create subscriptions table
 CREATE TABLE IF NOT EXISTS public.subscriptions (
     subscription_id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
@@ -29,8 +44,7 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
     start_date TIMESTAMP NOT NULL DEFAULT NOW(),
     end_date TIMESTAMP,                    -- تاريخ انتهاء الاشتراك
     auto_renew BOOLEAN DEFAULT TRUE,
-    status TEXT NOT NULL DEFAULT 'active',  -- active, expired, cancelled
-    current_usage JSONB DEFAULT '{}'        -- تخزين الاستخدام الحالي بصيغة JSON
+    status subscription_status_enum NOT NULL DEFAULT 'active'  -- active, expired, cancelled
 );
 
 -- Create usage_tracking table
@@ -40,7 +54,8 @@ CREATE TABLE IF NOT EXISTS public.usage_tracking (
     feature TEXT NOT NULL,                 -- file_upload, ai_chat, contract, token
     used_count INTEGER NOT NULL DEFAULT 0,
     reset_cycle TEXT NOT NULL,             -- daily / monthly / yearly
-    last_reset TIMESTAMP DEFAULT NOW()
+    last_reset TIMESTAMP DEFAULT NOW(),
+    UNIQUE(subscription_id, feature)       -- Ensure one record per subscription per feature
 );
 
 -- Create billing table
@@ -86,14 +101,16 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
     trial_plan_id UUID;
+    new_subscription_id UUID;
 BEGIN
     -- Insert a new profile for the user
-    INSERT INTO public.profiles (id, full_name, avatar_url, bio)
+    INSERT INTO public.profiles (id, full_name, avatar_url, bio, account_type)
     VALUES (
         NEW.id,
         COALESCE(NEW.raw_user_meta_data->>'full_name', 'User'),
         NEW.raw_user_meta_data->>'avatar_url',
-        NEW.raw_user_meta_data->>'bio'
+        NEW.raw_user_meta_data->>'bio',
+        'personal'
     );
     
     -- Get the trial plan ID
@@ -104,15 +121,25 @@ BEGIN
     
     -- Create a trial subscription for the new user
     IF trial_plan_id IS NOT NULL THEN
-        INSERT INTO public.subscriptions (user_id, plan_id, start_date, end_date, status, current_usage)
+        INSERT INTO public.subscriptions (user_id, plan_id, start_date, end_date, status)
         VALUES (
             NEW.id,
             trial_plan_id,
             NOW(),
             NOW() + INTERVAL '7 days',
-            'active',
-            '{}'
-        );
+            'active'::subscription_status_enum
+        )
+        RETURNING subscription_id INTO new_subscription_id;
+        
+        -- Create usage tracking records for common features
+        INSERT INTO public.usage_tracking (subscription_id, feature, used_count, reset_cycle)
+        VALUES 
+            (new_subscription_id, 'file_upload', 0, 'monthly'),
+            (new_subscription_id, 'ai_chat', 0, 'monthly'),
+            (new_subscription_id, 'contract', 0, 'monthly'),
+            (new_subscription_id, 'report', 0, 'monthly'),
+            (new_subscription_id, 'token', 0, 'monthly'),
+            (new_subscription_id, 'multi_user', 0, 'monthly');
     END IF;
     
     RETURN NEW;
@@ -171,6 +198,9 @@ CREATE POLICY "Users can view own billing" ON public.billing
     );
 
 -- Add comments
+COMMENT ON TYPE subscription_status_enum IS 'Subscription status enumeration: active, expired, cancelled';
+COMMENT ON TYPE account_type_enum IS 'Account type enumeration: personal, business';
+COMMENT ON TABLE public.profiles IS 'User profiles linked to Supabase auth.users';
 COMMENT ON TABLE public.plans IS 'Subscription plans with features and limits';
 COMMENT ON TABLE public.subscriptions IS 'User subscriptions linked to plans';
 COMMENT ON TABLE public.usage_tracking IS 'Feature usage tracking for subscriptions';
@@ -192,7 +222,7 @@ BEGIN
     SELECT subscription_id, plan_id INTO v_subscription_id, v_plan_id
     FROM public.subscriptions
     WHERE user_id = p_user_id 
-    AND status = 'active'
+    AND status = 'active'::subscription_status_enum
     AND (end_date IS NULL OR end_date > NOW())
     ORDER BY start_date DESC
     LIMIT 1;
@@ -218,10 +248,11 @@ BEGIN
         RETURN TRUE;
     END IF;
     
-    -- Get current usage
-    SELECT COALESCE((current_usage->>p_feature)::INTEGER, 0) INTO v_current_usage
-    FROM public.subscriptions
-    WHERE subscription_id = v_subscription_id;
+    -- Get current usage from usage_tracking table
+    SELECT COALESCE(used_count, 0) INTO v_current_usage
+    FROM public.usage_tracking
+    WHERE subscription_id = v_subscription_id 
+    AND feature = p_feature;
     
     -- Return true if under limit
     RETURN v_current_usage < v_limit;
@@ -243,7 +274,7 @@ BEGIN
     SELECT subscription_id INTO v_subscription_id
     FROM public.subscriptions
     WHERE user_id = p_user_id 
-    AND status = 'active'
+    AND status = 'active'::subscription_status_enum
     AND (end_date IS NULL OR end_date > NOW())
     ORDER BY start_date DESC
     LIMIT 1;
@@ -253,15 +284,17 @@ BEGIN
         RETURN 0;
     END IF;
     
-    -- Increment usage
-    UPDATE public.subscriptions
-    SET current_usage = jsonb_set(
-        COALESCE(current_usage, '{}'),
-        ARRAY[p_feature],
-        to_jsonb(COALESCE((current_usage->>p_feature)::INTEGER, 0) + p_amount)
-    )
-    WHERE subscription_id = v_subscription_id
-    RETURNING (current_usage->>p_feature)::INTEGER INTO v_new_usage;
+    -- Insert or update usage tracking record
+    INSERT INTO public.usage_tracking (subscription_id, feature, used_count, reset_cycle)
+    VALUES (v_subscription_id, p_feature, p_amount, 'monthly')
+    ON CONFLICT (subscription_id, feature) 
+    DO UPDATE SET 
+        used_count = usage_tracking.used_count + p_amount,
+        last_reset = CASE 
+            WHEN usage_tracking.should_reset() THEN NOW()
+            ELSE usage_tracking.last_reset
+        END
+    RETURNING used_count INTO v_new_usage;
     
     RETURN v_new_usage;
 END;

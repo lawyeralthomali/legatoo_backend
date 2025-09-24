@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Import models to ensure they are registered with SQLAlchemy
 from .models import profile
 from .models import plan
-from .models import subscription_new
+from .models import subscription
 from .models import usage_tracking
 from .models import billing
 from .db.database import create_tables
@@ -14,8 +14,8 @@ from .routes.user_router import router as user_router
 from .routes.profile_router import router as profile_router
 
 from .routes.supabase_auth_router import router as supabase_auth_router
-from .routes.subscription_router_new import router as subscription_router
-from .routes.premium_router_new import router as premium_router
+from .routes.subscription_router import router as subscription_router
+from .routes.premium_router import router as premium_router
 
 # Create FastAPI app
 app = FastAPI(

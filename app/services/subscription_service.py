@@ -6,7 +6,7 @@ from uuid import UUID
 from datetime import datetime, timedelta
 
 from ..models.plan import Plan
-from ..models.subscription_new import Subscription
+from ..models.subscription import Subscription, StatusType
 from ..models.usage_tracking import UsageTracking
 from ..models.billing import Billing
 
@@ -24,7 +24,7 @@ class SubscriptionServiceNew:
             select(Subscription)
             .options(selectinload(Subscription.plan))
             .where(Subscription.user_id == user_id)
-            .where(Subscription.status == 'active')
+            .where(Subscription.status == StatusType.ACTIVE)
             .where(
                 (Subscription.end_date.is_(None)) | 
                 (Subscription.end_date > datetime.utcnow())
@@ -59,8 +59,8 @@ class SubscriptionServiceNew:
         await db.execute(
             update(Subscription)
             .where(Subscription.user_id == user_id)
-            .where(Subscription.status == 'active')
-            .values(status='cancelled', updated_at=datetime.utcnow())
+            .where(Subscription.status == StatusType.ACTIVE)
+            .values(status=StatusType.CANCELLED, updated_at=datetime.utcnow())
         )
         
         subscription = Subscription.create_subscription(
@@ -102,10 +102,26 @@ class SubscriptionServiceNew:
         """Check if user can access a specific feature"""
         subscription = await SubscriptionServiceNew.get_user_subscription(db, user_id)
         
-        if not subscription:
+        if not subscription or not subscription.plan:
             return False
         
-        return subscription.can_use_feature(feature)
+        # Get usage tracking record for this feature
+        result = await db.execute(
+            select(UsageTracking)
+            .where(UsageTracking.subscription_id == subscription.subscription_id)
+            .where(UsageTracking.feature == feature)
+        )
+        usage_record = result.scalar_one_or_none()
+        
+        if not usage_record:
+            return True  # No usage record means no limit
+        
+        # Get plan limit for this feature
+        limit = subscription.plan.get_limit(feature)
+        if limit == 0:  # Unlimited
+            return True
+        
+        return usage_record.used_count < limit
 
     @staticmethod
     async def get_feature_usage(
@@ -124,12 +140,21 @@ class SubscriptionServiceNew:
                 'remaining': 0
             }
         
-        current_usage = subscription.get_usage(feature)
+        # Get usage tracking record for this feature
+        result = await db.execute(
+            select(UsageTracking)
+            .where(UsageTracking.subscription_id == subscription.subscription_id)
+            .where(UsageTracking.feature == feature)
+        )
+        usage_record = result.scalar_one_or_none()
+        
+        current_usage = usage_record.used_count if usage_record else 0
         limit = subscription.plan.get_limit(feature)
-        remaining = subscription.get_remaining_usage(feature)
+        remaining = max(0, limit - current_usage) if limit > 0 else 999999
+        can_use = limit == 0 or current_usage < limit
         
         return {
-            'can_use': subscription.can_use_feature(feature),
+            'can_use': can_use,
             'current_usage': current_usage,
             'limit': limit,
             'remaining': remaining
@@ -145,15 +170,36 @@ class SubscriptionServiceNew:
         """Increment feature usage for a user"""
         subscription = await SubscriptionServiceNew.get_user_subscription(db, user_id)
         
-        if not subscription:
+        if not subscription or not subscription.plan:
             return False
         
-        if not subscription.can_use_feature(feature):
+        # Check if user can use the feature
+        can_use = await SubscriptionServiceNew.check_feature_access(db, user_id, feature)
+        if not can_use:
             return False
         
-        subscription.increment_usage(feature, amount)
+        # Get or create usage tracking record
+        result = await db.execute(
+            select(UsageTracking)
+            .where(UsageTracking.subscription_id == subscription.subscription_id)
+            .where(UsageTracking.feature == feature)
+        )
+        usage_record = result.scalar_one_or_none()
+        
+        if not usage_record:
+            # Create new usage tracking record
+            usage_record = UsageTracking(
+                subscription_id=subscription.subscription_id,
+                feature=feature,
+                used_count=amount,
+                reset_cycle='monthly'  # Default reset cycle
+            )
+            db.add(usage_record)
+        else:
+            # Increment existing usage
+            usage_record.used_count += amount
+        
         await db.commit()
-        
         return True
 
     @staticmethod
@@ -274,9 +320,9 @@ class SubscriptionServiceNew:
         now = datetime.utcnow()
         result = await db.execute(
             update(Subscription)
-            .where(Subscription.status == 'active')
+            .where(Subscription.status == StatusType.ACTIVE)
             .where(Subscription.end_date < now)
-            .values(status='expired', updated_at=now)
+            .values(status=StatusType.EXPIRED, updated_at=now)
         )
         
         await db.commit()
@@ -292,7 +338,7 @@ class SubscriptionServiceNew:
             select(UsageTracking)
             .join(Subscription, UsageTracking.subscription_id == Subscription.subscription_id)
             .where(Subscription.user_id == user_id)
-            .order_by(UsageTracking.created_at.desc())
+            .order_by(UsageTracking.last_reset.desc())
         )
         return result.scalars().all()
 
@@ -305,7 +351,6 @@ class SubscriptionServiceNew:
         result = await db.execute(
             update(UsageTracking)
             .where(UsageTracking.subscription_id == subscription_id)
-            .where(UsageTracking.should_reset() == True)
             .values(used_count=0, last_reset=datetime.utcnow())
         )
         

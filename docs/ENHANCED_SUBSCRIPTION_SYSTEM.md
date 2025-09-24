@@ -31,11 +31,11 @@ The old simple subscription system has been completely removed and replaced with
 
 ### **New Files Created**
 - `app/models/plan.py` ✅
-- `app/models/subscription_new.py` ✅
+- `app/models/subscription.py` ✅
 - `app/models/usage_tracking.py` ✅
 - `app/models/billing.py` ✅
 - `app/services/subscription_service_new.py` ✅
-- `app/utils/subscription_new.py` ✅
+- `app/utils/subscription.py` ✅
 - `app/routes/subscription_router_new.py` ✅
 - `app/routes/premium_router_new.py` ✅
 - `database_setup_new.sql` ✅

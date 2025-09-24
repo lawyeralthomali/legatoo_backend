@@ -120,7 +120,7 @@ class Plan(Base):
     - subscriptions: One-to-Many with Subscription
 ```
 
-#### `subscription_new.py` - Subscription Model
+#### `subscription.py` - Subscription Model
 ```python
 class Subscription(Base):
     # Fields:
@@ -130,8 +130,11 @@ class Subscription(Base):
     - start_date: DateTime (Subscription start)
     - end_date: DateTime (Subscription end)
     - auto_renew: Boolean (Auto-renewal setting)
-    - status: Text (active, expired, cancelled)
+    - status: Enum(StatusType) (ACTIVE, EXPIRED, CANCELLED)
     - current_usage: JSONB (Feature usage tracking)
+    
+    # Enums:
+    - StatusType: ACTIVE, EXPIRED, CANCELLED
     
     # Relationships:
     - user: Many-to-One with Profile
@@ -294,7 +297,7 @@ class SubscriptionServiceNew:
 - decode_token(): Decode JWT token
 ```
 
-#### `subscription_new.py` - Subscription Utilities
+#### `subscription.py` - Subscription Utilities
 ```python
 # Functions:
 - get_subscription_status(): Get user's subscription status
