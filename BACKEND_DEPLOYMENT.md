@@ -72,7 +72,7 @@ SUPABASE_JWT_SECRET=your-supabase-jwt-secret
 ENVIRONMENT=production
 
 # CORS Origins (add your frontend domain)
-CORS_ORIGINS=https://your-frontend-domain.com,https://www.your-frontend-domain.com
+CORS_ORIGINS=https://legatoo.westlinktowing.com,https://www.legatoo.westlinktowing.com
 ```
 
 ## Deployment Methods
