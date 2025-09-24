@@ -1,10 +1,16 @@
-from sqlalchemy import Column, String, Boolean, DateTime, JSON, ForeignKey
+//SQLAlchemy → مكتبة للتعامل مع قواعد البيانات بأسلوب الكائنات (ORM).
+from sqlalchemy import Column, String, Boolean, DateTime, JSON, ForeignKey 
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from ..db.database import Base
-
+import enum
+class StatusType(enum.Enum):
+    """Account type enumeration"""
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
 
 class Subscription(Base):
     """Enhanced subscription model with plan references and usage tracking"""
@@ -16,8 +22,8 @@ class Subscription(Base):
     start_date = Column(DateTime, nullable=False, default=datetime.utcnow)
     end_date = Column(DateTime, nullable=True)  # تاريخ انتهاء الاشتراك
     auto_renew = Column(Boolean, default=True)
-    status = Column(String, nullable=False, default='active')  # active, expired, cancelled
-    current_usage = Column(JSONB, default={})  # تخزين الاستخدام الحالي بصيغة JSON
+    status = Column(Enum(StatusType), nullable=False, default=StatusType.ACTIVE)  # active, expired, cancelled
+    usage_records = relationship("UsageTracking", back_populates="subscription")
 
     # Relationships
     plan = relationship("Plan", back_populates="subscriptions")
@@ -30,7 +36,7 @@ class Subscription(Base):
     @property
     def is_active(self) -> bool:
         """Check if subscription is active"""
-        if self.status != 'active':
+        if self.status != StatusType.ACTIVE:
             return False
         if self.end_date and datetime.utcnow() >= self.end_date.replace(tzinfo=None):
             return False
@@ -39,7 +45,7 @@ class Subscription(Base):
     @property
     def is_expired(self) -> bool:
         """Check if subscription is expired"""
-        if self.status == 'expired':
+        if self.status == StatusType.EXPIRED:
             return True
         if self.end_date and datetime.utcnow() >= self.end_date.replace(tzinfo=None):
             return True
@@ -48,7 +54,7 @@ class Subscription(Base):
     @property
     def is_cancelled(self) -> bool:
         """Check if subscription is cancelled"""
-        return self.status == 'cancelled'
+        return self.status == StatusType.CANCELLED
 
     @property
     def days_remaining(self) -> int:
@@ -112,12 +118,12 @@ class Subscription(Base):
 
     def cancel_subscription(self) -> None:
         """Cancel the subscription"""
-        self.status = 'cancelled'
+        self.status = StatusType.CANCELLED
         self.auto_renew = False
 
     def expire_subscription(self) -> None:
         """Mark subscription as expired"""
-        self.status = 'expired'
+        self.status = StatusType.EXPIRED
         self.auto_renew = False
 
     @classmethod
@@ -134,6 +140,6 @@ class Subscription(Base):
             plan_id=plan_id,
             start_date=start_date,
             end_date=end_date,
-            status='active',
+            status=StatusType.ACTIVE,
             current_usage={}
         )

@@ -2,12 +2,20 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
+from enum import Enum
+
+
+class AccountTypeEnum(str, Enum):
+    """Account type enumeration for Pydantic"""
+    PERSONAL = "personal"
+    BUSINESS = "business"
 
 
 class ProfileBase(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=255)
     avatar_url: Optional[str] = Field(None, max_length=500)
     bio: Optional[str] = Field(None, max_length=1000)
+    account_type: AccountTypeEnum = Field(default=AccountTypeEnum.PERSONAL)
 
 
 class ProfileCreate(ProfileBase):
@@ -18,6 +26,7 @@ class ProfileUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=1, max_length=255)
     avatar_url: Optional[str] = Field(None, max_length=500)
     bio: Optional[str] = Field(None, max_length=1000)
+    account_type: Optional[AccountTypeEnum] = None
 
 
 class ProfileResponse(ProfileBase):
@@ -51,4 +60,8 @@ class TokenData(BaseModel):
     exp: int  # Expires at
     iss: str  # Issuer
     jti: Optional[str] = None  # JWT ID
+
+
+
+
 

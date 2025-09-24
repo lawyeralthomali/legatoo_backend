@@ -1,0 +1,36 @@
+# .cursorrules
+
+# 🎯 General Guidelines
+- Always write clean, readable, and maintainable code.
+- Follow PEP8 style guide and use clear, descriptive names.
+- Add type hints for all function arguments and return values.
+- Add docstrings for classes, functions, and complex logic.
+
+# 🏗️ Project Structure
+- Keep API endpoints in `app/routes/`.
+- Keep business logic in `app/services/` (no database queries in routes).
+- Keep database models in `app/models/`.
+- Keep request/response validation in `app/schemas/`.
+- Keep configuration in `app/config/`.
+- Keep reusable helpers in `app/utils/`.
+
+# 🗄️ Database
+- Use SQLAlchemy ORM models, no raw SQL unless necessary.
+- Define relationships clearly using `relationship`.
+- Use Alembic for migrations, never change models directly in production DB.
+
+# ⚡ API & Services
+- Always validate input with Pydantic schemas.
+- Return consistent responses (use schemas for output).
+- Handle errors with `HTTPException` and meaningful status codes.
+- Keep routes thin, put main logic in services.
+
+# 🛠️ Best Practices
+- Avoid code duplication: create helper functions when needed.
+- Write modular and extensible code for future features.
+- Use logging, not print, for debugging or errors.
+- Always consider multi-user and multi-tenant support.
+
+# ✅ Testing
+- Add tests in `tests/` for new features.
+- Use pytest fixtures for database setup/teardown.
