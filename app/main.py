@@ -27,20 +27,36 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+import os
+
+# Get CORS origins from environment variable
+cors_origins = os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGINS") else []
+
+# Default origins for development
+default_origins = [
+    "http://localhost:3000",      # React dev server
+    "http://localhost:8080",      # Vue dev server
+    "http://127.0.0.1:3000",     # Local React
+    "http://127.0.0.1:8080",     # Local Vue
+    "http://192.168.100.108:3000", # Network React
+    "http://192.168.100.108:8080", # Network Vue
+    "http://192.168.100.108:8000", # Self-reference
+    "http://localhost:8000",      # Self-reference local
+    "http://127.0.0.1:8000",     # Self-reference local
+]
+
+# Use environment CORS origins if available, otherwise use defaults
+if cors_origins and cors_origins[0]:
+    # Filter out empty strings
+    cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
+    allow_origins = cors_origins
+else:
+    # Development mode - allow all origins
+    allow_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",      # React dev server
-        "http://localhost:8080",      # Vue dev server
-        "http://127.0.0.1:3000",     # Local React
-        "http://127.0.0.1:8080",     # Local Vue
-        "http://192.168.100.108:3000", # Network React
-        "http://192.168.100.108:8080", # Network Vue
-        "http://192.168.100.108:8000", # Self-reference
-        "http://localhost:8000",      # Self-reference local
-        "http://127.0.0.1:8000",     # Self-reference local
-        "*"  # Allow all origins for development (remove in production)
-    ],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],

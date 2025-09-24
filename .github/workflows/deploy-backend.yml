@@ -1,0 +1,73 @@
+name: Deploy Backend to Hostinger
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'legatoo_backend/**'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'legatoo_backend/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Run tests
+      run: |
+        pytest tests/ -v
+        
+    - name: Build Docker image
+      run: |
+        docker build -t legatoo-backend:${{ github.sha }} .
+        
+    - name: Deploy to Hostinger
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOSTINGER_HOST }}
+        username: ${{ secrets.HOSTINGER_USERNAME }}
+        key: ${{ secrets.HOSTINGER_SSH_KEY }}
+        port: ${{ secrets.HOSTINGER_PORT }}
+        script: |
+          # Navigate to backend directory
+          cd /home/${{ secrets.HOSTINGER_USERNAME }}/legatoo-app/legatoo_backend
+          
+          # Pull latest changes
+          git pull origin master
+          
+          # Stop existing container
+          docker-compose down || true
+          
+          # Build and start new container
+          docker-compose up -d --build
+          
+          # Wait for service to be ready
+          sleep 10
+          
+          # Health check
+          curl -f http://localhost:8000/health || exit 1
+          
+          echo "Backend deployed successfully!"
