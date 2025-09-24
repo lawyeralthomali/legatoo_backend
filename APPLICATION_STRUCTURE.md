@@ -86,9 +86,10 @@ my_project/
 class Profile(Base):
     # Fields:
     - id: UUID (Primary Key, references auth.users.id)
-    - full_name: Text (Required)
+    - first_name: Text (required)
+    - last_name: Text (required)
     - avatar_url: Text (Optional)
-    - bio: Text (Optional)
+    - phone_number:Text (required)
     - account_type: Enum(AccountType) (Default: PERSONAL)
     - created_at: DateTime (Auto-generated)
     - updated_at: DateTime (Auto-updated)
@@ -265,7 +266,7 @@ class ProfileService:
     - create_profile_if_not_exists(): Auto-create profile
 ```
 
-#### `subscription_service_new.py` - Subscription Business Logic
+#### `subscription_service.py` - Subscription Business Logic
 ```python
 class SubscriptionServiceNew:
     # Methods:

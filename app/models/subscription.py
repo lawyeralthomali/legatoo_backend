@@ -25,7 +25,8 @@ class Subscription(Base):
 
     # Relationships
     plan = relationship("Plan", back_populates="subscriptions")
-    usage_records = relationship("UsageTracking", back_populates="subscription")
+    # Note: usage_records relationship removed due to missing foreign key constraints
+    # Can be added back after running add_missing_foreign_keys.sql
 
     def __repr__(self):
         return f"<Subscription(subscription_id={self.subscription_id}, user_id={self.user_id}, plan_id={self.plan_id}, status='{self.status.value}')>"

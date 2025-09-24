@@ -12,9 +12,10 @@ class AccountTypeEnum(str, Enum):
 
 
 class ProfileBase(BaseModel):
-    full_name: str = Field(..., min_length=1, max_length=255)
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
     avatar_url: Optional[str] = Field(None, max_length=500)
-    bio: Optional[str] = Field(None, max_length=1000)
+    phone_number: Optional[str] = Field(None, max_length=20)
     account_type: AccountTypeEnum = Field(default=AccountTypeEnum.PERSONAL)
 
 
@@ -23,9 +24,10 @@ class ProfileCreate(ProfileBase):
 
 
 class ProfileUpdate(BaseModel):
-    full_name: Optional[str] = Field(None, min_length=1, max_length=255)
+    first_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=100)
     avatar_url: Optional[str] = Field(None, max_length=500)
-    bio: Optional[str] = Field(None, max_length=1000)
+    phone_number: Optional[str] = Field(None, max_length=20)
     account_type: Optional[AccountTypeEnum] = None
 
 

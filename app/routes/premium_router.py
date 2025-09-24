@@ -11,7 +11,7 @@ from ..utils.subscription import (
     require_paid_plan,
     require_enterprise_plan
 )
-from ..services.subscription_service_new import SubscriptionServiceNew
+from ..services.subscription_service import SubscriptionServiceNew
 
 router = APIRouter(prefix="/premium", tags=["premium"])
 

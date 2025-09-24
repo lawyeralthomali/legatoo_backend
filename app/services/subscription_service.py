@@ -13,7 +13,7 @@ from .plan_service import PlanService
 
 class SubscriptionServiceNew:
     """Enhanced subscription service with plan-based system"""
-//يجيب الاشتراك الحالي النشط للمستخدم.
+
     @staticmethod
     async def get_user_subscription(
         db: AsyncSession, 

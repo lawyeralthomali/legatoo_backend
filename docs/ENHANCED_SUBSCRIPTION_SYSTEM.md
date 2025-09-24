@@ -34,9 +34,9 @@ The old simple subscription system has been completely removed and replaced with
 - `app/models/subscription.py` ✅
 - `app/models/usage_tracking.py` ✅
 - `app/models/billing.py` ✅
-- `app/services/subscription_service_new.py` ✅
+- `app/services/subscription_service.py` ✅
 - `app/utils/subscription.py` ✅
-- `app/routes/subscription_router_new.py` ✅
+- `app/routes/subscription_router.py` ✅
 - `app/routes/premium_router_new.py` ✅
 - `database_setup_new.sql` ✅
 - `migrate_to_new_subscription_system.sql` ✅

@@ -19,9 +19,10 @@ class Profile(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, index=True)
     
     # Profile information
-    full_name = Column(Text, nullable=False)
+    first_name = Column(Text, nullable=False)
+    last_name = Column(Text, nullable=False)
     avatar_url = Column(Text, nullable=True)
-    bio = Column(Text, nullable=True)
+    phone_number = Column(Text, nullable=True)
     account_type = Column(Enum(AccountType), default=AccountType.PERSONAL) 
     
     # Timestamps
@@ -29,4 +30,4 @@ class Profile(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
 
     def __repr__(self):
-        return f"<Profile(id={self.id}, full_name='{self.full_name}')>"
+        return f"<Profile(id={self.id}, first_name='{self.first_name}', last_name='{self.last_name}')>"

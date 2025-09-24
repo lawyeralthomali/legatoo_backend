@@ -5,8 +5,8 @@ from fastapi import HTTPException, status
 from typing import Optional
 from uuid import UUID
 
-from ..models.profile import Profile
-from ..schemas.profile import ProfileCreate, ProfileUpdate, ProfileResponse
+from ..models.profile import Profile, AccountType
+from ..schemas.profile import ProfileCreate, ProfileUpdate, ProfileResponse, AccountTypeEnum
 
 
 class ProfileService:
@@ -39,9 +39,11 @@ class ProfileService:
             # Create new profile
             profile = Profile(
                 id=user_id,
-                full_name=profile_data.full_name,
+                first_name=profile_data.first_name,
+                last_name=profile_data.last_name,
+                phone_number=profile_data.phone_number,
                 avatar_url=profile_data.avatar_url,
-                bio=profile_data.bio
+                account_type=AccountType(profile_data.account_type.value)
             )
             
             self.db.add(profile)
@@ -109,12 +111,16 @@ class ProfileService:
             
             # Prepare update data (only non-None values)
             update_data = {}
-            if profile_update.full_name is not None:
-                update_data["full_name"] = profile_update.full_name
+            if profile_update.first_name is not None:
+                update_data["first_name"] = profile_update.first_name
+            if profile_update.last_name is not None:
+                update_data["last_name"] = profile_update.last_name
             if profile_update.avatar_url is not None:
                 update_data["avatar_url"] = profile_update.avatar_url
-            if profile_update.bio is not None:
-                update_data["bio"] = profile_update.bio
+            if profile_update.phone_number is not None:
+                update_data["phone_number"] = profile_update.phone_number
+            if profile_update.account_type is not None:
+                update_data["account_type"] = AccountType(profile_update.account_type.value)
             
             if not update_data:
                 return ProfileResponse.from_orm(existing_profile)
@@ -172,14 +178,15 @@ class ProfileService:
                 detail=f"Failed to delete profile: {str(e)}"
             )
 
-    async def create_profile_if_not_exists(self, user_id: UUID, default_full_name: str = "User") -> ProfileResponse:
+    async def create_profile_if_not_exists(self, user_id: UUID, default_first_name: str = "User", default_last_name: str = "User") -> ProfileResponse:
         """
         Create a profile if it doesn't exist, or return existing one.
         This is useful for automatic profile creation when a user signs up.
         
         Args:
             user_id: The user's UUID
-            default_full_name: Default name if profile needs to be created
+            default_first_name: Default first name if profile needs to be created
+            default_last_name: Default last name if profile needs to be created
             
         Returns:
             ProfileResponse: Profile data
@@ -191,9 +198,11 @@ class ProfileService:
         
         # Create new profile with default data
         profile_data = ProfileCreate(
-            full_name=default_full_name,
+            first_name=default_first_name,
+            last_name=default_last_name,
             avatar_url=None,
-            bio=None
+            phone_number=None,
+            account_type=AccountTypeEnum.PERSONAL
         )
         
         return await self.create_profile(user_id, profile_data)
