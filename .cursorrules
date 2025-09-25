@@ -34,3 +34,30 @@
 # ✅ Testing
 - Add tests in `tests/` for new features.
 - Use pytest fixtures for database setup/teardown.
+
+# 🌐 Default API Response Structure (applies to all endpoints)
+- All API responses must follow a unified JSON format:
+  {
+    "success": bool,       # true if the request succeeded, false if there was an error
+    "message": str,        # human-readable message describing the result
+    "data": dict | list | null,   # payload for success, null for errors
+    "errors": list         # list of field-specific error objects; empty list if none
+  }
+
+- Field-specific error object structure:
+  {
+    "field": str | null,   # the field that caused the error; null if general
+    "message": str         # explanation of the error
+  }
+
+- Guidelines:
+  - Always use this structure for success, validation errors, authentication errors, or unexpected exceptions.
+  - Never return raw exceptions or non-standard error formats to clients.
+  - Include validation errors in the "errors" list, even for multiple fields.
+  - Keep "data" null for any error response.
+  - Keep "errors" empty list on successful requests unless warnings exist.
+
+# 💡 Benefits
+- Makes frontend handling of responses consistent.
+- Simplifies debugging and logging.
+- Enforces clean API standards across the project.

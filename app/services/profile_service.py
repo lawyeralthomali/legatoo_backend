@@ -1,214 +1,111 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
-from sqlalchemy.exc import IntegrityError
-from fastapi import HTTPException, status
+"""
+Profile service for business logic operations.
+
+This module contains business rules and orchestration for profile operations,
+following the Single Responsibility Principle.
+"""
+
 from typing import Optional
 from uuid import UUID
+from sqlalchemy.exc import IntegrityError
+import logging
 
-from ..models.profile import Profile, AccountType
-from ..schemas.profile import ProfileCreate, ProfileUpdate, ProfileResponse, AccountTypeEnum
+from ..interfaces.profile_repository import IProfileRepository
+from ..schemas.profile import ProfileCreate, ProfileResponse, AccountTypeEnum
+
+logger = logging.getLogger(__name__)
 
 
 class ProfileService:
-    def __init__(self, db: AsyncSession):
-        self.db = db
-
-    async def create_profile(self, user_id: UUID, profile_data: ProfileCreate) -> ProfileResponse:
+    """Service class for profile business logic operations."""
+    
+    def __init__(self, profile_repository: IProfileRepository):
         """
-        Create a new profile for a user.
+        Initialize profile service.
         
         Args:
-            user_id: The user's UUID from Supabase auth.users
-            profile_data: Profile data to create
+            profile_repository: Repository for profile data access
+        """
+        self.profile_repository = profile_repository
+    
+    async def check_email_uniqueness(self, email: str) -> bool:
+        """
+        Check if email is unique (not already registered).
+        
+        This method implements the business rule for email uniqueness.
+        In a real implementation, this might involve checking both
+        Supabase auth.users and local profiles table.
+        
+        Args:
+            email: Email address to check
             
         Returns:
-            ProfileResponse: Created profile data
+            True if email is unique, False if already exists
+        """
+        # For this implementation, we'll rely on the repository's email check
+        # In a production system, you might want to check Supabase auth.users
+        # or maintain a separate email mapping table
+        return not await self.profile_repository.email_exists(email)
+    
+    async def create_profile_for_user(
+        self, 
+        user_id: UUID, 
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        phone_number: Optional[str] = None,
+        avatar_url: Optional[str] = None
+    ) -> ProfileResponse:
+        """
+        Create a profile for a user with business rules applied.
+        
+        Applies business rules such as default values and validation.
+        
+        Args:
+            user_id: User ID from Supabase
+            first_name: User's first name
+            last_name: User's last name
+            phone_number: User's phone number
+            avatar_url: User's avatar URL
+            
+        Returns:
+            ProfileResponse with created profile data
             
         Raises:
-            HTTPException: If profile already exists or creation fails
+            IntegrityError: If profile already exists (race condition)
         """
-        try:
-            # Check if profile already exists
-            existing_profile = await self.get_profile_by_id(user_id)
-            if existing_profile:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Profile already exists for this user"
-                )
-            
-            # Create new profile
-            profile = Profile(
-                id=user_id,
-                first_name=profile_data.first_name,
-                last_name=profile_data.last_name,
-                phone_number=profile_data.phone_number,
-                avatar_url=profile_data.avatar_url,
-                account_type=profile_data.account_type.value
-            )
-            
-            self.db.add(profile)
-            await self.db.commit()
-            await self.db.refresh(profile)
-            
-            return ProfileResponse.from_orm(profile)
-            
-        except IntegrityError as e:
-            await self.db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Profile already exists for this user"
-            )
-
-    async def get_profile_by_id(self, user_id: UUID) -> Optional[Profile]:
-        """
-        Get a profile by user ID.
-        
-        Args:
-            user_id: The user's UUID
-            
-        Returns:
-            Profile or None if not found
-        """
-        result = await self.db.execute(
-            select(Profile).where(Profile.id == user_id)
-        )
-        return result.scalar_one_or_none()
-
-    async def get_profile_response_by_id(self, user_id: UUID) -> Optional[ProfileResponse]:
-        """
-        Get a profile response by user ID.
-        
-        Args:
-            user_id: The user's UUID
-            
-        Returns:
-            ProfileResponse or None if not found
-        """
-        profile = await self.get_profile_by_id(user_id)
-        if profile:
-            return ProfileResponse.from_orm(profile)
-        return None
-
-    async def update_profile(self, user_id: UUID, profile_update: ProfileUpdate) -> Optional[ProfileResponse]:
-        """
-        Update a user's profile.
-        
-        Args:
-            user_id: The user's UUID
-            profile_update: Profile data to update
-            
-        Returns:
-            ProfileResponse: Updated profile data or None if not found
-            
-        Raises:
-            HTTPException: If update fails
-        """
-        try:
-            # Check if profile exists
-            existing_profile = await self.get_profile_by_id(user_id)
-            if not existing_profile:
-                return None
-            
-            # Prepare update data (only non-None values)
-            update_data = {}
-            if profile_update.first_name is not None:
-                update_data["first_name"] = profile_update.first_name
-            if profile_update.last_name is not None:
-                update_data["last_name"] = profile_update.last_name
-            if profile_update.avatar_url is not None:
-                update_data["avatar_url"] = profile_update.avatar_url
-            if profile_update.phone_number is not None:
-                update_data["phone_number"] = profile_update.phone_number
-            if profile_update.account_type is not None:
-                update_data["account_type"] = profile_update.account_type.value
-            
-            if not update_data:
-                return ProfileResponse.from_orm(existing_profile)
-            
-            # Update the profile
-            await self.db.execute(
-                update(Profile)
-                .where(Profile.id == user_id)
-                .values(**update_data)
-            )
-            await self.db.commit()
-            
-            # Return updated profile
-            updated_profile = await self.get_profile_by_id(user_id)
-            return ProfileResponse.from_orm(updated_profile)
-            
-        except Exception as e:
-            await self.db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to update profile: {str(e)}"
-            )
-
-    async def delete_profile(self, user_id: UUID) -> bool:
-        """
-        Delete a user's profile.
-        
-        Args:
-            user_id: The user's UUID
-            
-        Returns:
-            bool: True if deleted, False if not found
-            
-        Raises:
-            HTTPException: If deletion fails
-        """
-        try:
-            # Check if profile exists
-            existing_profile = await self.get_profile_by_id(user_id)
-            if not existing_profile:
-                return False
-            
-            # Delete the profile
-            await self.db.execute(
-                delete(Profile).where(Profile.id == user_id)
-            )
-            await self.db.commit()
-            
-            return True
-            
-        except Exception as e:
-            await self.db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to delete profile: {str(e)}"
-            )
-
-    async def create_profile_if_not_exists(self, user_id: UUID, default_first_name: str = "User", default_last_name: str = "User") -> ProfileResponse:
-        """
-        Create a profile if it doesn't exist, or return existing one.
-        This is useful for automatic profile creation when a user signs up.
-        
-        Args:
-            user_id: The user's UUID
-            default_first_name: Default first name if profile needs to be created
-            default_last_name: Default last name if profile needs to be created
-            
-        Returns:
-            ProfileResponse: Profile data
-        """
-        # Try to get existing profile
-        existing_profile = await self.get_profile_response_by_id(user_id)
-        if existing_profile:
-            return existing_profile
-        
-        # Create new profile with default data
+        # Apply business rules for default values
         profile_data = ProfileCreate(
-            first_name=default_first_name,
-            last_name=default_last_name,
-            avatar_url=None,
-            phone_number=None,
-            account_type=AccountTypeEnum.PERSONAL
+            first_name=first_name or "User",
+            last_name=last_name or "User",
+            phone_number=phone_number,
+            avatar_url=avatar_url,
+            account_type=AccountTypeEnum.PERSONAL  # Default account type
         )
         
-        return await self.create_profile(user_id, profile_data)
-
-
-
-
-
-
+        try:
+            # Create profile using repository
+            profile = await self.profile_repository.create_profile(user_id, profile_data)
+            
+            # Convert to response format
+            return ProfileResponse.from_orm(profile)
+            
+        except IntegrityError:
+            # Re-raise integrity errors for upstream handling
+            raise
+        except Exception as e:
+            # Log and re-raise other errors
+            logger.error(f"Profile service error: {str(e)}")
+            raise
+    
+    async def get_profile_by_id(self, user_id: UUID) -> Optional[ProfileResponse]:
+        """
+        Get profile by user ID.
+        
+        Args:
+            user_id: User ID to search for
+            
+        Returns:
+            ProfileResponse if found, None otherwise
+        """
+        profile = await self.profile_repository.get_profile_by_id(user_id)
+        return ProfileResponse.from_orm(profile) if profile else None

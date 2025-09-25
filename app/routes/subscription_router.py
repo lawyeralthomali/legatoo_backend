@@ -2,14 +2,13 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict, Any
 from uuid import UUID
-
 from ..db.database import get_db
 from ..utils.auth import get_current_user, TokenData
 from ..utils.subscription import get_subscription_status
 from ..services.subscription_service import SubscriptionService
-# Removed SubscriptionRouterService - formatting moved inline
 from ..services.plan_service import PlanService
 from fastapi import HTTPException, status
+
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 

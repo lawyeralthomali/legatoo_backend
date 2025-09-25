@@ -1,5 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 # Import models to ensure they are registered with SQLAlchemy
 from .models import profile
@@ -7,15 +9,34 @@ from .models import plan
 from .models import subscription
 from .models import usage_tracking
 from .models import billing
+from .models import legal_document
+from .models import user
 from .db.database import create_tables
 
 # Import routers
-from .routes.user_router import router as user_router
 from .routes.profile_router import router as profile_router
+from .routes.auth_routes import router as auth_routes
+from .routes.user_routes import router as user_routes
 
-from .routes.supabase_auth_router import router as supabase_auth_router
 from .routes.subscription_router import router as subscription_router
 from .routes.premium_router import router as premium_router
+from .routes.legal_document_router import router as legal_document_router
+from .routes.legal_assistant_router import router as legal_assistant_router
+
+# Import exception handlers
+from .utils.exception_handlers import (
+    app_exception_handler, validation_exception_handler,
+    not_found_exception_handler, conflict_exception_handler,
+    authentication_exception_handler, database_exception_handler,
+    external_service_exception_handler, http_exception_handler,
+    validation_error_handler, integrity_error_handler,
+    sqlalchemy_error_handler, general_exception_handler
+)
+from .utils.exceptions import (
+    AppException, ValidationException, NotFoundException,
+    ConflictException, AuthenticationException, DatabaseException,
+    ExternalServiceException
+)
 
 # Create FastAPI app
 app = FastAPI(
@@ -62,13 +83,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(user_router, prefix="/api/v1")
-app.include_router(profile_router, prefix="/api/v1")
+# Add exception handlers
+app.add_exception_handler(AppException, app_exception_handler)
+app.add_exception_handler(ValidationException, validation_exception_handler)
+app.add_exception_handler(NotFoundException, not_found_exception_handler)
+app.add_exception_handler(ConflictException, conflict_exception_handler)
+app.add_exception_handler(AuthenticationException, authentication_exception_handler)
+app.add_exception_handler(DatabaseException, database_exception_handler)
+app.add_exception_handler(ExternalServiceException, external_service_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_error_handler)
+app.add_exception_handler(IntegrityError, integrity_error_handler)
+app.add_exception_handler(SQLAlchemyError, sqlalchemy_error_handler)
+app.add_exception_handler(Exception, general_exception_handler)
 
-app.include_router(supabase_auth_router, prefix="/api/v1")
+# Include routers
+app.include_router(profile_router, prefix="/api/v1")
+app.include_router(auth_routes, prefix="/api/v1")
+app.include_router(user_routes, prefix="/api/v1")
+
 app.include_router(subscription_router, prefix="/api/v1")
 app.include_router(premium_router, prefix="/api/v1")
+app.include_router(legal_document_router, prefix="/api/v1")
+app.include_router(legal_assistant_router, prefix="/api/v1")
 
 @app.on_event("startup")
 async def startup_event():

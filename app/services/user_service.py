@@ -1,37 +1,229 @@
 """
-User service
-Handles business logic for user-related operations
-"""
-from typing import Dict, Any
-from uuid import UUID
+User service for business logic operations.
 
-from ..utils.auth import TokenData
-from ..schemas.profile import UserAuth
+This module contains business logic for user-related operations,
+following the Single Responsibility Principle and Dependency Inversion.
+"""
+
+from typing import Optional, List, Dict, Any
+from uuid import UUID
+import logging
+
+from ..repositories.user_repository import IUserRepository
+from ..repositories.profile_repository import IProfileRepository
+from ..schemas.user import UserResponse
+from ..schemas.profile import ProfileResponse
+from ..utils.exceptions import NotFoundException, ValidationException
+
+logger = logging.getLogger(__name__)
 
 
 class UserService:
-    """Service for handling user business logic"""
+    """Service class for user business logic operations."""
     
-    @staticmethod
-    def get_user_auth_data(current_user: TokenData) -> UserAuth:
-        """Get user authentication data formatted for API response"""
-        return UserAuth(
-            id=current_user.sub,
-            email=current_user.email,
-            phone=current_user.phone,
-            aud=current_user.aud,
-            role=current_user.role,
-            created_at=str(current_user.iat),  # Convert timestamp to string
-            updated_at=str(current_user.exp) if current_user.exp else None
-        )
+    def __init__(
+        self,
+        user_repository: IUserRepository,
+        profile_repository: IProfileRepository
+    ):
+        """
+        Initialize user service.
+        
+        Args:
+            user_repository: User data repository
+            profile_repository: Profile data repository
+        """
+        self.user_repository = user_repository
+        self.profile_repository = profile_repository
     
-    @staticmethod
-    def get_auth_status_data(current_user: TokenData) -> Dict[str, Any]:
-        """Get authentication status data"""
+    async def get_user_by_id(self, user_id: UUID) -> UserResponse:
+        """
+        Get user by ID with business validation.
+        
+        Args:
+            user_id: User ID
+            
+        Returns:
+            UserResponse with user data
+            
+        Raises:
+            NotFoundException: If user not found
+        """
+        user = await self.user_repository.get_by_id(user_id)
+        if not user:
+            raise NotFoundException(
+                resource="User",
+                field="id"
+            )
+        return user
+    
+    async def get_user_by_email(self, email: str) -> UserResponse:
+        """
+        Get user by email with business validation.
+        
+        Args:
+            email: User's email address
+            
+        Returns:
+            UserResponse with user data
+            
+        Raises:
+            NotFoundException: If user not found
+        """
+        user = await self.user_repository.get_by_email(email)
+        if not user:
+            raise NotFoundException(
+                resource="User",
+                field="email"
+            )
+        return user
+    
+    async def get_user_profile(self, user_id: UUID) -> ProfileResponse:
+        """
+        Get user's profile with business validation.
+        
+        Args:
+            user_id: User ID
+            
+        Returns:
+            ProfileResponse with profile data
+            
+        Raises:
+            NotFoundException: If profile not found
+        """
+        profile = await self.profile_repository.get_by_user_id(user_id)
+        if not profile:
+            raise NotFoundException(
+                resource="Profile",
+                field="user_id"
+            )
+        return profile
+    
+    async def get_all_users(self, skip: int = 0, limit: int = 100) -> List[UserResponse]:
+        """
+        Get all users with pagination and business rules.
+        
+        Args:
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            
+        Returns:
+            List of UserResponse objects
+            
+        Raises:
+            ValidationException: If pagination parameters are invalid
+        """
+        if skip < 0:
+            raise ValidationException(
+                message="Skip parameter must be non-negative",
+                field="skip"
+            )
+        
+        if limit <= 0 or limit > 1000:
+            raise ValidationException(
+                message="Limit must be between 1 and 1000",
+                field="limit"
+            )
+        
+        return await self.user_repository.get_all_users(skip=skip, limit=limit)
+    
+    async def search_users(self, query: str, skip: int = 0, limit: int = 100) -> List[UserResponse]:
+        """
+        Search users by email with business validation.
+        
+        Args:
+            query: Search query
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            
+        Returns:
+            List of matching UserResponse objects
+            
+        Raises:
+            ValidationException: If search parameters are invalid
+        """
+        if not query or len(query.strip()) < 2:
+            raise ValidationException(
+                message="Search query must be at least 2 characters",
+                field="query"
+            )
+        
+        if skip < 0:
+            raise ValidationException(
+                message="Skip parameter must be non-negative",
+                field="skip"
+            )
+        
+        if limit <= 0 or limit > 1000:
+            raise ValidationException(
+                message="Limit must be between 1 and 1000",
+                field="limit"
+            )
+        
+        # For this implementation, we'll search by email
+        # In a real system, you might have a more sophisticated search
+        users = await self.user_repository.get_all_users(skip=skip, limit=limit)
+        query_lower = query.lower()
+        
+        return [
+            user for user in users
+            if query_lower in user.email.lower()
+        ]
+    
+    async def get_user_with_profile(self, user_id: UUID) -> Dict[str, Any]:
+        """
+        Get user with their profile in a single response.
+        
+        Args:
+            user_id: User ID
+            
+        Returns:
+            Dictionary containing both user and profile data
+            
+        Raises:
+            NotFoundException: If user or profile not found
+        """
+        user = await self.get_user_by_id(user_id)
+        profile = await self.get_user_profile(user_id)
+        
         return {
-            "authenticated": True,
-            "user_id": str(current_user.sub),
-            "email": current_user.email,
-            "phone": current_user.phone,
-            "role": current_user.role
+            "user": user.dict(),
+            "profile": profile.dict()
         }
+    
+    async def validate_user_exists(self, user_id: UUID) -> bool:
+        """
+        Validate that a user exists without returning full data.
+        
+        Args:
+            user_id: User ID to validate
+            
+        Returns:
+            True if user exists, False otherwise
+        """
+        try:
+            await self.get_user_by_id(user_id)
+            return True
+        except NotFoundException:
+            return False
+    
+    @staticmethod
+    def get_user_auth_data(token_data: 'TokenData') -> 'UserAuth':
+        """
+        Convert TokenData to UserAuth format.
+        
+        Args:
+            token_data: JWT token data
+            
+        Returns:
+            UserAuth object with user authentication data
+        """
+        from ..schemas.profile import UserAuth
+        
+        return UserAuth(
+            user_id=token_data.user_id,
+            email=token_data.email,
+            aud=token_data.aud,
+            role=token_data.role,
+            profile=None  # Profile will be loaded separately if needed
+        )
