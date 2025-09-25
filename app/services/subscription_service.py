@@ -11,7 +11,7 @@ from ..models.billing import Billing
 from .plan_service import PlanService
 
 
-class SubscriptionServiceNew:
+class SubscriptionService:
     """Enhanced subscription service with plan-based system"""
 
     @staticmethod
@@ -87,7 +87,7 @@ class SubscriptionServiceNew:
         feature: str
     ) -> bool:
         """Check if user can access a specific feature"""
-        subscription = await SubscriptionServiceNew.get_user_subscription(db, user_id)
+        subscription = await SubscriptionService.get_user_subscription(db, user_id)
         
         if not subscription or not subscription.plan:
             return False
@@ -117,7 +117,7 @@ class SubscriptionServiceNew:
         feature: str
     ) -> Dict[str, Any]:
         """Get feature usage information"""
-        subscription = await SubscriptionServiceNew.get_user_subscription(db, user_id)
+        subscription = await SubscriptionService.get_user_subscription(db, user_id)
         
         if not subscription or not subscription.plan:
             return {
@@ -155,13 +155,13 @@ class SubscriptionServiceNew:
         amount: int = 1
     ) -> bool:
         """Increment feature usage for a user"""
-        subscription = await SubscriptionServiceNew.get_user_subscription(db, user_id)
+        subscription = await SubscriptionService.get_user_subscription(db, user_id)
         
         if not subscription or not subscription.plan:
             return False
         
         # Check if user can use the feature
-        can_use = await SubscriptionServiceNew.check_feature_access(db, user_id, feature)
+        can_use = await SubscriptionService.check_feature_access(db, user_id, feature)
         if not can_use:
             return False
         
@@ -195,7 +195,7 @@ class SubscriptionServiceNew:
         user_id: UUID
     ) -> Dict[str, Any]:
         """Get comprehensive subscription status"""
-        subscription = await SubscriptionServiceNew.get_user_subscription(db, user_id)
+        subscription = await SubscriptionService.get_user_subscription(db, user_id)
         
         if not subscription:
             return {
@@ -210,7 +210,7 @@ class SubscriptionServiceNew:
         feature_usage = {}
         
         for feature in features:
-            feature_usage[feature] = await SubscriptionServiceNew.get_feature_usage(db, user_id, feature)
+            feature_usage[feature] = await SubscriptionService.get_feature_usage(db, user_id, feature)
         
         # Get plan information using PlanService
         plan = await PlanService.get_plan(db, subscription.plan_id)
@@ -241,7 +241,7 @@ class SubscriptionServiceNew:
         days: int
     ) -> Optional[Subscription]:
         """Extend user's subscription"""
-        subscription = await SubscriptionServiceNew.get_user_subscription(db, user_id)
+        subscription = await SubscriptionService.get_user_subscription(db, user_id)
         
         if not subscription:
             return None
@@ -258,7 +258,7 @@ class SubscriptionServiceNew:
         user_id: UUID
     ) -> bool:
         """Cancel user's subscription"""
-        subscription = await SubscriptionServiceNew.get_user_subscription(db, user_id)
+        subscription = await SubscriptionService.get_user_subscription(db, user_id)
         
         if not subscription:
             return False
@@ -346,3 +346,45 @@ class SubscriptionServiceNew:
         
         await db.commit()
         return result.rowcount
+
+    @staticmethod
+    async def validate_plan_for_subscription(
+        db: AsyncSession, 
+        plan_id: UUID
+    ) -> bool:
+        """Validate that a plan exists and is active for subscription creation"""
+        plan = await PlanService.get_plan(db, plan_id)
+        return plan is not None and plan.is_active
+
+    @staticmethod
+    async def validate_subscription_ownership(
+        db: AsyncSession, 
+        user_id: UUID, 
+        subscription_id: UUID
+    ) -> bool:
+        """Validate that a subscription belongs to a user"""
+        subscriptions = await SubscriptionService.get_user_subscriptions(db, user_id)
+        subscription_ids = [str(sub.subscription_id) for sub in subscriptions]
+        return str(subscription_id) in subscription_ids
+
+    @staticmethod
+    async def validate_feature_usage_request(
+        db: AsyncSession, 
+        user_id: UUID, 
+        feature: str, 
+        amount: int = 1
+    ) -> bool:
+        """Validate if user can use a feature"""
+        return await SubscriptionService.check_feature_access(db, user_id, feature)
+
+    @staticmethod
+    async def validate_extend_subscription_request(
+        db: AsyncSession, 
+        user_id: UUID, 
+        days: int
+    ) -> bool:
+        """Validate extend subscription request"""
+        if days <= 0:
+            return False
+        subscription = await SubscriptionService.get_user_subscription(db, user_id)
+        return subscription is not None

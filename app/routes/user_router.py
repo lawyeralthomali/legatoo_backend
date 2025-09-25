@@ -4,6 +4,7 @@ from uuid import UUID
 
 from ..schemas.profile import UserAuth, TokenData
 from ..utils.auth import get_current_user
+from ..services.user_service import UserService
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -16,15 +17,7 @@ async def get_current_user_info(
     Get the current authenticated user's information from JWT token.
     This returns the user data from Supabase Auth.
     """
-    return UserAuth(
-        id=current_user.sub,
-        email=current_user.email,
-        phone=current_user.phone,
-        aud=current_user.aud,
-        role=current_user.role,
-        created_at=str(current_user.iat),  # Convert timestamp to string
-        updated_at=str(current_user.exp) if current_user.exp else None
-    )
+    return UserService.get_user_auth_data(current_user)
 
 
 @router.get("/me/auth-status")
@@ -34,10 +27,4 @@ async def check_auth_status(
     """
     Check if the user is authenticated and return basic auth status.
     """
-    return {
-        "authenticated": True,
-        "user_id": str(current_user.sub),
-        "email": current_user.email,
-        "phone": current_user.phone,
-        "role": current_user.role
-    }
+    return UserService.get_auth_status_data(current_user)

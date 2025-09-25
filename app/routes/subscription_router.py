@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict, Any
 from uuid import UUID
@@ -6,18 +6,10 @@ from uuid import UUID
 from ..db.database import get_db
 from ..utils.auth import get_current_user, TokenData
 from ..utils.subscription import get_subscription_status
-from ..services.subscription_service import SubscriptionServiceNew
+from ..services.subscription_service import SubscriptionService
+# Removed SubscriptionRouterService - formatting moved inline
 from ..services.plan_service import PlanService
-from ..models.subscription import Subscription
-from ..models.billing import Billing
-from ..schemas.subscription import (
-    SubscriptionResponse, 
-    SubscriptionStatusResponse,
-    PlanResponse,
-    BillingResponse,
-    FeatureUsageResponse,
-    UsageTrackingResponse
-)
+from fastapi import HTTPException, status
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
@@ -38,7 +30,6 @@ async def get_available_plans(
 ):
     """Get all available subscription plans"""
     plans = await PlanService.get_plans(db, active_only=active_only)
-    
     return [
         {
             "plan_id": str(plan.plan_id),
@@ -68,22 +59,15 @@ async def subscribe_to_plan(
     db: AsyncSession = Depends(get_db)
 ):
     """Subscribe to a plan"""
-    # Check if plan exists
-    plan = await PlanService.get_plan(db, plan_id)
-    if not plan:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Plan not found"
-        )
-    
-    if not plan.is_active:
+    # Validate plan exists and is active
+    if not await SubscriptionService.validate_plan_for_subscription(db, plan_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Plan is not active"
+            detail="Plan not found or not active"
         )
     
     # Create subscription
-    subscription = await SubscriptionServiceNew.create_subscription(
+    subscription = await SubscriptionService.create_subscription(
         db=db,
         user_id=current_user.sub,
         plan_id=plan_id,
@@ -92,10 +76,11 @@ async def subscribe_to_plan(
     
     return {
         "subscription_id": str(subscription.subscription_id),
-        "plan_name": plan.plan_name,
-        "plan_type": plan.plan_type,
-        "price": float(plan.price),
-        "billing_cycle": plan.billing_cycle,
+        "plan_id": str(subscription.plan_id),
+        "plan_name": subscription.plan.plan_name if subscription.plan else None,
+        "plan_type": subscription.plan.plan_type if subscription.plan else None,
+        "price": float(subscription.plan.price) if subscription.plan else 0,
+        "billing_cycle": subscription.plan.billing_cycle if subscription.plan else None,
         "start_date": subscription.start_date,
         "end_date": subscription.end_date,
         "status": subscription.status
@@ -108,15 +93,14 @@ async def get_my_subscriptions(
     db: AsyncSession = Depends(get_db)
 ):
     """Get current user's all subscriptions"""
-    subscriptions = await SubscriptionServiceNew.get_user_subscriptions(db, current_user.sub)
-    
+    subscriptions = await SubscriptionService.get_user_subscriptions(db, current_user.sub)
     return [
         {
             "subscription_id": str(sub.subscription_id),
-            "plan_name": sub.plan.plan_name,
-            "plan_type": sub.plan.plan_type,
-            "price": float(sub.plan.price),
-            "billing_cycle": sub.plan.billing_cycle,
+            "plan_name": sub.plan.plan_name if sub.plan else None,
+            "plan_type": sub.plan.plan_type if sub.plan else None,
+            "price": float(sub.plan.price) if sub.plan else 0,
+            "billing_cycle": sub.plan.billing_cycle if sub.plan else None,
             "start_date": sub.start_date,
             "end_date": sub.end_date,
             "status": sub.status,
@@ -135,7 +119,7 @@ async def get_feature_usage(
     db: AsyncSession = Depends(get_db)
 ):
     """Get feature usage information"""
-    return await SubscriptionServiceNew.get_feature_usage(db, current_user.sub, feature)
+    return await SubscriptionService.get_feature_usage(db, current_user.sub, feature)
 
 
 @router.post("/features/{feature}/use")
@@ -146,18 +130,20 @@ async def use_feature(
     db: AsyncSession = Depends(get_db)
 ):
     """Use a feature (increment usage)"""
-    success = await SubscriptionServiceNew.increment_feature_usage(
+    # Validate feature usage
+    if not await SubscriptionService.validate_feature_usage_request(db, current_user.sub, feature, amount):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Cannot use feature '{feature}'. Check your subscription limits."
+        )
+    
+    # Increment usage
+    success = await SubscriptionService.increment_feature_usage(
         db=db,
         user_id=current_user.sub,
         feature=feature,
         amount=amount
     )
-    
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Cannot use feature '{feature}'. Check your subscription limits."
-        )
     
     return {"message": f"Successfully used {amount} {feature}(s)"}
 
@@ -169,23 +155,19 @@ async def extend_subscription(
     db: AsyncSession = Depends(get_db)
 ):
     """Extend current subscription"""
-    if days <= 0:
+    # Validate extend request
+    if not await SubscriptionService.validate_extend_subscription_request(db, current_user.sub, days):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Days must be greater than 0"
+            detail="Invalid extend request or no active subscription found"
         )
     
-    subscription = await SubscriptionServiceNew.extend_subscription(
+    # Extend subscription
+    subscription = await SubscriptionService.extend_subscription(
         db=db,
         user_id=current_user.sub,
         days=days
     )
-    
-    if not subscription:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No active subscription found"
-        )
     
     return {
         "message": f"Subscription extended by {days} days",
@@ -200,7 +182,8 @@ async def cancel_subscription(
     db: AsyncSession = Depends(get_db)
 ):
     """Cancel current subscription"""
-    success = await SubscriptionServiceNew.cancel_subscription(
+    # Cancel subscription
+    success = await SubscriptionService.cancel_subscription(
         db=db,
         user_id=current_user.sub
     )
@@ -220,8 +203,7 @@ async def get_my_invoices(
     db: AsyncSession = Depends(get_db)
 ):
     """Get current user's invoices"""
-    invoices = await SubscriptionServiceNew.get_user_invoices(db, current_user.sub)
-    
+    invoices = await SubscriptionService.get_user_invoices(db, current_user.sub)
     return [
         {
             "invoice_id": str(invoice.invoice_id),
@@ -245,17 +227,15 @@ async def create_invoice(
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new invoice"""
-    # Verify subscription belongs to user
-    subscription = await SubscriptionServiceNew.get_user_subscriptions(db, current_user.sub)
-    subscription_ids = [str(sub.subscription_id) for sub in subscription]
-    
-    if str(subscription_id) not in subscription_ids:
+    # Validate subscription ownership
+    if not await SubscriptionService.validate_subscription_ownership(db, current_user.sub, subscription_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Subscription not found or access denied"
         )
     
-    invoice = await SubscriptionServiceNew.create_invoice(
+    # Create invoice
+    invoice = await SubscriptionService.create_invoice(
         db=db,
         subscription_id=subscription_id,
         amount=amount,
@@ -279,8 +259,7 @@ async def get_usage_tracking(
     db: AsyncSession = Depends(get_db)
 ):
     """Get usage tracking information"""
-    usage_records = await SubscriptionServiceNew.get_usage_tracking(db, current_user.sub)
-    
+    usage_records = await SubscriptionService.get_usage_tracking(db, current_user.sub)
     return [
         {
             "usage_id": str(record.usage_id),
@@ -299,7 +278,7 @@ async def cleanup_expired_subscriptions(
     db: AsyncSession = Depends(get_db)
 ):
     """Clean up expired subscriptions (admin endpoint)"""
-    count = await SubscriptionServiceNew.cleanup_expired_subscriptions(db)
+    count = await SubscriptionService.cleanup_expired_subscriptions(db)
     return {"message": f"Cleaned up {count} expired subscriptions"}
 
 

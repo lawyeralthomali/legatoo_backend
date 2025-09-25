@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Test Pydantic v2 validator fix
+Test without email validation to isolate the issue
 """
 import sys
 sys.path.append('.')
 
-def test_pydantic_v2_validation():
-    """Test that Pydantic v2 validators work correctly"""
-    print("🧪 Testing Pydantic v2 Validation")
+def test_no_email_validation():
+    """Test that usman@gmail.com works without email validation"""
+    print("🧪 Testing Without Email Validation")
     print("=" * 50)
     
     try:
@@ -22,7 +22,7 @@ def test_pydantic_v2_validation():
             phone_number="0501234567"
         )
         
-        print("✅ usman@gmail.com is now VALID with Pydantic v2!")
+        print("✅ usman@gmail.com is VALID without email validation!")
         print(f"   📧 Email: {request.email}")
         print(f"   👤 Name: {request.first_name} {request.last_name}")
         print(f"   📱 Phone: {request.phone_number}")
@@ -31,19 +31,21 @@ def test_pydantic_v2_validation():
         
     except Exception as e:
         print(f"❌ usman@gmail.com is still INVALID: {e}")
+        print(f"   Error type: {type(e)}")
+        print(f"   Error details: {e}")
         return False
 
-
 if __name__ == "__main__":
-    print("🔧 Testing Pydantic v2 Validator Fix")
+    print("🔍 Testing Without Email Validation")
     print("=" * 60)
     
-    email_ok = test_pydantic_v2_validation()
+    success = test_no_email_validation()
     
-    if email_ok:
+    if success:
         print("\n🎉 SUCCESS!")
-        print("✅ Pydantic v2 validators are working correctly")
-        print("✅ usman@gmail.com should now be accepted")
-        print("✅ The signup endpoint should work after server restart")
+        print("✅ Email validation was the issue")
+        print("✅ usman@gmail.com works without custom validation")
+        print("✅ The signup endpoint should work now")
     else:
-        print("\n❌ There's still an issue with the validation")
+        print("\n❌ The issue is NOT with email validation")
+        print("🔍 There's another validation layer causing the problem")
