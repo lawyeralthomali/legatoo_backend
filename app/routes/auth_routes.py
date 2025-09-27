@@ -2,6 +2,7 @@ from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config.logging_config import get_logger
 from ..db.database import get_db
 from ..schemas.request import SignupRequest, LoginRequest, RefreshTokenRequest
 from ..schemas.response import ApiResponse, create_success_response, create_error_response
@@ -20,6 +21,7 @@ from dotenv import load_dotenv
 load_dotenv("supabase.env")
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+logger = get_logger(__name__)
 
 
 # Dependency injection functions
@@ -63,9 +65,10 @@ async def signup(
 ) -> ApiResponse:
    
     try:
+        logger.info(f"Signup request received for email: {signup_data.email}")
         # Delegate to service for business logic
         result = await auth_service.signup(signup_data)
-        print(f"hi iam here after signup auth_routes.py: {result}")
+        logger.info(f"Signup successful for email: {signup_data.email}, user ID: {result.get('user', {}).get('id')}")
         # Return success response
         return create_success_response(
             message="User and profile created successfully",
@@ -74,6 +77,7 @@ async def signup(
         
     except ConflictException as e:
         # Handle duplicate email
+        logger.warning(f"Signup failed - duplicate email: {signup_data.email}")
         from ..schemas.response import ErrorDetail
         return create_error_response(
             message=e.message,
@@ -82,6 +86,7 @@ async def signup(
         
     except ValidationException as e:
         # Handle validation errors
+        logger.warning(f"Signup failed - validation error for email {signup_data.email}: {e.message}")
         from ..schemas.response import ErrorDetail
         return create_error_response(
             message=e.message,
@@ -90,6 +95,7 @@ async def signup(
         
     except ExternalServiceException as e:
         # Handle external service errors
+        logger.error(f"Signup failed - external service error for email {signup_data.email}: {e.message}")
         from ..schemas.response import ErrorDetail
         return create_error_response(
             message=e.message,
@@ -98,6 +104,7 @@ async def signup(
         
     except Exception as e:
         # Handle unexpected errors
+        logger.exception(f"Unexpected error during signup for email {signup_data.email}: {str(e)}")
         from ..schemas.response import ErrorDetail
         return create_error_response(
             message="Signup failed",
@@ -121,8 +128,10 @@ async def login(
         ApiResponse with authentication data or error
     """
     try:
+        logger.info(f"Login request received for email: {login_data.email}")
         # Delegate to service for business logic
         result = await auth_service.login(login_data)
+        logger.info(f"Login successful for email: {login_data.email}, user ID: {result.get('user', {}).get('id')}")
         
         # Return success response
         return create_success_response(
@@ -148,6 +157,7 @@ async def login(
         
     except Exception as e:
         # Handle unexpected errors
+        logger.exception(f"Unexpected error during login for email {login_data.email}: {str(e)}")
         return create_error_response(
             message="Login failed",
             errors=[{"field": None, "message": "An unexpected error occurred"}]

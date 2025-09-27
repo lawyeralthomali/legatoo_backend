@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from ..config.logging_config import get_logger
 from .base import IProfileRepository, BaseRepository
 from ..models.profile import Profile
 from ..schemas.profile import ProfileCreate, ProfileResponse, ProfileUpdate
@@ -27,6 +28,7 @@ class ProfileRepository(IProfileRepository, BaseRepository):
             db: Database session
         """
         super().__init__(db, Profile)
+        self.logger = get_logger(__name__)
     
     async def get_by_user_id(self, user_id: UUID) -> Optional[ProfileResponse]:
         """
@@ -76,6 +78,7 @@ class ProfileRepository(IProfileRepository, BaseRepository):
             IntegrityError: If profile already exists (race condition)
         """
         try:
+            self.logger.info(f"Creating profile for user ID: {user_id}")
             profile_dict = profile_data.copy()
             profile_dict["id"] = user_id  # Primary key (same as Supabase user_id)
             
@@ -85,16 +88,22 @@ class ProfileRepository(IProfileRepository, BaseRepository):
             await self.db.commit()
             await self.db.refresh(profile)
             
+            self.logger.info(f"Profile created successfully for user ID: {user_id}")
             return ProfileResponse.model_validate(profile)
             
         except IntegrityError as e:
             await self.db.rollback()
+            self.logger.exception(f"Integrity error creating profile for user ID {user_id}: {str(e)}")
             if "id" in str(e.orig).lower() or "unique" in str(e.orig).lower():
                 raise IntegrityError(
                     statement=e.statement,
                     params=e.params,
                     orig=e.orig
                 )
+            raise e
+        except Exception as e:
+            await self.db.rollback()
+            self.logger.exception(f"Unexpected error creating profile for user ID {user_id}: {str(e)}")
             raise e
     
     async def update_profile(self, user_id: UUID, profile_data: ProfileUpdate) -> Optional[ProfileResponse]:

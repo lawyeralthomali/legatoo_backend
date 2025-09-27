@@ -4,13 +4,7 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 # Import models to ensure they are registered with SQLAlchemy
-from .models import profile
-from .models import plan
-from .models import subscription
-from .models import usage_tracking
-from .models import billing
-from .models import legal_document
-from .models import user
+from .config.logging_config import setup_logging
 from .db.database import create_tables
 
 # Import routers
@@ -22,7 +16,9 @@ from .routes.subscription_router import router as subscription_router
 from .routes.premium_router import router as premium_router
 from .routes.legal_document_router import router as legal_document_router
 from .routes.legal_assistant_router import router as legal_assistant_router
-
+from .routes.item import router as item_router
+from pydantic import BaseModel
+from typing import List
 # Import exception handlers
 from .utils.exception_handlers import (
     app_exception_handler, validation_exception_handler,
@@ -37,6 +33,9 @@ from .utils.exceptions import (
     ConflictException, AuthenticationException, DatabaseException,
     ExternalServiceException
 )
+
+# Setup logging
+setup_logging()
 
 # Create FastAPI app
 app = FastAPI(
@@ -101,7 +100,7 @@ app.add_exception_handler(Exception, general_exception_handler)
 app.include_router(profile_router, prefix="/api/v1")
 app.include_router(auth_routes, prefix="/api/v1")
 app.include_router(user_routes, prefix="/api/v1")
-
+app.include_router(item_router, prefix="/api/v1")
 app.include_router(subscription_router, prefix="/api/v1")
 app.include_router(premium_router, prefix="/api/v1")
 app.include_router(legal_document_router, prefix="/api/v1")
@@ -151,6 +150,27 @@ async def root():
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "supabase-auth-fastapi"}
+
+class Item(BaseModel):
+    item_name:str
+    item_price:float
+    item_quantity:int
+
+items = []
+@app.get("/items")
+async def list_items():
+    return items
+
+@app.post("/new-items")
+async def create_item(item :Item) :
+    items.append(item)
+    return items
+
+@app.get("/items/{item_id}") 
+async def get_item(item_id:int) ->Item:
+    if item_id >= len(items):
+        raise HTTPException(status_code=404, detail="Item not found")
+    return items[item_id]
 
 if __name__ == "__main__":
     import uvicorn
