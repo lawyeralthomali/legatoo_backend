@@ -1,331 +1,341 @@
 """
 Authentication service for business logic operations.
 
-This module contains business logic for authentication operations,
+This module contains business logic for authentication operations using SQLite,
 following the Single Responsibility Principle and Dependency Inversion.
 """
 
-from typing import Dict, Any
-from uuid import UUID
+from typing import Dict, Any, Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+from datetime import datetime, timedelta
+import os
 
-from fastapi import HTTPException
-from fastapi.concurrency import run_in_threadpool
 from ..config.logging_config import get_logger
-
-from ..repositories.user_repository import IUserRepository
-from ..repositories.profile_repository import ProfileRepository
+from ..models.user import User
+from ..models.profile import Profile
+from ..schemas.response import raise_error_response
+from ..schemas.user_schemas import UserCreate, UserLogin, UserResponse
+from ..schemas.profile_schemas import ProfileCreate, ProfileResponse
 from ..schemas.request import SignupRequest, LoginRequest
-from ..interfaces.supabase_client import ISupabaseClient
+from ..schemas.response import create_success_response
 from ..utils.exceptions import (
-    ValidationException, ConflictException, ExternalServiceException
+    ValidationException, ConflictException, AuthenticationException
 )
 from ..utils.api_exceptions import ApiException
 
 logger = get_logger(__name__)
 
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# JWT settings
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
 
 class AuthService:
     """
-    Authentication service for business logic operations.
+    Authentication service for business logic operations using SQLite.
     
-    This service handles user authentication, registration, and profile management
-    using Supabase Auth and the application's database repositories.
+    This service handles all authentication-related business logic,
+    including user registration, login, and profile management.
     """
     
-    def __init__(
-        self,
-        user_repository: IUserRepository,
-        profile_repository: ProfileRepository,
-        supabase_client: ISupabaseClient
-    ):
-        """
-        Initialize the authentication service.
-        
-        Args:
-            user_repository: Repository for user data operations
-            profile_repository: Repository for profile data operations
-            supabase_client: Client for Supabase authentication operations
-        """
-        self.user_repository = user_repository
-        self.profile_repository = profile_repository
-        self.supabase_client = supabase_client
+    def __init__(self, db: AsyncSession):
+        self.db = db
+    
+    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+        """Verify a password against its hash."""
+        return pwd_context.verify(plain_password, hashed_password)
+    
+    def get_password_hash(self, password: str) -> str:
+        """Hash a password."""
+        return pwd_context.hash(password)
+    
+    def create_access_token(self, data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+        """Create a JWT access token."""
+        to_encode = data.copy()
+        if expires_delta:
+            expire = datetime.utcnow() + expires_delta
+        else:
+            expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        to_encode.update({"exp": expire})
+        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        return encoded_jwt
     
     async def signup(self, signup_data: SignupRequest) -> Dict[str, Any]:
         """
-        Register a new user with Supabase Auth and create their profile.
+        Register a new user with profile.
         
         Args:
             signup_data: User registration data
             
         Returns:
-            Dict containing user and profile information
+            ApiResponse with user and profile information
             
         Raises:
-            ConflictException: If email is already registered
-            ExternalServiceException: For service errors
+            ApiException: For various error conditions
         """
         try:
-            # 0. Pre-check if user already exists
-            try:
-                user_exists = await self.check_user_exists(signup_data.email)
-                if user_exists:
-                    logger.warning(f"User with email {signup_data.email} already exists")
-                    raise ConflictException(
-                        message="Email already registered",
-                        field="email"
-                    )
-            except ConflictException:
-                # Re-raise conflict exceptions
-                raise
-            except Exception as e:
-                # Log warning but continue with signup attempt
-                logger.warning(f"Could not pre-check user existence for {signup_data.email}: {str(e)}")
-            
-            # 1. Create user in Supabase Auth (async-safe)
-            try:
-                user_data = await run_in_threadpool(
-                    self.supabase_client.signup,
-                    signup_data.email,
-                    signup_data.password,
-                    {
-                        "first_name": signup_data.first_name,
-                        "last_name": signup_data.last_name,
-                        "phone_number": signup_data.phone_number
-                    }
-                )
-                logger.info(f"Supabase signup successful for user: {user_data.get('email')}")
-            except HTTPException as e:
-                # Log the HTTP exception with full context
-                logger.exception(f"Supabase signup failed for email {signup_data.email}: {e.detail}")
-                
-                # SupabaseClient already handles error mapping, just propagate
-                if e.status_code == 400:
-                    raise ValidationException(
-                        message="Invalid email format",
-                        field="email"
-                    )
-                elif e.status_code == 422:
-                    raise ConflictException(
-                        message="Email already registered",
-                        field="email"
-                    )
-                elif e.status_code == 429:
-                    raise ExternalServiceException(
-                        message="Too many requests. Please try again later.",
-                        field="email",
-                        service="Supabase",
-                        details={"error": str(e.detail)}
-                    )
-                else:
-                    raise ExternalServiceException(
-                        message="User creation failed",
-                        field="email",
-                        service="Supabase",
-                        details={"error": str(e.detail)}
-                    )
-            
-            # 2. Validate user creation response
-            user_id = user_data.get("id")
-            if not user_id:
-                logger.error(f"Supabase signup succeeded but no user ID returned for email {signup_data.email}")
-                raise ExternalServiceException(
-                    message="User creation failed",
-                    field="user",
-                    service="Supabase",
-                    details={"error": "No user ID returned"}
+            # Check if user already exists
+            existing_user = await self.db.execute(
+                select(User).where(User.email == signup_data.email)
+            )
+            if existing_user.scalar_one_or_none():
+                raise_error_response(
+                    status_code=422,
+                    message="Email already registered",
+                    field="email"
                 )
             
-            # 3. Create profile for the new user
-            try:
-                profile_data = {
-                    "email": signup_data.email,
-                    "first_name": signup_data.first_name or "User",
-                    "last_name": signup_data.last_name or "User",
-                    "phone_number": signup_data.phone_number,
-                    "account_type": "personal"
+            # Create user
+            hashed_password = self.get_password_hash(signup_data.password)
+            user = User(
+                email=signup_data.email,
+                password_hash=hashed_password,
+                is_active=True,
+                is_verified=False
+            )
+            
+            self.db.add(user)
+            await self.db.flush()  # Get the user ID
+            
+            # Create profile
+            profile = Profile(
+                user_id=user.id,
+                email=signup_data.email,
+                first_name=signup_data.first_name,
+                last_name=signup_data.last_name,
+                phone_number=signup_data.phone_number,
+                account_type=signup_data.account_type.value if signup_data.account_type else "personal"
+            )
+            
+            self.db.add(profile)
+            await self.db.commit()
+            
+            # Create access token
+            access_token = self.create_access_token(data={"sub": str(user.id)})
+            
+            logger.info(f"User registered successfully: {user.email}")
+            
+            return create_success_response(
+                message="User and profile created successfully",
+                data={
+                    "user": {
+                        "id": user.id,
+                        "email": user.email,
+                        "is_active": user.is_active,
+                        "is_verified": user.is_verified,
+                        "created_at": user.created_at
+                    },
+                    "profile": {
+                        "id": profile.id,
+                        "first_name": profile.first_name,
+                        "last_name": profile.last_name,
+                        "phone_number": profile.phone_number,
+                        "account_type": profile.account_type
+                    },
+                    "access_token": access_token,
+                    "token_type": "bearer"
                 }
-                
-                profile = await self.profile_repository.create_profile(
-                    user_id=UUID(user_id),
-                    profile_data=profile_data
-                )
-                
-            except Exception as e:
-                logger.exception(f"Profile creation failed for user {user_id} (email: {signup_data.email}): {str(e)}")
-                
-                # Check if it's a unique constraint violation (profile already exists)
-                error_str = str(e).lower()
-                if "unique constraint" in error_str or "duplicate key" in error_str or "already exists" in error_str:
-                    # This means the user already exists in Supabase but we're trying to create a profile
-                    # Map this to an email already registered error
-                    logger.warning(f"Profile already exists for user {user_id} (email: {signup_data.email})")
-                    raise ConflictException(
-                        message="Email already registered",
-                        field="email"
-                    )
-                else:
-                    raise ExternalServiceException(
-                        message="Profile creation failed",
-                        field="profile",
-                        service="Database",
-                        details={"error": str(e)}
-                    )
+            )
             
-            # 4. Return success data
-            return {
-                "user": {
-                    "id": user_data.get("id"),
-                    "email": user_data.get("email"),
-                    "created_at": user_data.get("created_at"),
-                    "first_name": signup_data.first_name,
-                    "last_name": signup_data.last_name,
-                    "phone_number": signup_data.phone_number
-                },
-                "profile": {
-                    "id": profile.id,  # Same as Supabase user_id
-                    "email": profile.email,
-                    "first_name": profile.first_name,
-                    "last_name": profile.last_name,
-                    "phone_number": profile.phone_number,
-                    "account_type": profile.account_type,
-                    "created_at": profile.created_at
-                }
-            }
-            
-        except (ValidationException, ConflictException, ExternalServiceException, ApiException):
-            # Re-raise our custom exceptions (they're already logged by their handlers)
+        except ApiException:
+            # Re-raise ApiException as-is
             raise
         except Exception as e:
-            logger.exception(f"Unexpected error during signup for email {signup_data.email}: {str(e)}")
-            raise ExternalServiceException(
-                message="Signup failed",
-                field="general",
-                service="AuthService",
-                details={"error": str(e)}
+            await self.db.rollback()
+            logger.error(f"User registration failed: {str(e)}")
+            raise_error_response(
+                status_code=500,
+                message="User registration failed",
+                field="email"
             )
     
     async def login(self, login_data: LoginRequest) -> Dict[str, Any]:
         """
-        Authenticate user and return session data.
+        Authenticate a user.
         
         Args:
-            login_data: Login request data
+            login_data: Login credentials
             
         Returns:
-            Dict containing user and session data
+            Dict containing user information and access token
             
         Raises:
-            ValidationException: For validation errors
-            AuthenticationException: For authentication failures
-            ExternalServiceException: For auth service errors
+            ApiException: For various error conditions
         """
         try:
-            # Authenticate with Supabase (async-safe)
-            session_data = await run_in_threadpool(
-                self.supabase_client.login,
-                login_data.email,
-                login_data.password
+            # Find user by email
+            result = await self.db.execute(
+                select(User).where(User.email == login_data.email)
+            )
+            user = result.scalar_one_or_none()
+            
+            if not user or not self.verify_password(login_data.password, user.password_hash):
+                raise_error_response(
+                    status_code=401,
+                    message="Invalid email or password",
+                    field="email"
+                )
+            
+            if not user.is_active:
+                raise_error_response(
+                    status_code=401,
+                    message="Account is deactivated",
+                    field="email"
+                )
+            if not user.is_verified:
+                raise_error_response(
+                    status_code=401,
+                    message="Account is not verified, please check your email for verification",
+                    field="email"
+                )
+            
+            # Get user profile
+            profile_result = await self.db.execute(
+                select(Profile).where(Profile.user_id == user.id)
+            )
+            profile = profile_result.scalar_one_or_none()
+            
+            # Create access token
+            access_token = self.create_access_token(data={"sub": str(user.id)})
+            
+            logger.info(f"User logged in successfully: {user.email}")
+            
+            return create_success_response(
+                message="Login successful",
+                data={
+                    "user": {
+                        "id": user.id,
+                        "email": user.email,
+                        "is_active": user.is_active,
+                        "is_verified": user.is_verified,
+                        "created_at": user.created_at
+                    },
+                    "profile": {
+                        "id": profile.id if profile else None,
+                        "first_name": profile.first_name if profile else None,
+                        "last_name": profile.last_name if profile else None,
+                        "phone_number": profile.phone_number if profile else None,
+                        "account_type": profile.account_type if profile else None
+                    } if profile else None,
+                    "access_token": access_token,
+                    "token_type": "bearer"
+                }
             )
             
-            # Get user data
-            user_id = session_data.get("user", {}).get("id")
-            if not user_id:
-                logger.error(f"Supabase login succeeded but no user ID in session for email {login_data.email}")
-                raise ExternalServiceException(
-                    message="Authentication failed",
-                    field="email",
-                    service="Supabase",
-                    details={"error": "No user ID in session"}
-                )
-            
-            # Get profile data
-            try:
-                profile = await self.profile_repository.get_profile_by_user_id(UUID(user_id))
-                logger.info(f"Profile fetched successfully for user {user_id}")
-            except Exception as e:
-                logger.warning(f"Could not fetch profile for user {user_id} (email: {login_data.email}): {str(e)}")
-                profile = None
-            
-            # Build response data
-            response_data = {
-                "user": {
-                    "id": user_id,
-                    "email": session_data.get("user", {}).get("email"),
-                    "first_name": profile.first_name if profile else None,
-                    "last_name": profile.last_name if profile else None,
-                    "phone_number": profile.phone_number if profile else None
-                },
-                "session": {
-                    "access_token": session_data.get("access_token"),
-                    "refresh_token": session_data.get("refresh_token"),
-                    "expires_at": session_data.get("expires_at")
-                }
-            }
-            
-            # Add profile data if it exists
-            if profile:
-                response_data["profile"] = {
-                    "id": profile.id,  # Same as Supabase user_id
-                    "email": profile.email,
-                    "first_name": profile.first_name,
-                    "last_name": profile.last_name,
-                    "phone_number": profile.phone_number,
-                    "account_type": profile.account_type,
-                    "created_at": profile.created_at
-                }
-            else:
-                response_data["profile"] = None
-            
-            return response_data
-            
-        except HTTPException as e:
-            # Log the HTTP exception with full context
-            logger.exception(f"Supabase login failed for email {login_data.email}: {e.detail}")
-            
-            # Handle authentication errors from Supabase client
-            if e.status_code == 401:
-                raise ExternalServiceException(
-                    message="Invalid email or password",
-                    field="email",
-                    service="Supabase",
-                    details={"error": str(e.detail)}
-                )
-            else:
-                raise ExternalServiceException(
-                    message="Authentication failed",
-                    field="email",
-                    service="Supabase",
-                    details={"error": str(e.detail)}
-                )
-        except (ApiException, ExternalServiceException):
-            # Re-raise ApiException and ExternalServiceException
+        except ApiException:
+            # Re-raise ApiException as-is
             raise
         except Exception as e:
-            logger.exception(f"Unexpected error during login for email {login_data.email}: {str(e)}")
-            raise ExternalServiceException(
-                message="Authentication failed",
-                field="email",
-                service="Supabase",
-                details={"error": str(e)}
+            logger.error(f"User login failed: {str(e)}")
+            raise_error_response(
+                status_code=500,
+                message="Login failed",
+                field="email"
             )
     
-    async def check_user_exists(self, email: str) -> bool:
+    async def get_user_by_id(self, user_id: int) -> Optional[User]:
+        """Get user by ID."""
+        result = await self.db.execute(
+            select(User).where(User.id == user_id)
+        )
+        return result.scalar_one_or_none()
+    
+    async def get_user_by_email(self, email: str) -> Optional[User]:
+        """Get user by email."""
+        result = await self.db.execute(
+            select(User).where(User.email == email)
+        )
+        return result.scalar_one_or_none()
+    
+    async def verify_token(self, token: str) -> Optional[User]:
+        """Verify JWT token and return user."""
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id: str = payload.get("sub")
+            if user_id is None:
+                return None
+            return await self.get_user_by_id(int(user_id))
+        except JWTError:
+            return None
+    
+    async def refresh_token(self, token: str) -> Dict[str, Any]:
         """
-        Check if a user exists in the profiles table.
+        Refresh an access token.
         
         Args:
-            email: Email address to check
+            token: Current access token
             
         Returns:
-            True if user exists, False otherwise
+            Dict containing new access token
+            
+        Raises:
+            ApiException: For various error conditions
         """
         try:
-            result = await run_in_threadpool(
-                self.supabase_client.check_user_exists,
-                email
+            user = await self.verify_token(token)
+            if not user:
+                raise_error_response(
+                    status_code=401,
+                    message="Invalid token",
+                    field="token"
+                )
+            
+            # Create new access token
+            new_token = self.create_access_token(data={"sub": str(user.id)})
+            
+            return create_success_response(
+                message="Token refreshed successfully",
+                data={
+                    "access_token": new_token,
+                    "token_type": "bearer"
+                }
             )
-            logger.info(f"User existence check completed for email {email}: {result}")
-            return result
+            
+        except ApiException:
+            # Re-raise ApiException as-is
+            raise
         except Exception as e:
-            logger.warning(f"Could not check if user exists for email {email}: {str(e)}")
-            return False
+            logger.error(f"Token refresh failed: {str(e)}")
+            raise_error_response(
+                status_code=500,
+                message="Token refresh failed",
+                field="token"
+            )
+    
+    async def logout(self, token: str) -> Dict[str, Any]:
+        """
+        Logout a user (invalidate token).
+        
+        Args:
+            token: Access token to invalidate
+            
+        Returns:
+            Dict containing logout confirmation
+            
+        Raises:
+            ApiException: For various error conditions
+        """
+        try:
+            # In a real implementation, you might want to maintain a blacklist
+            # of invalidated tokens. For now, we'll just return success.
+            logger.info("User logged out successfully")
+            
+            return create_success_response(
+                message="Logout successful",
+                data={"logged_out": True}
+            )
+            
+        except Exception as e:
+            logger.error(f"Logout failed: {str(e)}")
+            raise_error_response(
+                status_code=500,
+                message="Logout failed",
+                field="token"
+            )

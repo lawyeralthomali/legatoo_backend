@@ -1,17 +1,14 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import String
 import os
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv("supabase.env")
 
-# Database URL - Supabase PostgreSQL (using session pooler for better performance)
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://postgres:Sd7GjUm1f1CI05Nd@db.otiivelflvidgyfshmjn.supabase.co:5432/postgres"
-)
+# Database URL - Force SQLite (local file database)
+DATABASE_URL = "sqlite+aiosqlite:///./app.db"
 
 # Create async engine
 engine = create_async_engine(

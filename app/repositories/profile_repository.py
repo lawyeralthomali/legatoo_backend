@@ -6,7 +6,6 @@ with comprehensive error handling, validation, and logging.
 """
 
 from typing import Optional, List, Dict, Any, Union
-from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
@@ -14,7 +13,7 @@ from datetime import datetime
 
 from ..config.logging_config import get_logger
 from ..models.profile import Profile
-from ..schemas.profile import ProfileCreate, ProfileResponse, ProfileUpdate
+from ..schemas.profile_schemas import ProfileCreate, ProfileResponse, ProfileUpdate
 
 
 class ProfileRepository:
@@ -36,12 +35,12 @@ class ProfileRepository:
         self.db = db
         self.logger = get_logger(__name__)
     
-    async def get_by_user_id(self, user_id: UUID) -> Optional[ProfileResponse]:
+    async def get_by_user_id(self, user_id: int) -> Optional[ProfileResponse]:
         """
         Get profile by user ID.
         
         Args:
-            user_id: User ID (UUID)
+            user_id: User ID (int)
             
         Returns:
             ProfileResponse if found, None otherwise
@@ -99,14 +98,14 @@ class ProfileRepository:
     
     async def create_profile(
         self, 
-        user_id: UUID, 
+        user_id: int, 
         profile_data: Union[Dict[str, Any], ProfileCreate]
     ) -> ProfileResponse:
         """
         Create new profile with comprehensive validation and error handling.
         
         Args:
-            user_id: User ID for the profile (UUID)
+            user_id: User ID for the profile (int)
             profile_data: Profile creation data (dict or ProfileCreate)
             
         Returns:
@@ -185,14 +184,14 @@ class ProfileRepository:
     
     async def update_profile(
         self, 
-        user_id: UUID, 
+        user_id: int, 
         profile_data: Union[ProfileUpdate, Dict[str, Any]]
     ) -> Optional[ProfileResponse]:
         """
         Update profile by user ID with comprehensive validation.
         
         Args:
-            user_id: User ID (UUID)
+            user_id: User ID (int)
             profile_data: Profile update data (ProfileUpdate or dict)
             
         Returns:
@@ -258,12 +257,12 @@ class ProfileRepository:
             self.logger.exception(f"Unexpected error updating profile for user ID {user_id}: {str(e)}")
             raise e
     
-    async def delete_profile(self, user_id: UUID) -> bool:
+    async def delete_profile(self, user_id: int) -> bool:
         """
         Delete profile by user ID with proper error handling.
         
         Args:
-            user_id: User ID (UUID)
+            user_id: User ID (int)
             
         Returns:
             True if deleted, False if not found

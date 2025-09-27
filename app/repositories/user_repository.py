@@ -6,14 +6,13 @@ following the Repository pattern for clean separation of concerns.
 """
 
 from typing import Optional, List, Dict, Any
-from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from .base import IUserRepository, BaseRepository
 from ..models.user import User
-from ..schemas.user import UserCreate, UserResponse
+from ..schemas.user_schemas import UserCreate, UserResponse
 
 
 class UserRepository(IUserRepository, BaseRepository):
@@ -92,7 +91,7 @@ class UserRepository(IUserRepository, BaseRepository):
                 )
             raise e
     
-    async def get_by_id(self, user_id: UUID) -> Optional[UserResponse]:
+    async def get_by_id(self, user_id: int) -> Optional[UserResponse]:
         """
         Get user by ID.
         
@@ -125,7 +124,7 @@ class UserRepository(IUserRepository, BaseRepository):
         users = result.scalars().all()
         return [UserResponse.model_validate(user) for user in users]
     
-    async def update_user(self, user_id: UUID, user_data: Dict[str, Any]) -> Optional[UserResponse]:
+    async def update_user(self, user_id: int, user_data: Dict[str, Any]) -> Optional[UserResponse]:
         """
         Update user by ID.
         
@@ -158,7 +157,7 @@ class UserRepository(IUserRepository, BaseRepository):
             await self.db.rollback()
             raise e
     
-    async def delete_user(self, user_id: UUID) -> bool:
+    async def delete_user(self, user_id: int) -> bool:
         """
         Delete user by ID.
         

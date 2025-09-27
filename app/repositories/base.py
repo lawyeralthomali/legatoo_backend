@@ -7,7 +7,6 @@ consistent data access patterns and enabling easy testing through mocking.
 
 from abc import ABC, abstractmethod
 from typing import Optional, List, Any, Dict
-from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from sqlalchemy.orm import DeclarativeBase
@@ -17,7 +16,7 @@ class IBaseRepository(ABC):
     """Base repository interface with common CRUD operations."""
     
     @abstractmethod
-    async def get_by_id(self, id: UUID) -> Optional[Any]:
+    async def get_by_id(self, id: int) -> Optional[Any]:
         """Get entity by ID."""
         pass
     
@@ -32,12 +31,12 @@ class IBaseRepository(ABC):
         pass
     
     @abstractmethod
-    async def update(self, id: UUID, entity_data: Dict[str, Any]) -> Optional[Any]:
+    async def update(self, id: int, entity_data: Dict[str, Any]) -> Optional[Any]:
         """Update entity by ID."""
         pass
     
     @abstractmethod
-    async def delete(self, id: UUID) -> bool:
+    async def delete(self, id: int) -> bool:
         """Delete entity by ID."""
         pass
 
@@ -65,7 +64,7 @@ class IProfileRepository(ABC):
     """Repository interface for profile-related operations."""
     
     @abstractmethod
-    async def get_by_user_id(self, user_id: UUID) -> Optional[Any]:
+    async def get_by_user_id(self, user_id: int) -> Optional[Any]:
         """Get profile by user ID."""
         pass
     
@@ -75,17 +74,17 @@ class IProfileRepository(ABC):
         pass
     
     @abstractmethod
-    async def create_profile(self, user_id: UUID, profile_data: Dict[str, Any]) -> Any:
+    async def create_profile(self, user_id: int, profile_data: Dict[str, Any]) -> Any:
         """Create new profile."""
         pass
     
     @abstractmethod
-    async def update_profile(self, user_id: UUID, profile_data: Dict[str, Any]) -> Optional[Any]:
+    async def update_profile(self, user_id: int, profile_data: Dict[str, Any]) -> Optional[Any]:
         """Update profile by user ID."""
         pass
     
     @abstractmethod
-    async def delete_profile(self, user_id: UUID) -> bool:
+    async def delete_profile(self, user_id: int) -> bool:
         """Delete profile by user ID."""
         pass
 
@@ -104,7 +103,7 @@ class BaseRepository:
         self.db = db
         self.model = model
     
-    async def get_by_id(self, id: UUID) -> Optional[Any]:
+    async def get_by_id(self, id: int) -> Optional[Any]:
         """Get entity by ID."""
         result = await self.db.execute(
             select(self.model).where(self.model.id == id)
@@ -126,7 +125,7 @@ class BaseRepository:
         await self.db.refresh(entity)
         return entity
     
-    async def update(self, id: UUID, entity_data: Dict[str, Any]) -> Optional[Any]:
+    async def update(self, id: int, entity_data: Dict[str, Any]) -> Optional[Any]:
         """Update entity by ID."""
         result = await self.db.execute(
             update(self.model)
@@ -139,7 +138,7 @@ class BaseRepository:
             await self.db.commit()
         return entity
     
-    async def delete(self, id: UUID) -> bool:
+    async def delete(self, id: int) -> bool:
         """Delete entity by ID."""
         result = await self.db.execute(
             delete(self.model).where(self.model.id == id)

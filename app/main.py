@@ -41,8 +41,8 @@ setup_logging()
 
 # Create FastAPI app
 app = FastAPI(
-    title="Supabase Auth FastAPI",
-    description="A FastAPI backend integrated with Supabase Authentication",
+    title="SQLite Auth FastAPI",
+    description="A FastAPI backend with SQLite authentication",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -143,7 +143,7 @@ async def root():
     local_ip = socket.gethostbyname(hostname)
     
     return {
-        "message": "Welcome to Supabase Auth FastAPI",
+        "message": "Welcome to SQLite Auth FastAPI",
         "version": "1.0.0",
         "server_info": {
             "hostname": hostname,
@@ -156,12 +156,10 @@ async def root():
             }
         },
         "endpoints": {
-            "test_auth": "/api/v1/auth/login/mohammed",
-            "real_auth": "/api/v1/supabase-auth/signin/mohammed",
-            "signup": "/api/v1/supabase-auth/signup",
-            "signin": "/api/v1/supabase-auth/signin",
-            "current_user": "/api/v1/supabase-auth/user",
-            "test_endpoints": "/api/v1/supabase-auth/test-endpoints",
+            "signup": "/api/v1/auth/signup",
+            "login": "/api/v1/auth/login",
+            "refresh_token": "/api/v1/auth/refresh-token",
+            "logout": "/api/v1/auth/logout",
             "profile": "/api/v1/profiles/me",
             "subscriptions": "/api/v1/subscriptions/status",
             "plans": "/api/v1/subscriptions/plans",
@@ -173,7 +171,7 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "supabase-auth-fastapi"}
+    return {"status": "healthy", "service": "sqlite-auth-fastapi"}
 
 class Item(BaseModel):
     item_name:str

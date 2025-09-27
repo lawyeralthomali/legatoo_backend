@@ -8,6 +8,7 @@ ensuring consistent validation and type safety.
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 import re
+from ..models.profile import AccountType
 
 
 class SignupRequest(BaseModel):
@@ -17,6 +18,7 @@ class SignupRequest(BaseModel):
     first_name: Optional[str] = Field(None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(None, min_length=1, max_length=100)
     phone_number: Optional[str] = Field(None, max_length=20, description="Must be Saudi (05xxxxxxxx)")
+    account_type: Optional[AccountType] = Field(AccountType.PERSONAL, description="Account type")
 
     @field_validator('email')
     @classmethod
