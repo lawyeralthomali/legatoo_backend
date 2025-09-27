@@ -10,7 +10,7 @@ from uuid import UUID
 import logging
 
 from ..repositories.user_repository import IUserRepository
-from ..repositories.profile_repository import IProfileRepository
+from ..repositories.profile_repository import ProfileRepository
 from ..schemas.user import UserResponse
 from ..schemas.profile import ProfileResponse
 from ..utils.exceptions import NotFoundException, ValidationException
@@ -24,7 +24,7 @@ class UserService:
     def __init__(
         self,
         user_repository: IUserRepository,
-        profile_repository: IProfileRepository
+        profile_repository: ProfileRepository
     ):
         """
         Initialize user service.

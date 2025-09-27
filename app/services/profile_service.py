@@ -10,7 +10,7 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 import logging
 
-from ..interfaces.profile_repository import IProfileRepository
+from ..repositories.profile_repository import ProfileRepository
 from ..schemas.profile import ProfileCreate, ProfileResponse, AccountTypeEnum
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class ProfileService:
     """Service class for profile business logic operations."""
     
-    def __init__(self, profile_repository: IProfileRepository):
+    def __init__(self, profile_repository: ProfileRepository):
         """
         Initialize profile service.
         
@@ -50,6 +50,7 @@ class ProfileService:
     async def create_profile_for_user(
         self, 
         user_id: UUID, 
+        email: str,
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,
         phone_number: Optional[str] = None,
@@ -62,6 +63,7 @@ class ProfileService:
         
         Args:
             user_id: User ID from Supabase
+            email: User's email address
             first_name: User's first name
             last_name: User's last name
             phone_number: User's phone number
@@ -75,6 +77,7 @@ class ProfileService:
         """
         # Apply business rules for default values
         profile_data = ProfileCreate(
+            email=email,
             first_name=first_name or "User",
             last_name=last_name or "User",
             phone_number=phone_number,
@@ -107,5 +110,34 @@ class ProfileService:
         Returns:
             ProfileResponse if found, None otherwise
         """
-        profile = await self.profile_repository.get_profile_by_id(user_id)
-        return ProfileResponse.from_orm(profile) if profile else None
+        profile = await self.profile_repository.get_by_user_id(user_id)
+        return profile
+    
+    async def get_profile_response_by_id(self, user_id: UUID) -> Optional[ProfileResponse]:
+        """
+        Get profile response by user ID.
+        
+        Args:
+            user_id: User ID to search for
+            
+        Returns:
+            ProfileResponse if found, None otherwise
+        """
+        return await self.get_profile_by_id(user_id)
+    
+    async def create_profile_if_not_exists(self, user_id: UUID) -> ProfileResponse:
+        """
+        Create a default profile if it doesn't exist.
+        
+        Args:
+            user_id: User ID to create profile for
+            
+        Returns:
+            Created ProfileResponse
+        """
+        return await self.create_profile_for_user(
+            user_id=user_id,
+            email="default@example.com",  # Default email for auto-created profiles
+            first_name="User",
+            last_name="User"
+        )

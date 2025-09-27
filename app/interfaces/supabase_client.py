@@ -60,11 +60,11 @@ class SupabaseClient(ISupabaseClient):
         try:
             # Use the official Supabase client for signup
             response = self.client.auth.sign_up({
-                "email": email,
-                "password": password,
+            "email": email,
+            "password": password,
                 "options": {
-                    "data": data
-                }
+            "data": data
+        }
             })
             
             # Check if signup was successful
@@ -107,17 +107,17 @@ class SupabaseClient(ISupabaseClient):
             # Check for invalid email format
             elif ("invalid email" in error_str or 
                   "email_address_invalid" in error_str):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid email format"
-                )
+                            raise HTTPException(
+                                status_code=400,
+                                detail="Invalid email format"
+                            )
             else:
-                # Log the error with full stack trace and raise a generic exception
-                logger.exception(f"Supabase signup error for email {email}")
-                raise HTTPException(
-                    status_code=500,
-                    detail="Authentication service unavailable"
-                )
+                            # Log the error with full stack trace and raise a generic exception
+                            logger.exception(f"Supabase signup error for email {email}")
+                            raise HTTPException(
+                                status_code=500,
+                                detail="Authentication service unavailable"
+                            )
     
     def login(self, email: str, password: str) -> Dict[str, Any]:
         """
@@ -142,7 +142,7 @@ class SupabaseClient(ISupabaseClient):
             
             # Check if login was successful
             if response.user is None or response.session is None:
-                raise HTTPException(
+                            raise HTTPException(
                     status_code=401,
                     detail="Invalid email or password"
                 )
@@ -162,7 +162,7 @@ class SupabaseClient(ISupabaseClient):
                 "refresh_token": response.session.refresh_token,
                 "expires_at": response.session.expires_at
             }
-            
+                
         except HTTPException:
             # Re-raise HTTP exceptions as-is
             raise
@@ -179,10 +179,10 @@ class SupabaseClient(ISupabaseClient):
             else:
                 # Log the error with full stack trace and raise a generic exception
                 logger.exception(f"Supabase login error for email {email}")
-                raise HTTPException(
-                    status_code=500,
-                    detail="Authentication service unavailable"
-                )
+            raise HTTPException(
+                status_code=500,
+                detail="Authentication service unavailable"
+            )
     
     def check_user_exists(self, email: str) -> bool:
         """

@@ -13,7 +13,7 @@ from fastapi.concurrency import run_in_threadpool
 from ..config.logging_config import get_logger
 
 from ..repositories.user_repository import IUserRepository
-from ..repositories.profile_repository import IProfileRepository
+from ..repositories.profile_repository import ProfileRepository
 from ..schemas.request import SignupRequest, LoginRequest
 from ..interfaces.supabase_client import ISupabaseClient
 from ..utils.exceptions import (
@@ -34,7 +34,7 @@ class AuthService:
     def __init__(
         self,
         user_repository: IUserRepository,
-        profile_repository: IProfileRepository,
+        profile_repository: ProfileRepository,
         supabase_client: ISupabaseClient
     ):
         """
