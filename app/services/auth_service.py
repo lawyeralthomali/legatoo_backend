@@ -21,6 +21,7 @@ from ..schemas.user_schemas import UserCreate, UserLogin, UserResponse
 from ..schemas.profile_schemas import ProfileCreate, ProfileResponse
 from ..schemas.request import SignupRequest, LoginRequest
 from ..schemas.response import create_success_response
+from ..services.email_service import EmailService
 from ..utils.exceptions import (
     ValidationException, ConflictException, AuthenticationException
 )
@@ -47,6 +48,7 @@ class AuthService:
     
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.email_service = EmailService()
     
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash."""
@@ -92,13 +94,18 @@ class AuthService:
                     field="email"
                 )
             
-            # Create user
+            # Create user with verification token
             hashed_password = self.get_password_hash(signup_data.password)
+            verification_token = self.email_service.generate_verification_token()
+            verification_expires = datetime.utcnow() + timedelta(hours=24)  # 24 hours expiry
+            
             user = User(
                 email=signup_data.email,
                 password_hash=hashed_password,
                 is_active=True,
-                is_verified=False
+                is_verified=False,
+                verification_token=verification_token,
+                verification_token_expires=verification_expires
             )
             
             self.db.add(user)
@@ -117,13 +124,26 @@ class AuthService:
             self.db.add(profile)
             await self.db.commit()
             
+            # Send verification email
+            try:
+                user_name = f"{signup_data.first_name} {signup_data.last_name}"
+                await self.email_service.send_verification_email(
+                    to_email=signup_data.email,
+                    user_name=user_name,
+                    verification_token=verification_token
+                )
+                logger.info(f"Verification email sent to {signup_data.email}")
+            except Exception as e:
+                logger.warning(f"Failed to send verification email to {signup_data.email}: {str(e)}")
+                # Don't fail the signup if email fails, just log it
+            
             # Create access token
             access_token = self.create_access_token(data={"sub": str(user.id)})
             
             logger.info(f"User registered successfully: {user.email}")
             
             return create_success_response(
-                message="User and profile created successfully",
+                message="User registered successfully. Please check your email for verification instructions.",
                 data={
                     "user": {
                         "id": user.id,
@@ -306,6 +326,80 @@ class AuthService:
             raise_error_response(
                 status_code=500,
                 message="Token refresh failed",
+                field="token"
+            )
+    
+    async def verify_email(self, verification_token: str) -> Dict[str, Any]:
+        """
+        Verify user email using verification token.
+        
+        Args:
+            verification_token: Email verification token
+            
+        Returns:
+            ApiResponse with verification status
+            
+        Raises:
+            ApiException: For various error conditions
+        """
+        try:
+            # Find user by verification token
+            result = await self.db.execute(
+                select(User).where(User.verification_token == verification_token)
+            )
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                raise_error_response(
+                    status_code=400,
+                    message="Invalid verification token",
+                    field="token"
+                )
+            
+            # Check if token is expired
+            if user.verification_token_expires and user.verification_token_expires < datetime.utcnow():
+                raise_error_response(
+                    status_code=400,
+                    message="Verification token has expired",
+                    field="token"
+                )
+            
+            # Check if already verified
+            if user.is_verified:
+                raise_error_response(
+                    status_code=400,
+                    message="Email is already verified",
+                    field="email"
+                )
+            
+            # Update user verification status
+            user.is_verified = True
+            user.verification_token = None  # Clear the token
+            user.verification_token_expires = None
+            
+            await self.db.commit()
+            
+            logger.info(f"Email verified successfully for user: {user.email}")
+            
+            return create_success_response(
+                message="Email verified successfully",
+                data={
+                    "user": {
+                        "id": user.id,
+                        "email": user.email,
+                        "is_verified": user.is_verified
+                    }
+                }
+            )
+            
+        except ApiException:
+            # Re-raise ApiException as-is
+            raise
+        except Exception as e:
+            logger.error(f"Email verification failed: {str(e)}")
+            raise_error_response(
+                status_code=500,
+                message="Email verification failed",
                 field="token"
             )
     
