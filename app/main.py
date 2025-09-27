@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 # Import models to ensure they are registered with SQLAlchemy
@@ -33,6 +34,7 @@ from .utils.exceptions import (
     ConflictException, AuthenticationException, DatabaseException,
     ExternalServiceException
 )
+from .utils.api_exceptions import ApiException
 
 # Setup logging
 setup_logging()
@@ -83,6 +85,28 @@ app.add_middleware(
 )
 
 # Add exception handlers
+# Custom ApiException handler for standardized error responses
+@app.exception_handler(ApiException)
+async def api_exception_handler(request: Request, exc: ApiException):
+    """Handle ApiException by returning the structured payload directly."""
+    return JSONResponse(status_code=exc.status_code, content=exc.payload)
+
+# Enhanced HTTPException handler for dict details
+@app.exception_handler(HTTPException)
+async def enhanced_http_exception_handler(request: Request, exc: HTTPException):
+    """Handle HTTPException with support for dict details."""
+    # If someone raised HTTPException(detail=dict), return it as-is
+    if isinstance(exc.detail, dict):
+        return JSONResponse(status_code=exc.status_code, content=exc.detail)
+    # Otherwise fallback to standard shape
+    fallback = {
+        "success": False,
+        "message": exc.detail if isinstance(exc.detail, str) else "Bad Request",
+        "data": None,
+        "errors": [{"field": None, "message": exc.detail if isinstance(exc.detail, str) else "Bad Request"}]
+    }
+    return JSONResponse(status_code=exc.status_code, content=fallback)
+
 app.add_exception_handler(AppException, app_exception_handler)
 app.add_exception_handler(ValidationException, validation_exception_handler)
 app.add_exception_handler(NotFoundException, not_found_exception_handler)
@@ -90,7 +114,7 @@ app.add_exception_handler(ConflictException, conflict_exception_handler)
 app.add_exception_handler(AuthenticationException, authentication_exception_handler)
 app.add_exception_handler(DatabaseException, database_exception_handler)
 app.add_exception_handler(ExternalServiceException, external_service_exception_handler)
-app.add_exception_handler(HTTPException, http_exception_handler)
+# HTTPException handler is now handled by enhanced_http_exception_handler above
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(IntegrityError, integrity_error_handler)
 app.add_exception_handler(SQLAlchemyError, sqlalchemy_error_handler)

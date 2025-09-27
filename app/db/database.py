@@ -10,7 +10,7 @@ load_dotenv("supabase.env")
 # Database URL - Supabase PostgreSQL (using session pooler for better performance)
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://postgres.otiivelflvidgyfshmjn:uWytSFyq-6cgJ%2AX@aws-0-eu-north-1.pooler.supabase.com:5432/postgres"
+    "postgresql+asyncpg://postgres:Sd7GjUm1f1CI05Nd@db.otiivelflvidgyfshmjn.supabase.co:5432/postgres"
 )
 
 # Create async engine

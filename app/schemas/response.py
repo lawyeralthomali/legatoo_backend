@@ -8,6 +8,7 @@ ensuring consistency and predictability for API consumers.
 from typing import Optional, List, Any, Dict
 from pydantic import BaseModel, Field
 from fastapi.responses import JSONResponse
+from fastapi import HTTPException
 
 
 class ErrorDetail(BaseModel):
@@ -137,3 +138,35 @@ def create_conflict_response(
         message=message,
         errors=[ErrorDetail(field=field, message=message)]
     )
+
+def raise_error_response(
+    status_code: int,
+    message: str,
+    field: Optional[str] = None,
+    errors: Optional[List[ErrorDetail]] = None
+) -> None:
+    """
+    Raise ApiException carrying a standardized error payload.
+    Callers expect this function to raise (no return).
+    """
+    from ..utils.api_exceptions import ApiException
+    
+    # Build normalized error list
+    if errors is None:
+        errors_payload = [{"field": field, "message": message}]
+    else:
+        # Convert ErrorDetail models to dicts if necessary
+        errors_payload = [
+            (e.model_dump() if hasattr(e, "model_dump") else {"field": getattr(e, "field", None), "message": getattr(e, "message", str(e))})
+            for e in errors
+        ]
+
+    payload = {
+        "success": False,
+        "message": message,
+        "data": None,
+        "errors": errors_payload
+    }
+
+    # Raise the custom ApiException with full payload (handler will serialize it)
+    raise ApiException(status_code=status_code, payload=payload)

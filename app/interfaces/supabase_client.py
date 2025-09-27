@@ -3,6 +3,7 @@ from typing import Dict, Any, Optional
 from fastapi import HTTPException
 from supabase import create_client, Client
 from ..config.logging_config import get_logger
+from ..schemas.response import raise_error_response
 
 logger = get_logger(__name__)
 
@@ -58,20 +59,37 @@ class SupabaseClient(ISupabaseClient):
             HTTPException: For various error conditions
         """
         try:
+            # First, check if user already exists in Supabase Auth
+            try:
+                # Try to get user by email to check if they already exist
+                existing_user = self.client.auth.admin.get_user_by_email(email)
+                if existing_user and existing_user.user:
+                    logger.warning(f"User with email {email} already exists in Supabase Auth")
+                    raise_error_response(
+                        status_code=422,
+                        message="Email already registered",
+                        field="email"
+                    )
+            except Exception as check_error:
+                # If we can't check (e.g., user doesn't exist), continue with signup
+                logger.debug(f"User existence check for {email}: {str(check_error)}")
+                pass
+            
             # Use the official Supabase client for signup
             response = self.client.auth.sign_up({
-            "email": email,
-            "password": password,
+                "email": email,
+                "password": password,
                 "options": {
-            "data": data
-        }
+                    "data": data
+                }
             })
             
             # Check if signup was successful
             if response.user is None:
-                raise HTTPException(
+                raise_error_response(
                     status_code=400,
-                    detail="User registration failed"
+                    message="User registration failed",
+                    field="email"
                 )
             
             # Log successful signup
@@ -89,35 +107,83 @@ class SupabaseClient(ISupabaseClient):
             # Re-raise HTTP exceptions as-is
             raise
         except Exception as e:
-            # Handle Supabase-specific errors
-            error_str = str(e).lower()
+            # Handle Supabase-specific errors using proper exception types and HTTP status codes
+            logger.warning(f"Supabase signup error for email {email}: {str(e)}")
             
-            # Check for duplicate email errors
-            if ("already registered" in error_str or 
-                "user already registered" in error_str or
-                "email already exists" in error_str or
-                "user already exists" in error_str or
-                "duplicate" in error_str or
-                "email address already in use" in error_str or
-                "user with this email already exists" in error_str):
-                raise HTTPException(
-                    status_code=422,
-                    detail="Email already registered"
-                )
-            # Check for invalid email format
-            elif ("invalid email" in error_str or 
-                  "email_address_invalid" in error_str):
-                            raise HTTPException(
-                                status_code=400,
-                                detail="Invalid email format"
-                            )
+            # Import Supabase-specific exceptions
+            from supabase_auth.errors import AuthApiError
+            from httpx import HTTPStatusError
+            
+            # Check if it's an HTTP status error (from httpx)
+            if isinstance(e, HTTPStatusError):
+                status_code = e.response.status_code
+                logger.info(f"HTTP status error for {email}: {status_code}")
+                
+                if status_code == 400:
+                    # 400 Bad Request - usually invalid email format or validation error
+                    raise_error_response(
+                        status_code=400,
+                        message="Invalid email format",
+                        field="email"
+                    )
+                elif status_code == 409:
+                    # 409 Conflict - usually duplicate email
+                    raise_error_response(
+                        status_code=422,
+                        message="Email already registered",
+                        field="email"
+                    )
+                elif status_code == 429:
+                    # 429 Too Many Requests - rate limiting
+                    raise_error_response(
+                        status_code=429,
+                        message="Too many requests. Please try again later.",
+                        field="email"
+                    )
+                else:
+                    # Other HTTP errors
+                    raise_error_response(
+                        status_code=500,
+                        message="Authentication service unavailable",
+                        field="email"
+                    )
+            
+            # Check if it's a Supabase Auth API error
+            elif isinstance(e, AuthApiError):
+                logger.info(f"Supabase Auth API error for {email}: {str(e)}")
+                
+                # For AuthApiError, we can check the error message more reliably
+                error_message = str(e).lower()
+                
+                # Check for specific known error patterns
+                if "already registered" in error_message or "already exists" in error_message:
+                    raise_error_response(
+                        status_code=422,
+                        message="Email already registered",
+                        field="email"
+                    )
+                elif "invalid" in error_message and "email" in error_message:
+                    raise_error_response(
+                        status_code=400,
+                        message="Invalid email format",
+                        field="email"
+                    )
+                else:
+                    # Generic Auth API error
+                    raise_error_response(
+                        status_code=500,
+                        message="Authentication service unavailable",
+                        field="email"
+                    )
+            
             else:
-                            # Log the error with full stack trace and raise a generic exception
-                            logger.exception(f"Supabase signup error for email {email}")
-                            raise HTTPException(
-                                status_code=500,
-                                detail="Authentication service unavailable"
-                            )
+                # Log the error with full stack trace and raise a generic exception
+                logger.exception(f"Unhandled Supabase signup error for email {email}: {str(e)}")
+                raise_error_response(
+                    status_code=500,
+                    message="Authentication service unavailable",
+                    field="email"
+                )
     
     def login(self, email: str, password: str) -> Dict[str, Any]:
         """
@@ -142,9 +208,10 @@ class SupabaseClient(ISupabaseClient):
             
             # Check if login was successful
             if response.user is None or response.session is None:
-                            raise HTTPException(
+                raise_error_response(
                     status_code=401,
-                    detail="Invalid email or password"
+                    message="Invalid email or password",
+                    field="email"
                 )
             
             # Log successful login
@@ -167,22 +234,70 @@ class SupabaseClient(ISupabaseClient):
             # Re-raise HTTP exceptions as-is
             raise
         except Exception as e:
-            # Handle Supabase-specific errors
-            error_str = str(e).lower()
+            # Handle Supabase-specific errors using proper exception types and HTTP status codes
+            logger.warning(f"Supabase login error for email {email}: {str(e)}")
             
-            # Check for invalid credentials
-            if ("invalid" in error_str and ("email" in error_str or "password" in error_str or "credentials" in error_str)):
-                raise HTTPException(
-                    status_code=401,
-                    detail="Invalid email or password"
-                )
+            # Import Supabase-specific exceptions
+            from supabase_auth.errors import AuthApiError
+            from httpx import HTTPStatusError
+            
+            # Check if it's an HTTP status error (from httpx)
+            if isinstance(e, HTTPStatusError):
+                status_code = e.response.status_code
+                logger.info(f"HTTP status error for login {email}: {status_code}")
+                
+                if status_code == 401:
+                    # 401 Unauthorized - invalid credentials
+                    raise_error_response(
+                        status_code=401,
+                        message="Invalid email or password",
+                        field="email"
+                    )
+                elif status_code == 429:
+                    # 429 Too Many Requests - rate limiting
+                    raise_error_response(
+                        status_code=429,
+                        message="Too many requests. Please try again later.",
+                        field="email"
+                    )
+                else:
+                    # Other HTTP errors
+                    raise_error_response(
+                        status_code=500,
+                        message="Authentication service unavailable",
+                        field="email"
+                    )
+            
+            # Check if it's a Supabase Auth API error
+            elif isinstance(e, AuthApiError):
+                logger.info(f"Supabase Auth API error for login {email}: {str(e)}")
+                
+                # For AuthApiError, we can check the error message more reliably
+                error_message = str(e).lower()
+                
+                # Check for specific known error patterns
+                if ("invalid" in error_message and ("email" in error_message or "password" in error_message or "credentials" in error_message)):
+                    raise_error_response(
+                        status_code=401,
+                        message="Invalid email or password",
+                        field="email"
+                    )
+                else:
+                    # Generic Auth API error
+                    raise_error_response(
+                        status_code=500,
+                        message="Authentication service unavailable",
+                        field="email"
+                    )
+            
             else:
                 # Log the error with full stack trace and raise a generic exception
-                logger.exception(f"Supabase login error for email {email}")
-            raise HTTPException(
-                status_code=500,
-                detail="Authentication service unavailable"
-            )
+                logger.exception(f"Unhandled Supabase login error for email {email}: {str(e)}")
+                raise_error_response(
+                    status_code=500,
+                    message="Authentication service unavailable",
+                    field="email"
+                )
     
     def check_user_exists(self, email: str) -> bool:
         """

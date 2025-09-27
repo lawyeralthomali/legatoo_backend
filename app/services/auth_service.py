@@ -19,6 +19,7 @@ from ..interfaces.supabase_client import ISupabaseClient
 from ..utils.exceptions import (
     ValidationException, ConflictException, ExternalServiceException
 )
+from ..utils.api_exceptions import ApiException
 
 logger = get_logger(__name__)
 
@@ -64,6 +65,22 @@ class AuthService:
             ExternalServiceException: For service errors
         """
         try:
+            # 0. Pre-check if user already exists
+            try:
+                user_exists = await self.check_user_exists(signup_data.email)
+                if user_exists:
+                    logger.warning(f"User with email {signup_data.email} already exists")
+                    raise ConflictException(
+                        message="Email already registered",
+                        field="email"
+                    )
+            except ConflictException:
+                # Re-raise conflict exceptions
+                raise
+            except Exception as e:
+                # Log warning but continue with signup attempt
+                logger.warning(f"Could not pre-check user existence for {signup_data.email}: {str(e)}")
+            
             # 1. Create user in Supabase Auth (async-safe)
             try:
                 user_data = await run_in_threadpool(
@@ -82,10 +99,22 @@ class AuthService:
                 logger.exception(f"Supabase signup failed for email {signup_data.email}: {e.detail}")
                 
                 # SupabaseClient already handles error mapping, just propagate
-                if e.status_code == 422:
+                if e.status_code == 400:
+                    raise ValidationException(
+                        message="Invalid email format",
+                        field="email"
+                    )
+                elif e.status_code == 422:
                     raise ConflictException(
                         message="Email already registered",
                         field="email"
+                    )
+                elif e.status_code == 429:
+                    raise ExternalServiceException(
+                        message="Too many requests. Please try again later.",
+                        field="email",
+                        service="Supabase",
+                        details={"error": str(e.detail)}
                     )
                 else:
                     raise ExternalServiceException(
@@ -163,7 +192,7 @@ class AuthService:
                 }
             }
             
-        except (ValidationException, ConflictException, ExternalServiceException):
+        except (ValidationException, ConflictException, ExternalServiceException, ApiException):
             # Re-raise our custom exceptions (they're already logged by their handlers)
             raise
         except Exception as e:
@@ -268,6 +297,9 @@ class AuthService:
                     service="Supabase",
                     details={"error": str(e.detail)}
                 )
+        except (ApiException, ExternalServiceException):
+            # Re-raise ApiException and ExternalServiceException
+            raise
         except Exception as e:
             logger.exception(f"Unexpected error during login for email {login_data.email}: {str(e)}")
             raise ExternalServiceException(
