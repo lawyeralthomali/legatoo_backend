@@ -1,10 +1,8 @@
-name: Auto-Deploy FastAPI Backend to Hostinger
+name: FastAPI Backend Deployment to Hostinger
 
 on:
   push:
     branches: [ main, master, develop ]
-  pull_request:
-    branches: [ main, master ]
 
 jobs:
   deploy:
@@ -14,31 +12,31 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Set up Python
+    - name: Set up Python 3.11
       uses: actions/setup-python@v4
       with:
-        python-version: '3.8'
+        python-version: '3.11'
         
     - name: Install system dependencies
       run: |
         sudo apt-get update -y
         sudo apt-get install -y python3-dev build-essential pkg-config libffi-dev \
-            libssl-dev libjpeg-dev zlib1g-dev
+            libssl-dev libjpeg-dev zlib1g-dev curl
         
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip setuptools wheel
         pip install -r requirements.txt
         
-    - name: Create production deployment files
+    - name: Generate deployment files
       run: |
         mkdir -p deploy_files
         
         # Create production startup script
         cat > deploy_files/start_production.py << 'EOF'
-        #!/usr/bin/env python3.12
+        #!/usr/bin/env python3.11
         """
-        Production startup script for Legatoo FastAPI Backend
+        Production startup script for FastAPI Backend
         """
         import os
         import sys
@@ -49,22 +47,14 @@ jobs:
         project_root = Path(__file__).parent
         sys.path.insert(0, str(project_root))
         
-        # Add user site-packages to Python path for user-installed packages
-        import site
-        user_site = site.getusersitepackages()
-        if user_site not in sys.path:
-            sys.path.insert(0, user_site)
-        
         # Set production environment variables
         os.environ.setdefault('ENVIRONMENT', 'production')
         os.environ.setdefault('LOG_LEVEL', 'INFO')
         
         if __name__ == "__main__":
-            print("🚀 Starting Legatoo FastAPI Backend - Production Mode")
-            print("📋 Deploying actual FastAPI backend with all endpoints")
-            print("🔄 Deployment triggered by: GitHub Actions Push")
-            print("🌐 API Documentation: https://legatoo.westlinktowing.com/api/docs")
-            print("📊 Swagger UI: https://legatoo.westlinktowing.com/api/swagger.html")
+            print("🚀 Starting FastAPI Backend - Production Mode")
+            print("🌐 Server: 0.0.0.0:8000")
+            print("📊 Environment: Production")
             
             # Start the FastAPI application
             uvicorn.run(
@@ -80,26 +70,25 @@ jobs:
         # Create production deployment script
         cat > deploy_files/deploy_production.sh << 'EOF'
         #!/bin/bash
-        echo "🚀 Starting Production FastAPI Backend Deployment..."
+        set -e
+        
+        echo "🚀 Starting FastAPI Backend Production Deployment..."
         echo "📅 Deployment Time: $(date)"
-        echo "🔄 Triggered by: Push to Repository"
         
         cd /home/$USER/legatoo_backend
         
         # Stop old processes
         echo "🛑 Stopping old backend processes..."
         pkill -f "start_production.py" || true
-        pkill -f "exact_routes_backend.py" || true
-        pkill -f "deploy_backend.py" || true
-        pkill -f "run_fastapi.py" || true
         pkill -f "uvicorn" || true
+        sleep 2
         
-        # Check available Python versions and use the best one
-        echo "🐍 Checking available Python versions..."
+        # Check Python version
+        echo "🐍 Checking Python installation..."
         PYTHON_BIN=""
         
         # Try different Python versions in order of preference
-        for version in python3.12 python3.11 python3.10 python3.9 python3.8 python3; do
+        for version in python3.11 python3.10 python3.9 python3.8 python3; do
             if command -v $version &> /dev/null; then
                 PYTHON_BIN=$version
                 echo "✅ Found Python: $version"
@@ -112,8 +101,6 @@ jobs:
             exit 1
         fi
         
-        # Check Python version
-        echo "🐍 Using Python: $PYTHON_BIN"
         $PYTHON_BIN --version
         
         # Install Python dependencies
@@ -121,53 +108,55 @@ jobs:
         $PYTHON_BIN -m pip install --upgrade pip setuptools wheel
         $PYTHON_BIN -m pip install --user -r requirements.txt
         
-        # Verify installation
-        echo "✅ Verifying installation..."
-        $PYTHON_BIN -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencies installed successfully!')"
+        # Verify critical dependencies
+        echo "✅ Verifying dependencies..."
+        $PYTHON_BIN -c "import fastapi, uvicorn, sqlalchemy; print('Core dependencies verified!')"
         
-        # Create database if it doesn't exist
-        echo "🗄️ Initializing database..."
+        # Run database migrations
+        echo "🗄️ Running database migrations..."
         $PYTHON_BIN -c "
         import asyncio
         from app.db.database import create_tables
         asyncio.run(create_tables())
-        print('Database tables created successfully!')
+        print('Database tables created/updated successfully!')
         "
         
         # Start production backend
-        echo "▶️ Starting production FastAPI backend..."
+        echo "▶️ Starting FastAPI backend in production mode..."
         nohup $PYTHON_BIN start_production.py > production.log 2>&1 &
+        BACKEND_PID=$!
         
         # Wait for startup
-        sleep 5
+        echo "⏳ Waiting for backend to start..."
+        sleep 10
         
-        # Test backend health
-        echo "🧪 Testing backend health..."
-        if curl -s http://localhost:8000/health > /dev/null; then
-            echo "✅ FastAPI Backend deployed successfully!"
-            echo "🌐 API: https://legatoo.westlinktowing.com/api"
-            echo "📚 Swagger UI: https://legatoo.westlinktowing.com/api/swagger.html"
-            echo "📖 API Docs: https://legatoo.westlinktowing.com/api/docs"
-            echo "🔐 Auth Endpoints: https://legatoo.westlinktowing.com/api/v1/auth/"
-        else
-            echo "❌ Backend health check failed"
+        # Check if process is still running
+        if ! kill -0 $BACKEND_PID 2>/dev/null; then
+            echo "❌ Backend process died during startup"
             echo "📋 Checking logs..."
             tail -20 production.log
             exit 1
         fi
+        
+        echo "✅ FastAPI Backend deployed successfully!"
+        echo "🌐 API Documentation: https://yourdomain.com/api/docs"
+        echo "🔐 Health Check: https://yourdomain.com/api/health"
+        echo "📊 Process ID: $BACKEND_PID"
         EOF
+        
+        chmod +x deploy_files/start_production.py
         chmod +x deploy_files/deploy_production.sh
 
-    - name: Upload files to Hostinger
+    - name: Upload backend project to Hostinger
       uses: appleboy/scp-action@v0.1.4
       with:
         host: ${{ secrets.HOSTINGER_HOST }}
         username: ${{ secrets.HOSTINGER_USERNAME }}
         password: ${{ secrets.HOSTINGER_PASSWORD }}
         port: ${{ secrets.HOSTINGER_PORT }}
-        source: "deploy_files/*"
+        source: "."
         target: "/home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend/"
-        strip_components: 1
+        strip_components: 0
 
     - name: Execute production deployment
       uses: appleboy/ssh-action@v1.0.0
@@ -176,9 +165,52 @@ jobs:
         username: ${{ secrets.HOSTINGER_USERNAME }}
         password: ${{ secrets.HOSTINGER_PASSWORD }}
         port: ${{ secrets.HOSTINGER_PORT }}
-        timeout: 60s
-        command_timeout: 60s
+        timeout: 120s
+        command_timeout: 120s
         script: |
           cd /home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend
-          chmod +x deploy_production.sh
-          ./deploy_production.sh
+          chmod +x deploy_files/deploy_production.sh
+          ./deploy_files/deploy_production.sh
+
+    - name: Health check
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.HOSTINGER_HOST }}
+        username: ${{ secrets.HOSTINGER_USERNAME }}
+        password: ${{ secrets.HOSTINGER_PASSWORD }}
+        port: ${{ secrets.HOSTINGER_PORT }}
+        timeout: 30s
+        command_timeout: 30s
+        script: |
+          echo "🧪 Performing health check..."
+          
+          # Wait a bit more for full startup
+          sleep 5
+          
+          # Check if backend is responding
+          if curl -s -f http://localhost:8000/health > /dev/null; then
+            echo "✅ Health check passed! Backend is running correctly."
+            echo "🌐 Backend is accessible at: http://localhost:8000"
+            echo "📊 API Documentation: http://localhost:8000/docs"
+            echo "🔐 Health endpoint: http://localhost:8000/health"
+            
+            # Show process info
+            echo "📋 Backend process information:"
+            ps aux | grep -E "(start_production|uvicorn)" | grep -v grep || echo "No backend processes found"
+            
+          else
+            echo "❌ Health check failed!"
+            echo "📋 Checking backend logs..."
+            cd /home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend
+            if [ -f production.log ]; then
+              echo "--- Recent logs ---"
+              tail -30 production.log
+            else
+              echo "No production.log found"
+            fi
+            
+            echo "📋 Checking process status..."
+            ps aux | grep -E "(start_production|uvicorn)" | grep -v grep || echo "No backend processes running"
+            
+            exit 1
+          fi
