@@ -17,7 +17,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.12'
+        python-version: '3.8'
         
     - name: Install system dependencies
       run: |
@@ -94,11 +94,26 @@ jobs:
         pkill -f "run_fastapi.py" || true
         pkill -f "uvicorn" || true
         
-        # Use Python 3.12 (available on production server)
-        PYTHON_BIN=python3.12
+        # Check available Python versions and use the best one
+        echo "🐍 Checking available Python versions..."
+        PYTHON_BIN=""
+        
+        # Try different Python versions in order of preference
+        for version in python3.12 python3.11 python3.10 python3.9 python3.8 python3; do
+            if command -v $version &> /dev/null; then
+                PYTHON_BIN=$version
+                echo "✅ Found Python: $version"
+                break
+            fi
+        done
+        
+        if [ -z "$PYTHON_BIN" ]; then
+            echo "❌ No Python installation found!"
+            exit 1
+        fi
         
         # Check Python version
-        echo "🐍 Checking Python installation..."
+        echo "🐍 Using Python: $PYTHON_BIN"
         $PYTHON_BIN --version
         
         # Install Python dependencies
