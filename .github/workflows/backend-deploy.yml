@@ -107,25 +107,29 @@ jobs:
         
         if [ -z "$PYTHON_BIN" ]; then
             echo "❌ No suitable Python version found (>= 3.8 required)!"
-            echo "⚠️  Cannot install Python via apt (no sudo privileges on shared hosting)"
-            echo "📋 Checking if any Python version is available for fallback..."
+            echo "📋 Installing Python 3.12 via deadsnakes PPA..."
             
-            # Try to find ANY Python version as last resort
-            for version in python3.7 python3 python; do
-                if command -v $version &> /dev/null; then
-                    VERSION_NUM=$($version -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-                    echo "⚠️  Found Python $version (version $VERSION_NUM) - using as fallback"
-                    echo "⚠️  WARNING: This version is older than recommended (3.8+)"
-                    PYTHON_BIN=$version
-                    break
-                fi
-            done
+            # Update apt repositories
+            echo "📦 Updating apt repositories..."
+            sudo apt-get update -y
             
-            if [ -z "$PYTHON_BIN" ]; then
-                echo "❌ No Python installation found at all!"
-                echo "💡 Please contact Hostinger support to install Python 3.8+ or request sudo access"
-                exit 1
-            fi
+            # Install software-properties-common
+            echo "🔧 Installing software-properties-common..."
+            sudo apt-get install -y software-properties-common
+            
+            # Add deadsnakes PPA for Python 3.12
+            echo "➕ Adding deadsnakes PPA..."
+            sudo add-apt-repository ppa:deadsnakes/ppa -y
+            
+            # Update repositories again after adding PPA
+            sudo apt-get update -y
+            
+            # Install Python 3.12 and required packages
+            echo "📥 Installing Python 3.12, python3.12-venv, and python3.12-dev..."
+            sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
+            
+            # Set Python binary to use 3.12
+            PYTHON_BIN="python3.12"
         fi
         
         echo "🐍 Using Python: $PYTHON_BIN"
@@ -133,38 +137,13 @@ jobs:
         
         # Create virtual environment
         echo "🏗️ Creating virtual environment..."
-        
-        # Check if venv module is available
-        if $PYTHON_BIN -m venv --help &> /dev/null; then
-            $PYTHON_BIN -m venv venv
-            echo "✅ Virtual environment created successfully!"
-        else
-            echo "⚠️  venv module not available, trying alternative methods..."
-            
-            # Try virtualenv if available
-            if command -v virtualenv &> /dev/null; then
-                echo "📦 Using virtualenv..."
-                virtualenv -p $PYTHON_BIN venv
-            else
-                echo "⚠️  No virtual environment tool available"
-                echo "⚠️  WARNING: Installing packages globally (not recommended)"
-                echo "⚠️  Consider contacting Hostinger support to enable venv module"
-                
-                # Create a fake activation script that does nothing
-                mkdir -p venv/bin
-                cat > venv/bin/activate << 'FAKE_EOF'
-# Fake activation script for environments without venv support
-echo "⚠️  Warning: No virtual environment active"
-FAKE_EOF
-                chmod +x venv/bin/activate
-            fi
-        fi
+        $PYTHON_BIN -m venv venv
         
         # Activate virtual environment
         echo "🔌 Activating virtual environment..."
         source venv/bin/activate
         
-        echo "✅ Environment setup completed!"
+        echo "✅ Virtual environment created and activated!"
         
         # Install Python dependencies in virtual environment
         echo "📦 Installing Python dependencies in virtual environment..."
@@ -184,18 +163,9 @@ FAKE_EOF
         print('Database tables created/updated successfully!')
         "
         
-        # Start production backend using virtual environment (or fallback to system Python)
+        # Start production backend using virtual environment
         echo "▶️ Starting FastAPI backend in production mode..."
-        
-        # Check if venv/bin/python exists, otherwise use the detected Python binary
-        if [ -f "venv/bin/python" ]; then
-            echo "🐍 Using virtual environment Python: venv/bin/python"
-            nohup venv/bin/python start_production.py > production.log 2>&1 &
-        else
-            echo "⚠️  Virtual environment Python not found, using system Python: $PYTHON_BIN"
-            nohup $PYTHON_BIN start_production.py > production.log 2>&1 &
-        fi
-        
+        nohup venv/bin/python start_production.py > production.log 2>&1 &
         BACKEND_PID=$!
         
         # Wait for startup
