@@ -97,15 +97,15 @@ jobs:
         if command -v pip3 &> /dev/null; then
             echo "Using pip3..."
             pip3 install --upgrade pip
-            pip3 install -r requirements.txt
+            pip3 install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4" "aiofiles==0.8.0" "python-multipart==0.0.5" "jinja2==3.1.2" "aiosmtplib==3.0.1"
         elif command -v pip &> /dev/null; then
             echo "Using pip..."
             pip install --upgrade pip
-            pip install -r requirements.txt
+            pip install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4" "aiofiles==0.8.0" "python-multipart==0.0.5" "jinja2==3.1.2" "aiosmtplib==3.0.1"
         elif python3 -m pip --version &> /dev/null; then
             echo "Using python3 -m pip..."
             python3 -m pip install --upgrade pip
-            python3 -m pip install -r requirements.txt
+            python3 -m pip install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4" "aiofiles==0.8.0" "python-multipart==0.0.5" "jinja2==3.1.2" "aiosmtplib==3.0.1"
         else
             echo "❌ No pip command found. Installing pip..."
             # Use Python 3.6 specific pip installer
@@ -113,20 +113,13 @@ jobs:
             python3 get-pip.py --user
             export PATH="$HOME/.local/bin:$PATH"
             python3 -m pip install --user --upgrade pip
-            python3 -m pip install --user -r requirements.txt
+            python3 -m pip install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4" "aiofiles==0.8.0" "python-multipart==0.0.5" "jinja2==3.1.2" "aiosmtplib==3.0.1"
         fi
         
         # Verify installation
         echo "✅ Verifying installation..."
         export PYTHONPATH="$HOME/.local/lib/python3.6/site-packages:$PYTHONPATH"
-        if python3 -c "import fastapi, uvicorn, sqlalchemy; print('All dependencies installed successfully!')"; then
-            echo "✅ Dependencies verified successfully!"
-        else
-            echo "❌ Dependency verification failed. Trying alternative installation..."
-            # Try installing core packages individually with compatible versions
-            python3 -m pip install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4" "aiofiles==0.8.0" "python-multipart==0.0.5" "jinja2==3.1.2" "aiosmtplib==3.0.1"
-            python3 -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('Core dependencies installed successfully!')"
-        fi
+        python3 -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencies installed successfully!')"
         
         # Create database if it doesn't exist
         echo "🗄️ Initializing database..."
