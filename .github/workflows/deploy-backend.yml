@@ -47,24 +47,15 @@ jobs:
         username: ${{ secrets.HOSTINGER_USERNAME }}
         password: ${{ secrets.HOSTINGER_PASSWORD }}
         port: ${{ secrets.HOSTINGER_PORT }}
-        timeout: 600s
-        command_timeout: 600s
+        timeout: 120s
+        command_timeout: 120s
         script: |
-          echo "Starting Legatoo Backend Deployment..."
           cd /home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend
-          echo "Current directory: $(pwd)"
-          
-          echo "Pulling latest changes..."
           git pull origin main
-          echo "Repository updated successfully"
-          
-          echo "Creating deployment script..."
           cat > deploy_backend.py << 'EOF'
-          #!/usr/bin/env python3
           import json
           from http.server import BaseHTTPRequestHandler, HTTPServer
           from datetime import datetime
-          
           class APIHandler(BaseHTTPRequestHandler):
               def _send_json(self, data, status=200):
                   self.send_response(status)
@@ -72,42 +63,20 @@ jobs:
                   self.send_header('Access-Control-Allow-Origin', '*')
                   self.end_headers()
                   self.wfile.write(json.dumps(data).encode())
-              
               def do_GET(self):
                   if self.path == '/health':
-                      self._send_json({
-                          'status': 'healthy',
-                          'service': 'legatoo-backend',
-                          'version': '2.0.0',
-                          'timestamp': datetime.now().isoformat()
-                      })
+                      self._send_json({'status': 'healthy', 'service': 'legatoo-backend', 'version': '2.0.0', 'timestamp': datetime.now().isoformat()})
                   elif self.path == '/':
-                      self._send_json({
-                          'message': 'Legatoo API v2.0.0',
-                          'service': 'legatoo-backend-enhanced',
-                          'timestamp': datetime.now().isoformat(),
-                          'endpoints': ['/health', '/api/v1/status']
-                      })
+                      self._send_json({'message': 'Legatoo API v2.0.0', 'service': 'legatoo-backend-enhanced', 'timestamp': datetime.now().isoformat(), 'endpoints': ['/health', '/api/v1/status']})
                   elif self.path == '/api/v1/status':
-                      self._send_json({
-                          'api_status': 'active',
-                          'version': '2.0.0',
-                          'timestamp': datetime.now().isoformat()
-                      })
+                      self._send_json({'api_status': 'active', 'version': '2.0.0', 'timestamp': datetime.now().isoformat()})
                   else:
                       self._send_json({'error': 'Not found'}, 404)
-              
               def log_message(self, format, *args):
                   pass
-          
-          print("Starting Legatoo Backend on port 8000...")
           server = HTTPServer(('', 8000), APIHandler)
           server.serve_forever()
           EOF
-          
-          echo "Starting backend server..."
           pkill -f "deploy_backend.py" || true
           nohup python3 deploy_backend.py > backend.log 2>&1 &
-          echo "Backend started with PID: $!"
-          
           echo "Deployment completed!"
