@@ -17,11 +17,17 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
+        python-version: '3.12'
         
-    - name: Install dependencies
+    - name: Install system dependencies
       run: |
-        python -m pip install --upgrade pip
+        sudo apt-get update -y
+        sudo apt-get install -y python3-dev build-essential pkg-config libffi-dev \
+            libssl-dev libjpeg-dev zlib1g-dev
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
         pip install -r requirements.txt
         
     - name: Create production deployment files
@@ -30,7 +36,7 @@ jobs:
         
         # Create production startup script
         cat > deploy_files/start_production.py << 'EOF'
-        #!/usr/bin/env python3
+        #!/usr/bin/env python3.12
         """
         Production startup script for Legatoo FastAPI Backend
         """
@@ -88,21 +94,25 @@ jobs:
         pkill -f "run_fastapi.py" || true
         pkill -f "uvicorn" || true
         
-        # Check Python version and install dependencies
-        echo "🐍 Checking Python installation..."
-        python3 --version
+        # Use available Python version (check what's available)
+        PYTHON_BIN=python3
         
-        # Install Python dependencies with current Python version
+        # Check Python version
+        echo "🐍 Checking Python installation..."
+        $PYTHON_BIN --version
+        
+        # Install Python dependencies (without system dependencies since no sudo)
         echo "📦 Installing Python dependencies..."
-        python3 -m pip install --user -r requirements.txt
+        $PYTHON_BIN -m pip install --upgrade pip setuptools wheel
+        $PYTHON_BIN -m pip install --user -r requirements.txt
         
         # Verify installation
         echo "✅ Verifying installation..."
-        python3 -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencies installed successfully!')"
+        $PYTHON_BIN -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencies installed successfully!')"
         
         # Create database if it doesn't exist
         echo "🗄️ Initializing database..."
-        python3 -c "
+        $PYTHON_BIN -c "
         import asyncio
         from app.db.database import create_tables
         asyncio.run(create_tables())
@@ -111,7 +121,7 @@ jobs:
         
         # Start production backend
         echo "▶️ Starting production FastAPI backend..."
-        nohup python3 start_production.py > production.log 2>&1 &
+        nohup $PYTHON_BIN start_production.py > production.log 2>&1 &
         
         # Wait for startup
         sleep 5
