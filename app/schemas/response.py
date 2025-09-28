@@ -148,6 +148,12 @@ def raise_error_response(
     """
     Raise ApiException carrying a standardized error payload.
     Callers expect this function to raise (no return).
+    
+    Args:
+        status_code: HTTP status code
+        message: Human-readable error message
+        field: Field that caused the error (optional)
+        errors: List of ErrorDetail objects (optional)
     """
     from ..utils.api_exceptions import ApiException
     

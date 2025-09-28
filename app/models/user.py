@@ -24,6 +24,20 @@ class User(Base):
     is_verified = Column(Boolean, default=False, nullable=False)
     verification_token = Column(String(255), nullable=True, unique=True, index=True)
     verification_token_expires = Column(DateTime, nullable=True)
+    
+    # Security fields
+    last_login = Column(DateTime, nullable=True)
+    failed_attempts = Column(Integer, default=0, nullable=False)
+    locked_until = Column(DateTime, nullable=True)
+    
+    # Email verification status
+    email_sent = Column(Boolean, default=False, nullable=False)
+    email_sent_at = Column(DateTime, nullable=True)
+    
+    # Password reset fields
+    password_reset_token = Column(String(255), nullable=True, unique=True, index=True)
+    password_reset_token_expires = Column(DateTime, nullable=True)
+    
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, onupdate=func.now())
     

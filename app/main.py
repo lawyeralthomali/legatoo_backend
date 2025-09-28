@@ -1,11 +1,14 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+import uuid
+import os
 
 # Import models to ensure they are registered with SQLAlchemy
-from .config.logging_config import setup_logging
+from .config.enhanced_logging import setup_logging, get_logger
 from .db.database import create_tables
 
 # Import routers
@@ -17,7 +20,7 @@ from .routes.subscription_router import router as subscription_router
 from .routes.premium_router import router as premium_router
 from .routes.legal_document_router import router as legal_document_router
 from .routes.legal_assistant_router import router as legal_assistant_router
-from .routes.item import router as item_router
+
 from pydantic import BaseModel
 from typing import List
 # Import exception handlers
@@ -63,6 +66,8 @@ default_origins = [
     "http://192.168.100.108:3000", # Network React
     "http://192.168.100.108:8080", # Network Vue
     "http://192.168.100.108:8000", # Self-reference
+    "http://192.168.100.109:3000", # Your frontend IP
+    "http://192.168.100.109:8080", # Your frontend IP (Vue)
     "http://localhost:8000",      # Self-reference local
     "http://127.0.0.1:8000",     # Self-reference local
 ]
@@ -84,19 +89,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files for frontend pages
+# This allows serving HTML files directly from the backend for testing
+if os.path.exists("."):
+    app.mount("/static", StaticFiles(directory="."), name="static")
+
 # Add exception handlers
 # Custom ApiException handler for standardized error responses
 @app.exception_handler(ApiException)
 async def api_exception_handler(request: Request, exc: ApiException):
-    """Handle ApiException by returning the structured payload directly."""
+    """Handle ApiException with unified response format and logging."""
+    logger = get_logger(__name__)
+    correlation_id = request.headers.get("X-Correlation-ID", "no-correlation-id")
+    logger.error(f"ApiException [{correlation_id}]: {exc.payload}")
     return JSONResponse(status_code=exc.status_code, content=exc.payload)
 
 # Enhanced HTTPException handler for dict details
 @app.exception_handler(HTTPException)
 async def enhanced_http_exception_handler(request: Request, exc: HTTPException):
-    """Handle HTTPException with support for dict details."""
+    """Handle HTTPException with unified response format and logging."""
+    logger = get_logger(__name__)
+    correlation_id = request.headers.get("X-Correlation-ID", "no-correlation-id")
+    
     # If someone raised HTTPException(detail=dict), return it as-is
     if isinstance(exc.detail, dict):
+        logger.warning(f"HTTPException [{correlation_id}]: {exc.detail}")
         return JSONResponse(status_code=exc.status_code, content=exc.detail)
     # Otherwise fallback to standard shape
     fallback = {
@@ -105,6 +122,7 @@ async def enhanced_http_exception_handler(request: Request, exc: HTTPException):
         "data": None,
         "errors": [{"field": None, "message": exc.detail if isinstance(exc.detail, str) else "Bad Request"}]
     }
+    logger.warning(f"HTTPException [{correlation_id}]: {fallback}")
     return JSONResponse(status_code=exc.status_code, content=fallback)
 
 app.add_exception_handler(AppException, app_exception_handler)
@@ -122,9 +140,8 @@ app.add_exception_handler(Exception, general_exception_handler)
 
 # Include routers
 app.include_router(profile_router, prefix="/api/v1")
-app.include_router(auth_routes, prefix="/api/v1")
+app.include_router(auth_routes)
 app.include_router(user_routes, prefix="/api/v1")
-app.include_router(item_router, prefix="/api/v1")
 app.include_router(subscription_router, prefix="/api/v1")
 app.include_router(premium_router, prefix="/api/v1")
 app.include_router(legal_document_router, prefix="/api/v1")
@@ -173,26 +190,34 @@ async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "sqlite-auth-fastapi"}
 
-class Item(BaseModel):
-    item_name:str
-    item_price:float
-    item_quantity:int
 
-items = []
-@app.get("/items")
-async def list_items():
-    return items
+# Frontend HTML pages for testing
+@app.get("/email-verification.html")
+async def email_verification_page():
+    """Serve email verification page."""
+    if os.path.exists("email-verification.html"):
+        return FileResponse("email-verification.html")
+    else:
+        raise HTTPException(status_code=404, detail="Email verification page not found")
 
-@app.post("/new-items")
-async def create_item(item :Item) :
-    items.append(item)
-    return items
 
-@app.get("/items/{item_id}") 
-async def get_item(item_id:int) ->Item:
-    if item_id >= len(items):
-        raise HTTPException(status_code=404, detail="Item not found")
-    return items[item_id]
+@app.get("/login.html")
+async def login_page():
+    """Serve login page."""
+    if os.path.exists("login.html"):
+        return FileResponse("login.html")
+    else:
+        raise HTTPException(status_code=404, detail="Login page not found")
+
+
+@app.get("/password-reset.html")
+async def password_reset_page():
+    """Serve password reset page."""
+    if os.path.exists("password-reset.html"):
+        return FileResponse("password-reset.html")
+    else:
+        raise HTTPException(status_code=404, detail="Password reset page not found")
+
 
 if __name__ == "__main__":
     import uvicorn

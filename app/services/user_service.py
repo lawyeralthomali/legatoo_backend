@@ -11,8 +11,8 @@ import logging
 
 from ..repositories.user_repository import IUserRepository
 from ..repositories.profile_repository import ProfileRepository
-from ..schemas.user import UserResponse
-from ..schemas.profile import ProfileResponse
+from ..schemas.user_schemas import UserResponse
+from ..schemas.profile_schemas import ProfileResponse
 from ..utils.exceptions import NotFoundException, ValidationException
 
 logger = logging.getLogger(__name__)
@@ -218,7 +218,7 @@ class UserService:
         Returns:
             UserAuth object with user authentication data
         """
-        from ..schemas.profile import UserAuth
+        from ..schemas.profile_schemas import ProfileResponse
         
         return UserAuth(
             user_id=token_data.user_id,

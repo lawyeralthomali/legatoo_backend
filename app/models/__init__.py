@@ -2,9 +2,10 @@
 from ..db.database import Base
 from .user import User
 from .profile import Profile, AccountType
+from .refresh_token import RefreshToken
 
 # Import all models to ensure they are registered with SQLAlchemy
-__all__ = ["Base", "User", "Profile", "AccountType"]
+__all__ = ["Base", "User", "Profile", "AccountType", "RefreshToken"]
 
 
 

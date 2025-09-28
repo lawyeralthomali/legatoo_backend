@@ -142,6 +142,59 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str = Field(..., description="Refresh token")
 
 
+class ChangePasswordRequest(BaseModel):
+    """Request schema for changing password."""
+    current_password: str = Field(..., description="Current password")
+    new_password: str = Field(..., min_length=8, max_length=128, description="New password")
+    
+    @field_validator('new_password')
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        """Ensure strong password policy for new password."""
+        if not re.search(r'[A-Z]', v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r'[a-z]', v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not re.search(r'\d', v):
+            raise ValueError("Password must contain at least one digit")
+        if not re.search(r'[!@#$%^&*(),.?\":{}|<>]', v):
+            raise ValueError("Password must contain at least one special character")
+        return v
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request schema for password reset."""
+    email: str = Field(..., description="Email address for password reset")
+    
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        """Basic email validation for password reset."""
+        if not v or not v.strip():
+            raise ValueError("Email address is required")
+        return v.strip().lower()
+
+
+class ConfirmPasswordResetRequest(BaseModel):
+    """Request schema for confirming password reset."""
+    reset_token: str = Field(..., description="Password reset token")
+    new_password: str = Field(..., min_length=8, max_length=128, description="New password")
+    
+    @field_validator('new_password')
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        """Ensure strong password policy for new password."""
+        if not re.search(r'[A-Z]', v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r'[a-z]', v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not re.search(r'\d', v):
+            raise ValueError("Password must contain at least one digit")
+        if not re.search(r'[!@#$%^&*(),.?\":{}|<>]', v):
+            raise ValueError("Password must contain at least one special character")
+        return v
+
+
 class ProfileUpdateRequest(BaseModel):
     """Request schema for profile updates."""
     first_name: Optional[str] = Field(None, min_length=1, max_length=100)

@@ -181,7 +181,7 @@ class EmailService:
                 return False
             
             # Create verification URL
-            verification_url = f"{self.frontend_url}/verify-email?token={verification_token}"
+            verification_url = f"{self.frontend_url}/email-verification.html?token={verification_token}"
             
             # Create email content
             html_content = self.create_verification_email_html(user_name, verification_token, verification_url)
@@ -213,6 +213,179 @@ class EmailService:
                 message="Failed to send verification email",
                 field="email"
             )
+    
+    async def send_password_reset_email(self, to_email: str, user_name: str, reset_token: str) -> bool:
+        """
+        Send password reset email to user.
+        
+        Args:
+            to_email: Recipient email address
+            user_name: User's name for personalization
+            reset_token: Password reset token
+            
+        Returns:
+            bool: True if email sent successfully, False otherwise
+            
+        Raises:
+            ApiException: If email sending fails
+        """
+        try:
+            if not self.smtp_username or not self.smtp_password:
+                logger.warning("SMTP not configured, skipping password reset email")
+                return False
+            
+            # Create reset URL
+            reset_url = f"{self.frontend_url}/password-reset.html?token={reset_token}"
+            
+            # Create email content
+            html_content = self.create_password_reset_email_html(user_name, reset_token, reset_url)
+            text_content = self.create_password_reset_email_text(user_name, reset_token, reset_url)
+            
+            # Create message
+            message = MIMEMultipart("alternative")
+            message["Subject"] = f"Password Reset - {self.app_name}"
+            message["From"] = f"{self.from_name} <{self.from_email}>"
+            message["To"] = to_email
+            
+            # Add both HTML and text versions
+            text_part = MIMEText(text_content, "plain")
+            html_part = MIMEText(html_content, "html")
+            
+            message.attach(text_part)
+            message.attach(html_part)
+            
+            # Send email using asyncio
+            await self._send_email_async(message, to_email)
+            
+            logger.info(f"Password reset email sent successfully to {to_email}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to send password reset email to {to_email}: {str(e)}")
+            raise_error_response(
+                status_code=500,
+                message="Failed to send password reset email",
+                field="email"
+            )
+    
+    def create_password_reset_email_html(self, user_name: str, reset_token: str, reset_url: str) -> str:
+        """Create HTML email template for password reset."""
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Password Reset - {self.app_name}</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }}
+                .header {{
+                    background-color: #2c3e50;
+                    color: white;
+                    padding: 20px;
+                    text-align: center;
+                    border-radius: 8px 8px 0 0;
+                }}
+                .content {{
+                    background-color: #f9f9f9;
+                    padding: 30px;
+                    border-radius: 0 0 8px 8px;
+                }}
+                .button {{
+                    display: inline-block;
+                    background-color: #e74c3c;
+                    color: white;
+                    padding: 12px 30px;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    margin: 20px 0;
+                }}
+                .button:hover {{
+                    background-color: #c0392b;
+                }}
+                .footer {{
+                    text-align: center;
+                    margin-top: 30px;
+                    font-size: 12px;
+                    color: #666;
+                }}
+                .warning {{
+                    background-color: #fff3cd;
+                    border: 1px solid #ffeaa7;
+                    padding: 15px;
+                    border-radius: 5px;
+                    margin: 20px 0;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>{self.app_name}</h1>
+                <h2>Password Reset Request</h2>
+            </div>
+            <div class="content">
+                <p>Hello {user_name},</p>
+                
+                <p>You requested a password reset for your {self.app_name} account. Click the button below to reset your password:</p>
+                
+                <div style="text-align: center;">
+                    <a href="{reset_url}" class="button">Reset Password</a>
+                </div>
+                
+                <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+                <p style="word-break: break-all; background-color: #e9e9e9; padding: 10px; border-radius: 4px;">
+                    {reset_url}
+                </p>
+                
+                <div class="warning">
+                    <p><strong>Security Notice:</strong></p>
+                    <ul>
+                        <li>This password reset link will expire in 1 hour</li>
+                        <li>If you didn't request this reset, please ignore this email</li>
+                        <li>Your password will remain unchanged until you click the link</li>
+                    </ul>
+                </div>
+                
+                <p>Best regards,<br>The {self.app_name} Team</p>
+            </div>
+            <div class="footer">
+                <p>This is an automated message. Please do not reply to this email.</p>
+                <p>&copy; 2024 {self.app_name}. All rights reserved.</p>
+            </div>
+        </body>
+        </html>
+        """
+    
+    def create_password_reset_email_text(self, user_name: str, reset_token: str, reset_url: str) -> str:
+        """Create plain text email template for password reset."""
+        return f"""
+        Password Reset - {self.app_name}
+        
+        Hello {user_name},
+        
+        You requested a password reset for your {self.app_name} account. Click the link below to reset your password:
+        
+        {reset_url}
+        
+        Security Notice:
+        - This password reset link will expire in 1 hour
+        - If you didn't request this reset, please ignore this email
+        - Your password will remain unchanged until you click the link
+        
+        Best regards,
+        The {self.app_name} Team
+        
+        ---
+        This is an automated message. Please do not reply to this email.
+        © 2024 {self.app_name}. All rights reserved.
+        """
     
     async def _send_email_async(self, message: MIMEMultipart, to_email: str):
         """Send email asynchronously using asyncio."""

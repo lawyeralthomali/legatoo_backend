@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification - Legatoo Westlink Towing</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: white;
+            font-weight: bold;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .status-container {
+            margin: 30px 0;
+        }
+
+        .status-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            animation: pulse 2s infinite;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .loading {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .message {
+            font-size: 18px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .success-message {
+            color: #155724;
+        }
+
+        .error-message {
+            color: #721c24;
+        }
+
+        .loading-message {
+            color: #0c5460;
+        }
+
+        .timer {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            border-left: 4px solid #4CAF50;
+        }
+
+        .timer-text {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .countdown {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+            margin: 10px 0;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button-secondary {
+            background: linear-gradient(135deg, #6c757d, #5a6268);
+            box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
+        }
+
+        .button-secondary:hover {
+            box-shadow: 0 6px 20px rgba(108, 117, 125, 0.4);
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4CAF50;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-details {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #721c24;
+            font-size: 14px;
+        }
+
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #666;
+            font-size: 12px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 30px 20px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .status-icon {
+                width: 60px;
+                height: 60px;
+                font-size: 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">L</div>
+        <h1>Email Verification</h1>
+        <p class="subtitle">Legatoo Westlink Towing</p>
+        
+        <div class="status-container">
+            <div id="statusIcon" class="status-icon loading">
+                <div class="spinner"></div>
+            </div>
+            <div id="statusMessage" class="message loading-message">
+                Verifying your email address...
+            </div>
+        </div>
+
+        <div id="timerContainer" class="timer" style="display: none;">
+            <div class="timer-text">Redirecting to login page in:</div>
+            <div id="countdown" class="countdown">5</div>
+        </div>
+
+        <div id="buttonContainer" style="display: none;">
+            <a href="https://legatoo.westlinktowing.com/auth/login" class="button" id="loginButton">Go to Login</a>
+            <button class="button button-secondary" onclick="location.reload()">Try Again</button>
+        </div>
+
+        <div id="errorContainer" class="error-details" style="display: none;">
+            <strong>Error Details:</strong>
+            <div id="errorDetails"></div>
+        </div>
+
+        <div class="footer">
+            <p>&copy; 2024 Legatoo Westlink Towing. All rights reserved.</p>
+            <p>If you're having trouble, please contact support.</p>
+        </div>
+    </div>
+
+    <script>
+        class EmailVerification {
+            constructor() {
+                this.apiBase = 'http://127.0.0.1:8000/api/v1/auth';
+                this.token = this.getTokenFromUrl();
+                this.countdown = 5;
+                this.countdownInterval = null;
+                
+                if (this.token) {
+                    this.verifyEmail();
+                } else {
+                    this.showError('No verification token found in URL');
+                }
+            }
+
+            getTokenFromUrl() {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get('token');
+            }
+
+            async verifyEmail() {
+                try {
+                    const response = await fetch(`${this.apiBase}/verify-email?verification_token=${this.token}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        this.showSuccess(result);
+                    } else {
+                        this.showError(result.message || 'Verification failed', result.errors);
+                    }
+                } catch (error) {
+                    console.error('Verification error:', error);
+                    this.showError('Network error. Please check your connection and try again.');
+                }
+            }
+
+            showSuccess(result) {
+                // Update UI for success
+                document.getElementById('statusIcon').innerHTML = '✓';
+                document.getElementById('statusIcon').className = 'status-icon success';
+                document.getElementById('statusMessage').innerHTML = 'Email verified successfully!';
+                document.getElementById('statusMessage').className = 'message success-message';
+
+                // Show timer and buttons
+                document.getElementById('timerContainer').style.display = 'block';
+                document.getElementById('buttonContainer').style.display = 'block';
+
+                // Start countdown
+                this.startCountdown();
+            }
+
+            showError(message, errors = null) {
+                // Update UI for error
+                document.getElementById('statusIcon').innerHTML = '✗';
+                document.getElementById('statusIcon').className = 'status-icon error';
+                document.getElementById('statusMessage').innerHTML = message;
+                document.getElementById('statusMessage').className = 'message error-message';
+
+                // Show error details if available
+                if (errors && errors.length > 0) {
+                    const errorDetails = errors.map(error => 
+                        `${error.field ? error.field + ': ' : ''}${error.message}`
+                    ).join('<br>');
+                    document.getElementById('errorDetails').innerHTML = errorDetails;
+                    document.getElementById('errorContainer').style.display = 'block';
+                }
+
+                // Show retry button
+                document.getElementById('buttonContainer').style.display = 'block';
+                document.getElementById('loginButton').style.display = 'none';
+            }
+
+            startCountdown() {
+                this.countdownInterval = setInterval(() => {
+                    this.countdown--;
+                    document.getElementById('countdown').textContent = this.countdown;
+
+                    if (this.countdown <= 0) {
+                        clearInterval(this.countdownInterval);
+                        window.location.href = 'https://legatoo.westlinktowing.com/auth/login';
+                    }
+                }, 1000);
+            }
+
+            stopCountdown() {
+                if (this.countdownInterval) {
+                    clearInterval(this.countdownInterval);
+                }
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new EmailVerification();
+        });
+
+        // Stop countdown if user clicks login button
+        document.getElementById('loginButton').addEventListener('click', () => {
+            if (window.emailVerification) {
+                window.emailVerification.stopCountdown();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -11,7 +11,8 @@ from sqlalchemy.exc import IntegrityError
 import logging
 
 from ..repositories.profile_repository import ProfileRepository
-from ..schemas.profile import ProfileCreate, ProfileResponse, AccountTypeEnum
+from ..models.profile import AccountType
+from ..schemas.profile_schemas import ProfileResponse
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ class ProfileService:
             last_name=last_name or "User",
             phone_number=phone_number,
             avatar_url=avatar_url,
-            account_type=AccountTypeEnum.PERSONAL  # Default account type
+            account_type=AccountType.PERSONAL  # Default account type
         )
         
         try:

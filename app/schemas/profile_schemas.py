@@ -41,3 +41,24 @@ class ProfileResponse(ProfileBase):
     
     class Config:
         from_attributes = True
+
+
+# Additional schemas that were in the old profile.py
+class TokenData(BaseModel):
+    """Schema for JWT token data."""
+    user_id: str
+    email: str
+    aud: Optional[str] = None
+    role: Optional[str] = None
+    exp: Optional[int] = None
+    iat: Optional[int] = None
+    sub: Optional[str] = None
+
+
+class UserAuth(BaseModel):
+    """Schema for authenticated user data."""
+    user_id: str
+    email: str
+    aud: Optional[str] = None
+    role: Optional[str] = None
+    profile: Optional[dict] = None

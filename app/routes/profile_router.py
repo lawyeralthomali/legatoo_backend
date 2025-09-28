@@ -4,10 +4,10 @@ from typing import Annotated
 from uuid import UUID
 
 from ..db.database import get_db
-from ..schemas.profile import ProfileCreate, ProfileUpdate, ProfileResponse
-from ..schemas.responses import (
-    UnifiedResponse, ErrorDetail,
-    create_success_response, create_error_response, create_not_found_error_response
+from ..schemas.profile_schemas import ProfileCreate, ProfileUpdate, ProfileResponse
+from ..schemas.response import (
+    ApiResponse, ErrorDetail,
+    create_success_response, create_error_response
 )
 from ..services.profile_service import ProfileService
 from ..repositories.profile_repository import ProfileRepository
@@ -16,15 +16,15 @@ from ..utils.auth import get_current_user_id, get_current_user, TokenData
 router = APIRouter(prefix="/profiles", tags=["Profiles"])
 
 # Unified Response Schemas
-class ProfileGetResponse(UnifiedResponse):
+class ProfileGetResponse(ApiResponse):
     """Unified response for profile retrieval"""
     pass
 
-class ProfileUpdateResponse(UnifiedResponse):
+class ProfileUpdateResponse(ApiResponse):
     """Unified response for profile updates"""
     pass
 
-class ProfileDeleteResponse(UnifiedResponse):
+class ProfileDeleteResponse(ApiResponse):
     """Unified response for profile deletion"""
     pass
 

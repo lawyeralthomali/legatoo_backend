@@ -8,7 +8,7 @@ from uuid import UUID
 
 from ..utils.auth import get_current_user_id
 from ..utils.profile_creation import ensure_user_profile
-from ..schemas.profile import AccountTypeEnum
+from ..models.profile import AccountType
 
 
 async def ensure_profile_middleware(request: Request, call_next):
@@ -31,7 +31,7 @@ async def ensure_profile_middleware(request: Request, call_next):
                 profile_result = await ensure_user_profile(
                     db=db,
                     user_id=user_id,
-                    account_type=AccountTypeEnum.PERSONAL
+                    account_type=AccountType.PERSONAL
                 )
                 
                 # Add profile info to request state

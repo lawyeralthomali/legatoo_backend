@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 from uuid import UUID
 
 from ..services.profile_service import ProfileService
-from ..schemas.profile import ProfileCreate, AccountTypeEnum
+from ..models.profile import AccountType
 
 
 async def ensure_user_profile(
@@ -16,7 +16,7 @@ async def ensure_user_profile(
     last_name: Optional[str] = None,
     phone_number: Optional[str] = None,
     avatar_url: Optional[str] = None,
-    account_type: AccountTypeEnum = AccountTypeEnum.PERSONAL
+    account_type: AccountType = AccountType.PERSONAL
 ) -> Dict[str, Any]:
     """
     Ensure a user has a profile. Create one if it doesn't exist.
@@ -95,7 +95,7 @@ async def create_profile_from_user_data(
         last_name=user_metadata.get("last_name"),
         phone_number=user_metadata.get("phone_number"),
         avatar_url=user_metadata.get("avatar_url"),
-        account_type=AccountTypeEnum.PERSONAL
+        account_type=AccountType.PERSONAL
     )
 
 

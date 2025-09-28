@@ -7,7 +7,7 @@ from datetime import datetime
 from uuid import UUID
 from dotenv import load_dotenv
 
-from ..schemas.profile import TokenData
+from ..schemas.profile_schemas import TokenData
 
 # Load environment variables
 load_dotenv("supabase.env")
