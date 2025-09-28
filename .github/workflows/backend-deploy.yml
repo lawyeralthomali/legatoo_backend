@@ -34,7 +34,7 @@ jobs:
         
         # Create production startup script
         cat > deploy_files/start_production.py << 'EOF'
-        #!/usr/bin/env python3.11
+        #!/usr/bin/env python
         """
         Production startup script for FastAPI Backend
         """
@@ -83,54 +83,89 @@ jobs:
         pkill -f "uvicorn" || true
         sleep 2
         
-        # Install Python 3.12
-        echo "🐍 Installing Python 3.12..."
+        # Detect and install best available Python version
+        echo "🐍 Detecting best available Python version..."
+        PYTHON_BIN=""
         
-        # Update apt repositories
-        echo "📦 Updating apt repositories..."
-        sudo apt-get update -y
+        # Try different Python versions in order of preference
+        for version in python3.12 python3.11 python3.10 python3.9 python3.8; do
+            if command -v $version &> /dev/null; then
+                # Check if version is >= 3.8
+                VERSION_NUM=$($version -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+                MAJOR=$(echo $VERSION_NUM | cut -d. -f1)
+                MINOR=$(echo $VERSION_NUM | cut -d. -f2)
+                
+                if [ "$MAJOR" -gt 3 ] || ([ "$MAJOR" -eq 3 ] && [ "$MINOR" -ge 8 ]); then
+                    PYTHON_BIN=$version
+                    echo "✅ Found suitable Python: $version (version $VERSION_NUM)"
+                    break
+                else
+                    echo "⚠️  Python $version found but version $VERSION_NUM is too old (need >= 3.8)"
+                fi
+            fi
+        done
         
-        # Install software-properties-common
-        echo "🔧 Installing software-properties-common..."
-        sudo apt-get install -y software-properties-common
+        if [ -z "$PYTHON_BIN" ]; then
+            echo "❌ No suitable Python version found (>= 3.8 required)!"
+            echo "📋 Installing Python 3.12 via deadsnakes PPA..."
+            
+            # Update apt repositories
+            echo "📦 Updating apt repositories..."
+            sudo apt-get update -y
+            
+            # Install software-properties-common
+            echo "🔧 Installing software-properties-common..."
+            sudo apt-get install -y software-properties-common
+            
+            # Add deadsnakes PPA for Python 3.12
+            echo "➕ Adding deadsnakes PPA..."
+            sudo add-apt-repository ppa:deadsnakes/ppa -y
+            
+            # Update repositories again after adding PPA
+            sudo apt-get update -y
+            
+            # Install Python 3.12 and required packages
+            echo "📥 Installing Python 3.12, python3.12-venv, and python3.12-dev..."
+            sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
+            
+            # Set Python binary to use 3.12
+            PYTHON_BIN="python3.12"
+        fi
         
-        # Add deadsnakes PPA for Python 3.12
-        echo "➕ Adding deadsnakes PPA..."
-        sudo add-apt-repository ppa:deadsnakes/ppa -y
-        
-        # Update repositories again after adding PPA
-        sudo apt-get update -y
-        
-        # Install Python 3.12 and required packages
-        echo "📥 Installing Python 3.12, python3.12-venv, and python3.12-dev..."
-        sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
-        
-        # Set Python binary to use 3.12
-        PYTHON_BIN="python3.12"
-        echo "✅ Python 3.12 installation completed!"
+        echo "🐍 Using Python: $PYTHON_BIN"
         $PYTHON_BIN --version
         
-        # Install Python dependencies
-        echo "📦 Installing Python dependencies..."
-        $PYTHON_BIN -m pip install --upgrade pip setuptools wheel
-        $PYTHON_BIN -m pip install --user -r requirements.txt
+        # Create virtual environment
+        echo "🏗️ Creating virtual environment..."
+        $PYTHON_BIN -m venv venv
+        
+        # Activate virtual environment
+        echo "🔌 Activating virtual environment..."
+        source venv/bin/activate
+        
+        echo "✅ Virtual environment created and activated!"
+        
+        # Install Python dependencies in virtual environment
+        echo "📦 Installing Python dependencies in virtual environment..."
+        pip install --upgrade pip setuptools wheel
+        pip install -r requirements.txt
         
         # Verify critical dependencies
         echo "✅ Verifying dependencies..."
-        $PYTHON_BIN -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencies verified successfully!')"
+        python -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencies verified successfully!')"
         
         # Run database migrations
         echo "🗄️ Running database migrations..."
-        $PYTHON_BIN -c "
+        python -c "
         import asyncio
         from app.db.database import create_tables
         asyncio.run(create_tables())
         print('Database tables created/updated successfully!')
         "
         
-        # Start production backend
+        # Start production backend using virtual environment
         echo "▶️ Starting FastAPI backend in production mode..."
-        nohup $PYTHON_BIN start_production.py > production.log 2>&1 &
+        nohup venv/bin/python start_production.py > production.log 2>&1 &
         BACKEND_PID=$!
         
         # Wait for startup
