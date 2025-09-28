@@ -17,26 +17,17 @@ engine = create_async_engine(
     future=True
 )
 
-# Create async session factory - Python 3.6 compatible
-try:
-    from sqlalchemy.ext.asyncio import async_sessionmaker
-    AsyncSessionLocal = async_sessionmaker(
-        engine,
-        class_=AsyncSession,
-        expire_on_commit=False
-    )
-except ImportError:
-    # Fallback for older SQLAlchemy versions
-    from sqlalchemy.orm import sessionmaker
-    AsyncSessionLocal = sessionmaker(
-        bind=engine,
-        class_=AsyncSession,
-        expire_on_commit=False
-    )
+# Create async session factory - SQLAlchemy 1.4.23 compatible
+from sqlalchemy.orm import sessionmaker
+AsyncSessionLocal = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
 
-# Base class for all models
-class Base(DeclarativeBase):
-    pass
+# Base class for all models - SQLAlchemy 1.4.23 compatible
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
 
 # Dependency to get database session
 async def get_db() -> AsyncSession:
