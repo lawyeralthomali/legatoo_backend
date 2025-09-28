@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, Numeric, Integer, Boolean, Text
 from sqlalchemy.orm import relationship
-from .base import Base
+from ..db.database import Base
 
 
 class Plan(Base):

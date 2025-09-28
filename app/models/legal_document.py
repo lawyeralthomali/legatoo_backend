@@ -6,7 +6,7 @@ import enum
 from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey, DateTime, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from .base import Base
+from ..db.database import Base
 
 
 class DocumentTypeEnum(enum.Enum):

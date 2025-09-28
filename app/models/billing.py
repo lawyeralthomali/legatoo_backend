@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from .base import Base
+from ..db.database import Base
 
 
 class Billing(Base):

@@ -2,7 +2,7 @@
 Legal Document schemas for FastAPI
 Converted from Django forms
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime
@@ -79,7 +79,8 @@ class LegalDocumentChunkResponse(LegalDocumentChunkBase):
     document_id: UUID
     created_at: datetime
     
-    model_config = {"from_attributes": True}
+    class Config:
+        from_attributes = True
 
 
 class LegalDocumentResponse(LegalDocumentBase):
@@ -93,7 +94,8 @@ class LegalDocumentResponse(LegalDocumentBase):
     file_url: str
     chunks: Optional[List[LegalDocumentChunkResponse]] = []
     
-    model_config = {"from_attributes": True}
+    class Config:
+        from_attributes = True
 
 
 class LegalDocumentListResponse(BaseModel):

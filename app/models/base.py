@@ -5,13 +5,11 @@ This module defines the base class for all SQLAlchemy models,
 providing common functionality and configuration.
 """
 
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, DateTime
 from sqlalchemy.sql import func
 
-
-class Base(DeclarativeBase):
-    pass
+Base = declarative_base()
 
 
 class TimestampMixin:
