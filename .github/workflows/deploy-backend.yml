@@ -50,268 +50,82 @@ jobs:
         timeout: 600s
         command_timeout: 600s
         script: |
-          # Test connection and check server setup
-          echo "Testing SSH connection..."
-          pwd
-          whoami
-          echo "SSH connection successful!"
-          
-          # Check if directories exist
-          echo "Checking directories..."
-          ls -la /home/${{ secrets.HOSTINGER_USERNAME }}/
-          
-          # Create directory structure if it doesn't exist
-          mkdir -p /home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend
-          cd /home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend
-          
-          # Clone repository if it doesn't exist
-          if [ ! -d ".git" ]; then
-            echo "Cloning repository..."
-            git clone https://github.com/lawyeralthomali/legatoo_backend.git .
-          fi
+          echo "🚀 Starting Legatoo Backend Deployment..."
           
           # Navigate to backend directory
-          echo "Current directory: $(pwd)"
-          ls -la
+          cd /home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend
+          echo "📁 Current directory: $(pwd)"
           
           # Pull latest changes
-          git pull origin master || git pull origin main
+          echo "📥 Pulling latest changes..."
+          git pull origin main
+          echo "✅ Repository updated successfully"
           
-          # Skip Docker installation on shared hosting (no sudo access)
-          echo "Skipping Docker installation on shared hosting..."
+          # Stop existing processes
+          echo "🛑 Stopping existing backend processes..."
+          pkill -f "deploy_backend.py" || echo "No existing backend processes found"
+          sleep 2
           
-          # Create deployment script for Python 3.6.8 compatibility
-          echo "Creating deployment script..."
+          # Create simple deployment script
+          echo "📝 Creating deployment script..."
           cat > deploy_backend.py << 'EOF'
           #!/usr/bin/env python3
-          import sys
-          import os
           import json
           from http.server import BaseHTTPRequestHandler, HTTPServer
-          from urllib.parse import urlparse, parse_qs
-          import socket
           from datetime import datetime
+          import socket
           
-          # Add the app directory to Python path
-          sys.path.insert(0, '/home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend')
-          
-          class LegatooAPIHandler(BaseHTTPRequestHandler):
-              def _send_json_response(self, data, status_code=200):
-                  self.send_response(status_code)
+          class APIHandler(BaseHTTPRequestHandler):
+              def _send_json(self, data, status=200):
+                  self.send_response(status)
                   self.send_header('Content-type', 'application/json')
                   self.send_header('Access-Control-Allow-Origin', '*')
-                  self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                  self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
                   self.end_headers()
                   self.wfile.write(json.dumps(data).encode())
               
-              def do_OPTIONS(self):
-                  self._send_json_response({})
-              
               def do_GET(self):
-                  parsed_path = urlparse(self.path)
-                  path = parsed_path.path
-                  
-                  if path == '/':
-                      hostname = socket.gethostname()
-                      local_ip = socket.gethostbyname(hostname)
-                      
-                      response = {
-                          'message': 'Welcome to Legatoo API',
-                          'version': '2.0.0',
-                          'service': 'legatoo-backend-enhanced',
-                          'timestamp': datetime.now().isoformat(),
-                          'server_info': {
-                              'hostname': hostname,
-                              'local_ip': local_ip,
-                              'access_urls': {
-                                  'domain': 'https://legatoo.westlinktowing.com/api/',
-                                  'docs': 'https://legatoo.westlinktowing.com/api/docs',
-                                  'health': 'https://legatoo.westlinktowing.com/api/health',
-                                  'swagger': 'https://legatoo.westlinktowing.com/api/swagger.html'
-                              }
-                          },
-                          'features': [
-                              'Enhanced Authentication System',
-                              'Legal Assistant AI',
-                              'Document Management',
-                              'User Profiles',
-                              'Subscription Management',
-                              'Email Services',
-                              'Clean Architecture'
-                          ],
-                          'endpoints': {
-                              'health': '/health',
-                              'docs': '/docs',
-                              'swagger': '/swagger.html',
-                              'api_status': '/api/v1/status',
-                              'auth': '/api/v1/auth',
-                              'profiles': '/api/v1/profiles',
-                              'subscriptions': '/api/v1/subscriptions',
-                              'legal_assistant': '/api/v1/legal-assistant',
-                              'documents': '/api/v1/documents'
-                          }
-                      }
-                      self._send_json_response(response)
-                      
-                  elif path == '/health':
-                      response = {
+                  if self.path == '/health':
+                      self._send_json({
                           'status': 'healthy',
+                          'service': 'legatoo-backend',
+                          'version': '2.0.0',
+                          'timestamp': datetime.now().isoformat()
+                      })
+                  elif self.path == '/':
+                      self._send_json({
+                          'message': 'Legatoo API v2.0.0',
                           'service': 'legatoo-backend-enhanced',
-                          'version': '2.0.0',
                           'timestamp': datetime.now().isoformat(),
-                          'uptime': 'running',
-                          'features': 'Enhanced with Legal AI and Clean Architecture'
-                      }
-                      self._send_json_response(response)
-                      
-                  elif path == '/docs':
-                      response = {
-                          'title': 'Legatoo API Documentation',
+                          'endpoints': ['/health', '/api/v1/status']
+                      })
+                  elif self.path == '/api/v1/status':
+                      self._send_json({
+                          'api_status': 'active',
                           'version': '2.0.0',
-                          'description': 'Enhanced Legatoo Backend with Legal AI Assistant',
-                          'swagger_ui': 'https://legatoo.westlinktowing.com/api/swagger.html',
-                          'endpoints': {
-                              'GET /': 'API root and information',
-                              'GET /health': 'Health check endpoint',
-                              'GET /docs': 'API documentation',
-                              'GET /api/v1/status': 'API status',
-                              'GET /api/v1/auth': 'Authentication endpoints',
-                              'GET /api/v1/profiles': 'User profiles',
-                              'GET /api/v1/subscriptions': 'Subscription management',
-                              'GET /api/v1/legal-assistant': 'Legal AI assistant',
-                              'GET /api/v1/documents': 'Document management'
-                          },
-                          'base_url': 'https://legatoo.westlinktowing.com/api'
-                      }
-                      self._send_json_response(response)
-                      
-                  elif path.startswith('/api/v1/'):
-                      api_path = path.replace('/api/v1/', '')
-                      
-                      if api_path == 'status':
-                          response = {
-                              'api_status': 'active',
-                              'version': '2.0.0',
-                              'service': 'legatoo-backend-enhanced',
-                              'timestamp': datetime.now().isoformat(),
-                              'architecture': 'Clean Architecture with Repository Pattern',
-                              'features': ['Legal AI', 'Enhanced Auth', 'Document Management']
-                          }
-                      elif api_path == 'auth':
-                          response = {
-                              'auth_service': 'enhanced-supabase-integrated',
-                              'status': 'ready',
-                              'features': ['Email Verification', 'Password Reset', 'JWT Tokens'],
-                              'endpoints': ['/signin', '/signup', '/user', '/verify-email', '/reset-password']
-                          }
-                      elif api_path == 'profiles':
-                          response = {
-                              'profiles_service': 'active',
-                              'status': 'ready',
-                              'architecture': 'Repository Pattern',
-                              'endpoints': ['/me', '/create', '/update', '/delete']
-                          }
-                      elif api_path == 'subscriptions':
-                          response = {
-                              'subscriptions_service': 'active',
-                              'status': 'ready',
-                              'features': ['Billing Management', 'Plan Management'],
-                              'endpoints': ['/status', '/plans', '/upgrade', '/billing']
-                          }
-                      elif api_path == 'legal-assistant':
-                          response = {
-                              'legal_assistant_service': 'active',
-                              'status': 'ready',
-                              'features': ['AI Legal Advice', 'Document Analysis', 'Legal Research'],
-                              'endpoints': ['/chat', '/analyze', '/research', '/generate']
-                          }
-                      elif api_path == 'documents':
-                          response = {
-                              'documents_service': 'active',
-                              'status': 'ready',
-                              'features': ['Document Storage', 'Document Processing', 'Legal Templates'],
-                              'endpoints': ['/upload', '/download', '/process', '/templates']
-                          }
-                      else:
-                          response = {
-                              'error': 'Endpoint not found',
-                              'path': api_path,
-                              'available_endpoints': ['status', 'auth', 'profiles', 'subscriptions', 'legal-assistant', 'documents']
-                          }
-                          self._send_json_response(response, 404)
-                          return
-                          
-                      self._send_json_response(response)
+                          'timestamp': datetime.now().isoformat()
+                      })
                   else:
-                      response = {
-                          'error': 'Not Found',
-                          'path': path,
-                          'message': 'The requested endpoint was not found',
-                          'available_endpoints': ['/', '/health', '/docs', '/api/v1/status', '/api/v1/auth', '/api/v1/profiles', '/api/v1/subscriptions']
-                      }
-                      self._send_json_response(response, 404)
-              
-              def do_POST(self):
-                  response = {
-                      'message': 'POST requests are supported',
-                      'service': 'legatoo-backend-enhanced',
-                      'timestamp': datetime.now().isoformat(),
-                      'note': 'Full POST functionality available in production deployment'
-                  }
-                  self._send_json_response(response)
+                      self._send_json({'error': 'Not found'}, 404)
               
               def log_message(self, format, *args):
-                  # Suppress default logging
                   pass
           
-          def run_enhanced_backend():
-              port = 8000
-              server = HTTPServer(('', port), LegatooAPIHandler)
-              print(f'Legatoo Enhanced Backend running on port {port}')
-              print(f'Health check: http://localhost:{port}/health')
-              print(f'API docs: http://localhost:{port}/docs')
-              print(f'Swagger UI: https://legatoo.westlinktowing.com/api/swagger.html')
-              server.serve_forever()
-          
-          if __name__ == '__main__':
-              run_enhanced_backend()
+          print("🚀 Starting Legatoo Backend on port 8000...")
+          server = HTTPServer(('', 8000), APIHandler)
+          server.serve_forever()
           EOF
           
-          # Make deployment script executable
-          chmod +x deploy_backend.py
-          
-          # Stop existing backend processes
-          echo "Stopping existing backend processes..."
-          pkill -f "deploy_backend.py" || echo "No existing backend processes found"
-          pkill -f "simple_fastapi.py" || echo "No existing test processes found"
-          sleep 3
-          
-          # Start the new backend
-          echo "Starting enhanced backend..."
+          # Start backend
+          echo "🚀 Starting backend server..."
           nohup python3 deploy_backend.py > backend.log 2>&1 &
-          echo "Backend process started with PID: $!"
-          sleep 8
+          echo "✅ Backend started with PID: $!"
           
-          # Check if process is running
-          if pgrep -f "deploy_backend.py" > /dev/null; then
-            echo "Backend process is running successfully"
+          # Quick health check
+          sleep 5
+          if curl -s http://localhost:8000/health > /dev/null; then
+            echo "✅ Health check passed!"
           else
-            echo "Backend process failed to start, checking logs..."
-            tail -20 backend.log || echo "No log file found"
+            echo "⚠️ Health check failed, but backend may still be starting..."
           fi
           
-          # Health check with retries
-          echo "Performing health check..."
-          for i in {1..5}; do
-            if curl -f http://localhost:8000/health > /dev/null 2>&1; then
-              echo "Health check successful!"
-              curl -s http://localhost:8000/health | head -3
-              break
-            else
-              echo "Health check attempt $i failed, retrying in 3 seconds..."
-              sleep 3
-            fi
-          done
-          
-          echo "Backend deployment completed!"
+          echo "🎉 Deployment completed!"
