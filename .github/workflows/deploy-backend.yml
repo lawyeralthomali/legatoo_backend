@@ -43,6 +43,12 @@ jobs:
         project_root = Path(__file__).parent
         sys.path.insert(0, str(project_root))
         
+        # Add user site-packages to Python path for user-installed packages
+        import site
+        user_site = site.getusersitepackages()
+        if user_site not in sys.path:
+            sys.path.insert(0, user_site)
+        
         # Set production environment variables
         os.environ.setdefault('ENVIRONMENT', 'production')
         os.environ.setdefault('LOG_LEVEL', 'INFO')
@@ -96,24 +102,27 @@ jobs:
             echo "Using pip..."
             pip install --upgrade pip
             pip install -r requirements.txt
-        elif command -v python3 -m pip &> /dev/null; then
+        elif python3 -m pip --version &> /dev/null; then
             echo "Using python3 -m pip..."
             python3 -m pip install --upgrade pip
             python3 -m pip install -r requirements.txt
         else
             echo "❌ No pip command found. Installing pip..."
             curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-            python3 get-pip.py
-            python3 -m pip install --upgrade pip
-            python3 -m pip install -r requirements.txt
+            python3 get-pip.py --user
+            export PATH="$HOME/.local/bin:$PATH"
+            python3 -m pip install --user --upgrade pip
+            python3 -m pip install --user -r requirements.txt
         fi
         
         # Verify installation
         echo "✅ Verifying installation..."
+        export PYTHONPATH="$HOME/.local/lib/python3.6/site-packages:$PYTHONPATH"
         python3 -c "import fastapi, uvicorn, sqlalchemy; print('All dependencies installed successfully!')"
         
         # Create database if it doesn't exist
         echo "🗄️ Initializing database..."
+        export PYTHONPATH="$HOME/.local/lib/python3.6/site-packages:$PYTHONPATH"
         python3 -c "
         import asyncio
         from app.db.database import create_tables
