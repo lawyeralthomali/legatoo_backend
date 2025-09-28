@@ -1,5 +1,4 @@
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from ..db.database import Base
@@ -9,8 +8,8 @@ class UsageTracking(Base):
     """Usage tracking model for monitoring feature usage"""
     __tablename__ = "usage_tracking"
 
-    usage_id = Column(UUID(as_uuid=True), primary_key=True, index=True)
-    subscription_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    usage_id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    subscription_id = Column(Integer, nullable=True, index=True)
     feature = Column(String, nullable=False)  # file_upload, ai_chat, contract, token
     used_count = Column(Integer, nullable=False, default=0)
     reset_cycle = Column(String, nullable=False)  # daily / monthly / yearly

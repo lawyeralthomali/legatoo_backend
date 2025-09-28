@@ -5,7 +5,7 @@ This module provides comprehensive authentication endpoints including
 JWT refresh token flow, brute force protection, and unified error handling.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 import uuid
@@ -128,7 +128,7 @@ async def refresh_token(
 
 @router.post("/verify-email", response_model=ApiResponse)
 async def verify_email(
-    verification_token: str,
+    verification_token: str = Query(..., description="Email verification token"),
     auth_service: AuthService = Depends(get_auth_service)
 ) -> ApiResponse:
     """

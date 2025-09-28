@@ -1,7 +1,6 @@
 import enum
 from datetime import datetime, timedelta
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Enum
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Enum, Integer
 from sqlalchemy.orm import relationship
 from ..db.database import Base
 
@@ -15,9 +14,9 @@ class Subscription(Base):
     """Subscription model with plan references and usage tracking"""
     __tablename__ = "subscriptions"
 
-    subscription_id = Column(UUID(as_uuid=True), primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("profiles.id"), nullable=True, index=True)
-    plan_id = Column(UUID(as_uuid=True), ForeignKey("plans.plan_id"), nullable=True, index=True)
+    subscription_id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    user_id = Column(Integer, ForeignKey("profiles.id"), nullable=True, index=True)
+    plan_id = Column(Integer, ForeignKey("plans.plan_id"), nullable=True, index=True)
     start_date = Column(DateTime, nullable=False, default=datetime.utcnow)
     end_date = Column(DateTime, nullable=True)
     auto_renew = Column(Boolean, default=True)

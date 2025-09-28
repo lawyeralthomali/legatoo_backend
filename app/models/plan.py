@@ -1,5 +1,4 @@
 from sqlalchemy import Column, String, Numeric, Integer, Boolean, Text
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from ..db.database import Base
 
@@ -8,7 +7,7 @@ class Plan(Base):
     """Plan model for different subscription plans"""
     __tablename__ = "plans"
 
-    plan_id = Column(UUID(as_uuid=True), primary_key=True, index=True)
+    plan_id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     plan_name = Column(Text, nullable=False)  # Free Trial, Monthly, Annual
     plan_type = Column(Text, nullable=False)  # free, monthly, annual
     price = Column(Numeric(10, 2), nullable=False, default=0)  # السعر (0 للـ Free)

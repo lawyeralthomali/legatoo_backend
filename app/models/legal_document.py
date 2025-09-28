@@ -4,7 +4,6 @@ Converted from Django models
 """
 import enum
 from sqlalchemy import Column, String, Text, Boolean, Integer, ForeignKey, DateTime, JSON
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..db.database import Base
@@ -42,10 +41,10 @@ class LegalDocument(Base):
     """Model for storing legal documents"""
     __tablename__ = "legal_documents"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     title = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)
-    uploaded_by_id = Column(UUID(as_uuid=True), ForeignKey("profiles.id"), nullable=True)
+    uploaded_by_id = Column(Integer, ForeignKey("profiles.id"), nullable=True)
     document_type = Column(String(50), default="other", nullable=False)
     language = Column(String(10), default="ar", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -67,8 +66,8 @@ class LegalDocumentChunk(Base):
     """Model for storing chunks of legal documents with embeddings"""
     __tablename__ = "legal_document_chunks"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, index=True)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("legal_documents.id"), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    document_id = Column(Integer, ForeignKey("legal_documents.id"), nullable=False)
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
     article_number = Column(String(50), nullable=True)

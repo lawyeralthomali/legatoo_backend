@@ -3,10 +3,40 @@ from ..db.database import Base
 from .user import User
 from .profile import Profile, AccountType
 from .refresh_token import RefreshToken
-from .legal_document import LegalDocument
+from .legal_document import LegalDocument, LegalDocumentChunk, DocumentTypeEnum, LanguageEnum, ProcessingStatusEnum
+from .subscription import Subscription, StatusType
+from .plan import Plan
+from .billing import Billing
+from .usage_tracking import UsageTracking
+from .role import UserRole, Role, ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER, DEFAULT_USER_ROLE, ROLE_HIERARCHY, get_role_level, has_permission
 
 # Import all models to ensure they are registered with SQLAlchemy
-__all__ = ["Base", "User", "Profile", "AccountType", "RefreshToken", "LegalDocument"]
+__all__ = [
+    "Base", 
+    "User", 
+    "Profile", 
+    "AccountType", 
+    "RefreshToken", 
+    "LegalDocument", 
+    "LegalDocumentChunk", 
+    "DocumentTypeEnum", 
+    "LanguageEnum", 
+    "ProcessingStatusEnum",
+    "Subscription", 
+    "StatusType",
+    "Plan",
+    "Billing",
+    "UsageTracking",
+    "UserRole", 
+    "Role", 
+    "ROLE_SUPER_ADMIN", 
+    "ROLE_ADMIN", 
+    "ROLE_USER", 
+    "DEFAULT_USER_ROLE", 
+    "ROLE_HIERARCHY", 
+    "get_role_level", 
+    "has_permission"
+]
 
 
 

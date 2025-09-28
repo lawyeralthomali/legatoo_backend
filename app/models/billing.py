@@ -1,5 +1,4 @@
-from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from ..db.database import Base
@@ -9,8 +8,8 @@ class Billing(Base):
     """Billing model for invoices and payments"""
     __tablename__ = "billing"
 
-    invoice_id = Column(UUID(as_uuid=True), primary_key=True, index=True)
-    subscription_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    invoice_id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    subscription_id = Column(Integer, nullable=True, index=True)
     amount = Column(Numeric(10, 2), nullable=False)
     currency = Column(String, nullable=False, default='SAR')
     status = Column(String, nullable=False)  # paid, pending, failed, refunded
