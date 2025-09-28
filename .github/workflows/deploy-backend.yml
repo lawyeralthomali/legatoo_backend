@@ -42,9 +42,73 @@ jobs:
         
     - name: Build Docker image
       run: |
-        docker build -t legatoo-backend:${{ github.sha }} .
+        mkdir -p deploy_files
+        cat > deploy_files/run_fastapi.py << 'EOF'
+        #!/usr/bin/env python3
+        import sys
+        import os
+        import uvicorn
         
-    - name: Deploy to Hostinger
+        # Add the current directory to Python path
+        sys.path.insert(0, '/home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend')
+        
+        # Import and run the FastAPI app
+        from app.main import app
+        
+        if __name__ == "__main__":
+            print("🚀 Starting Legatoo FastAPI Backend...")
+            print("📋 Available endpoints:")
+            print("  - /docs - Swagger UI")
+            print("  - /redoc - ReDoc documentation")
+            print("  - /health - Health check")
+            print("  - /profiles - User profiles")
+            print("  - /auth - Authentication")
+            print("  - /subscriptions - Subscription management")
+            print("  - /premium - Premium features")
+            print("  - /legal-assistant - Legal AI assistant")
+            print("  - /legal-documents - Legal documents")
+            
+            uvicorn.run(
+                app,
+                host="0.0.0.0",
+                port=8000,
+                log_level="info",
+                access_log=True
+            )
+        EOF
+        EOF
+        
+        cat > deploy_files/deploy.sh << 'EOF'
+        #!/bin/bash
+        cd /home/$USER/legatoo_backend
+        git pull origin main
+        
+        # Stop old backend processes
+        pkill -f "deploy_backend.py" || true
+        pkill -f "run_fastapi.py" || true
+        pkill -f "uvicorn" || true
+        
+        # Install required dependencies
+        pip3 install fastapi uvicorn sqlalchemy asyncpg alembic python-jose[cryptography] python-multipart pydantic email-validator python-dotenv --user
+        
+        # Start FastAPI application
+        nohup python3 run_fastapi.py > fastapi.log 2>&1 &
+        echo "FastAPI deployment completed!"
+        EOF
+        chmod +x deploy_files/deploy.sh
+
+    - name: Upload files to Hostinger
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.HOSTINGER_HOST }}
+        username: ${{ secrets.HOSTINGER_USERNAME }}
+        password: ${{ secrets.HOSTINGER_PASSWORD }}
+        port: ${{ secrets.HOSTINGER_PORT }}
+        source: "deploy_files/*"
+        target: "/home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend/"
+        strip_components: 1
+
+    - name: Execute deployment
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.HOSTINGER_HOST }}
