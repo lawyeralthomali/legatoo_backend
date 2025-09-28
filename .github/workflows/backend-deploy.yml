@@ -152,10 +152,10 @@ jobs:
                 
                 # Create a fake activation script that does nothing
                 mkdir -p venv/bin
-                cat > venv/bin/activate << 'EOF'
+                cat > venv/bin/activate << 'FAKE_EOF'
 # Fake activation script for environments without venv support
 echo "⚠️  Warning: No virtual environment active"
-EOF
+FAKE_EOF
                 chmod +x venv/bin/activate
             fi
         fi
