@@ -17,7 +17,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.8'
+        python-version: '3.12'
         
     - name: Install system dependencies
       run: |
@@ -94,14 +94,14 @@ jobs:
         pkill -f "run_fastapi.py" || true
         pkill -f "uvicorn" || true
         
-        # Use available Python version (check what's available)
-        PYTHON_BIN=python3
+        # Use Python 3.12 (available on production server)
+        PYTHON_BIN=python3.12
         
         # Check Python version
         echo "🐍 Checking Python installation..."
         $PYTHON_BIN --version
         
-        # Install Python dependencies (without system dependencies since no sudo)
+        # Install Python dependencies
         echo "📦 Installing Python dependencies..."
         $PYTHON_BIN -m pip install --upgrade pip setuptools wheel
         $PYTHON_BIN -m pip install --user -r requirements.txt
