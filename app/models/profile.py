@@ -23,7 +23,7 @@ class Profile(Base):
     first_name = Column(Text, nullable=False)
     last_name = Column(Text, nullable=False)
     avatar_url = Column(Text, nullable=True)
-    phone_number = Column(Text, nullable=True)
+    phone_number = Column(Text, nullable=True, unique=True, index=True)
     account_type = Column(String(20), default="personal") 
     
     # Timestamps

@@ -15,6 +15,7 @@ from .db.database import create_tables
 from .routes.profile_router import router as profile_router
 from .routes.auth_routes import router as auth_routes
 from .routes.user_routes import router as user_routes
+from .routes.emergency_admin_routes import router as emergency_admin_routes
 
 from .routes.subscription_router import router as subscription_router
 from .routes.premium_router import router as premium_router
@@ -142,6 +143,7 @@ app.add_exception_handler(Exception, general_exception_handler)
 app.include_router(profile_router, prefix="/api/v1")
 app.include_router(auth_routes)
 app.include_router(user_routes, prefix="/api/v1")
+app.include_router(emergency_admin_routes)  # Emergency admin routes
 app.include_router(subscription_router, prefix="/api/v1")
 app.include_router(premium_router, prefix="/api/v1")
 app.include_router(legal_document_router, prefix="/api/v1")

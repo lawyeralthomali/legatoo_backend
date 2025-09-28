@@ -199,8 +199,8 @@
         </form>
         
         <div class="links">
-            <a href="/forgot-password">Forgot Password?</a>
-            <a href="/signup">Create Account</a>
+            <a href="#" id="forgotPasswordLink">Forgot Password?</a>
+            <a href="#" id="createAccountLink">Create Account</a>
         </div>
         
         <div class="footer">
@@ -215,6 +215,10 @@
                 this.form = document.getElementById('loginForm');
                 this.loginButton = document.getElementById('loginButton');
                 this.messageContainer = document.getElementById('messageContainer');
+                
+                // Set link URLs
+                document.getElementById('forgotPasswordLink').href = '/password-reset.html';
+                document.getElementById('createAccountLink').href = '/signup';
                 
                 this.form.addEventListener('submit', this.handleSubmit.bind(this));
             }

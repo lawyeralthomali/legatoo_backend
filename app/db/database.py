@@ -36,8 +36,30 @@ async def get_db() -> AsyncSession:
         finally:
             await session.close()
 
-# Function to create database tables (only for our custom tables, not auth.users)
+# Function to create database tables and initialize super admin
 async def create_tables():
+    """Create all database tables and initialize super admin user."""
     async with engine.begin() as conn:
-        # Only create our custom tables, not Supabase's auth.users
+        # Create all tables
         await conn.run_sync(Base.metadata.create_all)
+    
+    # Initialize super admin after tables are created
+    await initialize_super_admin()
+
+async def initialize_super_admin():
+    """Initialize super admin user if it doesn't exist."""
+    try:
+        from ..services.super_admin_service import SuperAdminService
+        
+        async with AsyncSessionLocal() as db:
+            super_admin_service = SuperAdminService()
+            result = await super_admin_service.create_super_admin(db)
+            
+            if result.success:
+                print("✅ Super admin initialized successfully")
+            else:
+                print(f"⚠️ Super admin initialization: {result.message}")
+                
+    except Exception as e:
+        print(f"❌ Failed to initialize super admin: {str(e)}")
+        # Don't raise the exception to avoid breaking database creation

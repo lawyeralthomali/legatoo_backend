@@ -21,6 +21,7 @@ from ..config.enhanced_logging import get_logger, log_auth_attempt, log_security
 from ..models.user import User
 from ..models.profile import Profile
 from ..models.refresh_token import RefreshToken
+from ..models.role import DEFAULT_USER_ROLE
 from ..schemas.response import raise_error_response, create_success_response
 from ..schemas.request import SignupRequest, LoginRequest
 from ..services.email_service import EmailService
@@ -191,6 +192,26 @@ class AuthService:
                     field="email"
                 )
             
+            # Check for duplicate phone number if provided
+            if signup_data.phone_number:
+                existing_phone = await self.db.execute(
+                    select(Profile).where(Profile.phone_number == signup_data.phone_number)
+                )
+                if existing_phone.scalar_one_or_none():
+                    self.logger.warning(f"Signup attempt with existing phone number: {signup_data.phone_number}")
+                    log_security_event(
+                        self.logger,
+                        "Duplicate phone number signup attempt",
+                        email=mask_email(signup_data.email),
+                        phone_number=signup_data.phone_number,
+                        correlation_id=self.correlation_id
+                    )
+                    raise_error_response(
+                        status_code=422,
+                        message="Phone number is already registered",
+                        field="phone_number"
+                    )
+            
             # Create user with verification token
             hashed_password = self.get_password_hash(signup_data.password)
             verification_token = self.email_service.generate_verification_token()
@@ -204,7 +225,8 @@ class AuthService:
                 verification_token=verification_token,
                 verification_token_expires=verification_expires,
                 failed_attempts=0,
-                email_sent=False
+                email_sent=False,
+                role=DEFAULT_USER_ROLE  # Set default admin role for new signups
             )
             
             self.db.add(user)
@@ -367,7 +389,11 @@ class AuthService:
             profile = profile_result.scalar_one_or_none()
             
             # Generate tokens
-            access_token = self.create_access_token(data={"sub": str(user.id), "email": user.email})
+            access_token = self.create_access_token(data={
+                "sub": str(user.id), 
+                "email": user.email,
+                "role": user.role  # Include user role in JWT token
+            })
             refresh_token = self.generate_refresh_token()
             
             # Store refresh token
@@ -384,6 +410,7 @@ class AuthService:
                         "email": user.email,
                         "is_active": user.is_active,
                         "is_verified": user.is_verified,
+                        "role": user.role,  # Include user role in response
                         "last_login": user.last_login
                     },
                     "profile": {
@@ -471,7 +498,11 @@ class AuthService:
                 )
             
             # Generate new access token
-            access_token = self.create_access_token(data={"sub": str(user.id), "email": user.email})
+            access_token = self.create_access_token(data={
+                "sub": str(user.id), 
+                "email": user.email,
+                "role": user.role  # Include user role in JWT token
+            })
             
             self.logger.info(f"Token refreshed successfully for user: {mask_email(user.email)}")
             

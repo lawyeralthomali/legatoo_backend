@@ -9,8 +9,8 @@ from sqlalchemy import Column, String, DateTime, Boolean, Integer
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
-
 from ..db.database import Base
+from .role import UserRole, DEFAULT_USER_ROLE
 
 class User(Base):
     """User model representing authenticated users."""
@@ -38,6 +38,9 @@ class User(Base):
     password_reset_token = Column(String(255), nullable=True, unique=True, index=True)
     password_reset_token_expires = Column(DateTime, nullable=True)
     
+    # Role field
+    role = Column(String(20), default=DEFAULT_USER_ROLE, nullable=False, index=True)
+    
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, onupdate=func.now())
     
@@ -45,4 +48,19 @@ class User(Base):
     profile = relationship("Profile", back_populates="user", uselist=False, lazy="select")
     
     def __repr__(self):
-        return f"<User(id={self.id}, email={self.email})>"
+        return f"<User(id={self.id}, email={self.email}, role={self.role})>"
+    
+    @property
+    def is_super_admin(self) -> bool:
+        """Check if user is super admin."""
+        return self.role == UserRole.SUPER_ADMIN
+    
+    @property
+    def is_admin(self) -> bool:
+        """Check if user is admin or super admin."""
+        return self.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+    
+    @property
+    def is_user(self) -> bool:
+        """Check if user is regular user."""
+        return self.role == UserRole.USER

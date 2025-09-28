@@ -249,7 +249,7 @@
         </div>
 
         <div id="buttonContainer" style="display: none;">
-            <a href="https://legatoo.westlinktowing.com/auth/login" class="button" id="loginButton">Go to Login</a>
+            <a href="#" class="button" id="loginButton">Go to Login</a>
             <button class="button button-secondary" onclick="location.reload()">Try Again</button>
         </div>
 
@@ -313,6 +313,9 @@
                 document.getElementById('statusMessage').innerHTML = 'Email verified successfully!';
                 document.getElementById('statusMessage').className = 'message success-message';
 
+                // Set login button URL
+                document.getElementById('loginButton').href = 'https://legatoo.westlinktowing.com/auth/login/';
+
                 // Show timer and buttons
                 document.getElementById('timerContainer').style.display = 'block';
                 document.getElementById('buttonContainer').style.display = 'block';
@@ -349,7 +352,7 @@
 
                     if (this.countdown <= 0) {
                         clearInterval(this.countdownInterval);
-                        window.location.href = 'https://legatoo.westlinktowing.com/auth/login';
+                        window.location.href = 'https://legatoo.westlinktowing.com/auth/login/';
                     }
                 }, 1000);
             }

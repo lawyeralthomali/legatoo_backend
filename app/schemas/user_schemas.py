@@ -6,6 +6,8 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
 
+from ..models.role import UserRole
+
 
 class UserBase(BaseModel):
     """Base user schema."""
@@ -28,6 +30,7 @@ class UserResponse(UserBase):
     id: int
     is_active: bool
     is_verified: bool
+    role: UserRole
     created_at: datetime
     
     class Config:
@@ -39,3 +42,9 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     is_active: Optional[bool] = None
     is_verified: Optional[bool] = None
+    role: Optional[UserRole] = None
+
+
+class UserRoleUpdate(BaseModel):
+    """Schema for updating user role (admin only)."""
+    role: UserRole

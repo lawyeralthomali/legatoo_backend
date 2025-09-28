@@ -17,6 +17,7 @@ import secrets
 import string
 
 from ..config.logging_config import get_logger
+from ..config.urls import get_url_config
 from ..utils.exceptions import ExternalServiceException
 from ..utils.api_exceptions import ApiException
 from ..schemas.response import raise_error_response
@@ -33,6 +34,9 @@ class EmailService:
     """
     
     def __init__(self):
+        # Get centralized URL configuration
+        self.url_config = get_url_config()
+        
         # SMTP Configuration from environment variables
         self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
@@ -43,7 +47,9 @@ class EmailService:
         
         # App configuration
         self.app_name = os.getenv("APP_NAME", "Your App")
-        self.frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        
+        # Frontend URL for email links
+        self.frontend_url = self.url_config.frontend_url
         
         # Validate required configuration
         if not self.smtp_username or not self.smtp_password:
@@ -180,8 +186,8 @@ class EmailService:
                 logger.warning("SMTP not configured, skipping email verification")
                 return False
             
-            # Create verification URL
-            verification_url = f"{self.frontend_url}/email-verification.html?token={verification_token}"
+            # Create verification URL using centralized config
+            verification_url = self.url_config.get_verification_url(verification_token)
             
             # Create email content
             html_content = self.create_verification_email_html(user_name, verification_token, verification_url)
@@ -234,8 +240,8 @@ class EmailService:
                 logger.warning("SMTP not configured, skipping password reset email")
                 return False
             
-            # Create reset URL
-            reset_url = f"{self.frontend_url}/password-reset.html?token={reset_token}"
+            # Create reset URL using centralized config
+            reset_url = self.url_config.get_password_reset_url(reset_token)
             
             # Create email content
             html_content = self.create_password_reset_email_html(user_name, reset_token, reset_url)
