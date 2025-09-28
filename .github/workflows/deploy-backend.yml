@@ -43,145 +43,57 @@ jobs:
     - name: Create deployment files
       run: |
         mkdir -p deploy_files
-        cat > deploy_files/deploy_backend.py << 'EOF'
-        import json
-        import urllib.parse
-        from http.server import BaseHTTPRequestHandler, HTTPServer
-        from datetime import datetime, timedelta
-        import uuid
+        cat > deploy_files/run_fastapi.py << 'EOF'
+        #!/usr/bin/env python3
+        import sys
+        import os
+        import uvicorn
         
-        class APIHandler(BaseHTTPRequestHandler):
-            def _send_json(self, data, status=200):
-                self.send_response(status)
-                self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-                self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-                self.end_headers()
-                self.wfile.write(json.dumps(data).encode())
-            
-            def do_OPTIONS(self):
-                self._send_json({})
-            
-            def do_GET(self):
-                if self.path == '/health':
-                    self._send_json({'status': 'healthy', 'service': 'legatoo-backend', 'version': '2.0.0', 'timestamp': datetime.now().isoformat()})
-                elif self.path == '/':
-                    self._send_json({
-                        'message': 'Legatoo API v2.0.0', 
-                        'service': 'legatoo-backend-enhanced', 
-                        'timestamp': datetime.now().isoformat(), 
-                        'endpoints': [
-                            '/health', 
-                            '/api/v1/status',
-                            '/api/v1/auth/login',
-                            '/api/v1/auth/register', 
-                            '/api/v1/auth/me',
-                            '/api/v1/auth/logout'
-                        ]
-                    })
-                elif self.path == '/api/v1/status':
-                    self._send_json({'api_status': 'active', 'version': '2.0.0', 'timestamp': datetime.now().isoformat()})
-                elif self.path == '/api/v1/auth/me':
-                    # Simulate user profile endpoint
-                    self._send_json({
-                        'user': {
-                            'id': 'user_123',
-                            'email': 'user@example.com',
-                            'name': 'John Doe',
-                            'role': 'user',
-                            'created_at': '2025-01-01T00:00:00Z'
-                        },
-                        'message': 'User profile retrieved successfully'
-                    })
-                else:
-                    self._send_json({'error': 'Not found', 'path': self.path}, 404)
-            
-            def do_POST(self):
-                if self.path == '/api/v1/auth/login':
-                    # Simulate login endpoint
-                    content_length = int(self.headers.get('Content-Length', 0))
-                    post_data = self.rfile.read(content_length).decode('utf-8')
-                    try:
-                        data = json.loads(post_data)
-                        email = data.get('email', '')
-                        password = data.get('password', '')
-                        
-                        # Simulate authentication (replace with real auth logic)
-                        if email and password:
-                            token = f"token_{uuid.uuid4().hex[:16]}"
-                            self._send_json({
-                                'success': True,
-                                'message': 'Login successful',
-                                'user': {
-                                    'id': 'user_123',
-                                    'email': email,
-                                    'name': 'John Doe',
-                                    'role': 'user'
-                                },
-                                'token': token,
-                                'expires_in': 3600
-                            })
-                        else:
-                            self._send_json({'error': 'Email and password are required'}, 400)
-                    except json.JSONDecodeError:
-                        self._send_json({'error': 'Invalid JSON'}, 400)
-                
-                elif self.path == '/api/v1/auth/register':
-                    # Simulate registration endpoint
-                    content_length = int(self.headers.get('Content-Length', 0))
-                    post_data = self.rfile.read(content_length).decode('utf-8')
-                    try:
-                        data = json.loads(post_data)
-                        email = data.get('email', '')
-                        password = data.get('password', '')
-                        name = data.get('name', '')
-                        
-                        if email and password and name:
-                            self._send_json({
-                                'success': True,
-                                'message': 'Registration successful',
-                                'user': {
-                                    'id': 'user_456',
-                                    'email': email,
-                                    'name': name,
-                                    'role': 'user',
-                                    'created_at': datetime.now().isoformat()
-                                },
-                                'token': f"token_{uuid.uuid4().hex[:16]}",
-                                'expires_in': 3600
-                            })
-                        else:
-                            self._send_json({'error': 'Email, password, and name are required'}, 400)
-                    except json.JSONDecodeError:
-                        self._send_json({'error': 'Invalid JSON'}, 400)
-                
-                elif self.path == '/api/v1/auth/logout':
-                    # Simulate logout endpoint
-                    self._send_json({
-                        'success': True,
-                        'message': 'Logout successful'
-                    })
-                
-                else:
-                    self._send_json({'error': 'Not found', 'path': self.path}, 404)
-            
-            def log_message(self, format, *args):
-                pass
+        # Add the current directory to Python path
+        sys.path.insert(0, '/home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend')
         
-        server = HTTPServer(('', 8000), APIHandler)
-        server.serve_forever()
+        # Import and run the FastAPI app
+        from app.main import app
+        
+        if __name__ == "__main__":
+            print("🚀 Starting Legatoo FastAPI Backend...")
+            print("📋 Available endpoints:")
+            print("  - /docs - Swagger UI")
+            print("  - /redoc - ReDoc documentation")
+            print("  - /health - Health check")
+            print("  - /profiles - User profiles")
+            print("  - /auth - Authentication")
+            print("  - /subscriptions - Subscription management")
+            print("  - /premium - Premium features")
+            print("  - /legal-assistant - Legal AI assistant")
+            print("  - /legal-documents - Legal documents")
+            
+            uvicorn.run(
+                app,
+                host="0.0.0.0",
+                port=8000,
+                log_level="info",
+                access_log=True
+            )
+        EOF
         EOF
         
         cat > deploy_files/deploy.sh << 'EOF'
         #!/bin/bash
         cd /home/$USER/legatoo_backend
         git pull origin main
+        
+        # Stop old backend processes
         pkill -f "deploy_backend.py" || true
-        cp deploy_backend.py deploy_backend.py.new
-        mv deploy_backend.py.new deploy_backend.py
-        nohup python3 deploy_backend.py > backend.log 2>&1 &
-        echo "Deployment completed!"
+        pkill -f "run_fastapi.py" || true
+        pkill -f "uvicorn" || true
+        
+        # Install required dependencies
+        pip3 install fastapi uvicorn sqlalchemy asyncpg alembic python-jose[cryptography] python-multipart pydantic email-validator python-dotenv --user
+        
+        # Start FastAPI application
+        nohup python3 run_fastapi.py > fastapi.log 2>&1 &
+        echo "FastAPI deployment completed!"
         EOF
         chmod +x deploy_files/deploy.sh
 
