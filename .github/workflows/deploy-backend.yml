@@ -19,9 +19,15 @@ jobs:
       with:
         python-version: '3.12'
         
-    - name: Install dependencies
+    - name: Install system dependencies
       run: |
-        python -m pip install --upgrade pip
+        sudo apt-get update -y
+        sudo apt-get install -y python3-dev build-essential pkg-config libffi-dev \
+            libssl-dev libjpeg-dev zlib1g-dev
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
         pip install -r requirements.txt
         
     - name: Create production deployment files
@@ -95,8 +101,15 @@ jobs:
         echo "🐍 Checking Python installation..."
         $PYTHON_BIN --version
         
+        # Install system dependencies
+        echo "📦 Installing system dependencies..."
+        sudo apt-get update -y
+        sudo apt-get install -y python3-dev build-essential pkg-config libffi-dev \
+            libssl-dev libjpeg-dev zlib1g-dev
+        
         # Install Python dependencies
         echo "📦 Installing Python dependencies..."
+        $PYTHON_BIN -m pip install --upgrade pip setuptools wheel
         $PYTHON_BIN -m pip install --user -r requirements.txt
         
         # Verify installation
