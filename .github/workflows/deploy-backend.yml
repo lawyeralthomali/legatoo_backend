@@ -40,43 +40,68 @@ jobs:
           echo "No tests found, skipping test execution"
         fi
         
-    - name: Deploy to Hostinger
+    - name: Create deployment files
+      run: |
+        mkdir -p deploy_files
+        cat > deploy_files/deploy_backend.py << 'EOF'
+        import json
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        from datetime import datetime
+        class APIHandler(BaseHTTPRequestHandler):
+            def _send_json(self, data, status=200):
+                self.send_response(status)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps(data).encode())
+            def do_GET(self):
+                if self.path == '/health':
+                    self._send_json({'status': 'healthy', 'service': 'legatoo-backend', 'version': '2.0.0', 'timestamp': datetime.now().isoformat()})
+                elif self.path == '/':
+                    self._send_json({'message': 'Legatoo API v2.0.0', 'service': 'legatoo-backend-enhanced', 'timestamp': datetime.now().isoformat(), 'endpoints': ['/health', '/api/v1/status']})
+                elif self.path == '/api/v1/status':
+                    self._send_json({'api_status': 'active', 'version': '2.0.0', 'timestamp': datetime.now().isoformat()})
+                else:
+                    self._send_json({'error': 'Not found'}, 404)
+            def log_message(self, format, *args):
+                pass
+        server = HTTPServer(('', 8000), APIHandler)
+        server.serve_forever()
+        EOF
+        
+        cat > deploy_files/deploy.sh << 'EOF'
+        #!/bin/bash
+        cd /home/$USER/legatoo_backend
+        git pull origin main
+        pkill -f "deploy_backend.py" || true
+        cp deploy_backend.py deploy_backend.py.new
+        mv deploy_backend.py.new deploy_backend.py
+        nohup python3 deploy_backend.py > backend.log 2>&1 &
+        echo "Deployment completed!"
+        EOF
+        chmod +x deploy_files/deploy.sh
+
+    - name: Upload files to Hostinger
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.HOSTINGER_HOST }}
+        username: ${{ secrets.HOSTINGER_USERNAME }}
+        password: ${{ secrets.HOSTINGER_PASSWORD }}
+        port: ${{ secrets.HOSTINGER_PORT }}
+        source: "deploy_files/*"
+        target: "/home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend/"
+        strip_components: 1
+
+    - name: Execute deployment
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.HOSTINGER_HOST }}
         username: ${{ secrets.HOSTINGER_USERNAME }}
         password: ${{ secrets.HOSTINGER_PASSWORD }}
         port: ${{ secrets.HOSTINGER_PORT }}
-        timeout: 120s
-        command_timeout: 120s
+        timeout: 60s
+        command_timeout: 60s
         script: |
           cd /home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend
-          git pull origin main
-          cat > deploy_backend.py << 'EOF'
-          import json
-          from http.server import BaseHTTPRequestHandler, HTTPServer
-          from datetime import datetime
-          class APIHandler(BaseHTTPRequestHandler):
-              def _send_json(self, data, status=200):
-                  self.send_response(status)
-                  self.send_header('Content-type', 'application/json')
-                  self.send_header('Access-Control-Allow-Origin', '*')
-                  self.end_headers()
-                  self.wfile.write(json.dumps(data).encode())
-              def do_GET(self):
-                  if self.path == '/health':
-                      self._send_json({'status': 'healthy', 'service': 'legatoo-backend', 'version': '2.0.0', 'timestamp': datetime.now().isoformat()})
-                  elif self.path == '/':
-                      self._send_json({'message': 'Legatoo API v2.0.0', 'service': 'legatoo-backend-enhanced', 'timestamp': datetime.now().isoformat(), 'endpoints': ['/health', '/api/v1/status']})
-                  elif self.path == '/api/v1/status':
-                      self._send_json({'api_status': 'active', 'version': '2.0.0', 'timestamp': datetime.now().isoformat()})
-                  else:
-                      self._send_json({'error': 'Not found'}, 404)
-              def log_message(self, format, *args):
-                  pass
-          server = HTTPServer(('', 8000), APIHandler)
-          server.serve_forever()
-          EOF
-          pkill -f "deploy_backend.py" || true
-          nohup python3 deploy_backend.py > backend.log 2>&1 &
-          echo "Deployment completed!"
+          chmod +x deploy.sh
+          ./deploy.sh
