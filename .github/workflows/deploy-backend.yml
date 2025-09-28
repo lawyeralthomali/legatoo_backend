@@ -124,8 +124,8 @@ jobs:
         else
             echo "❌ Dependency verification failed. Trying alternative installation..."
             # Try installing core packages individually with compatible versions
-            python3 -m pip install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4"
-            python3 -c "import fastapi, uvicorn, sqlalchemy; print('Core dependencies installed successfully!')"
+            python3 -m pip install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4" "aiofiles==0.8.0" "python-multipart==0.0.5" "jinja2==3.1.2" "aiosmtplib==3.0.1"
+            python3 -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('Core dependencies installed successfully!')"
         fi
         
         # Create database if it doesn't exist
