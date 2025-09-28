@@ -47,8 +47,8 @@ jobs:
         username: ${{ secrets.HOSTINGER_USERNAME }}
         password: ${{ secrets.HOSTINGER_PASSWORD }}
         port: ${{ secrets.HOSTINGER_PORT }}
-        timeout: 300s
-        command_timeout: 300s
+        timeout: 600s
+        command_timeout: 600s
         script: |
           # Test connection and check server setup
           echo "Testing SSH connection..."
@@ -77,20 +77,8 @@ jobs:
           # Pull latest changes
           git pull origin master || git pull origin main
           
-          # Check if Docker is installed
-          if ! command -v docker &> /dev/null; then
-            echo "Docker not found. Installing Docker..."
-            curl -fsSL https://get.docker.com -o get-docker.sh
-            sh get-docker.sh
-            sudo usermod -aG docker $USER
-          fi
-          
-          # Check if Docker Compose is installed
-          if ! command -v docker-compose &> /dev/null; then
-            echo "Docker Compose not found. Installing..."
-            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-            sudo chmod +x /usr/local/bin/docker-compose
-          fi
+          # Skip Docker installation on shared hosting (no sudo access)
+          echo "Skipping Docker installation on shared hosting..."
           
           # Create deployment script for Python 3.6.8 compatibility
           echo "Creating deployment script..."
@@ -295,16 +283,35 @@ jobs:
           
           # Stop existing backend processes
           echo "Stopping existing backend processes..."
-          pkill -f python3 || echo "No existing processes found"
-          sleep 2
+          pkill -f "deploy_backend.py" || echo "No existing backend processes found"
+          pkill -f "simple_fastapi.py" || echo "No existing test processes found"
+          sleep 3
           
           # Start the new backend
           echo "Starting enhanced backend..."
           nohup python3 deploy_backend.py > backend.log 2>&1 &
-          sleep 5
+          echo "Backend process started with PID: $!"
+          sleep 8
           
-          # Health check
+          # Check if process is running
+          if pgrep -f "deploy_backend.py" > /dev/null; then
+            echo "Backend process is running successfully"
+          else
+            echo "Backend process failed to start, checking logs..."
+            tail -20 backend.log || echo "No log file found"
+          fi
+          
+          # Health check with retries
           echo "Performing health check..."
-          curl -f http://localhost:8000/health || echo "Health check failed, but deployment completed"
+          for i in {1..5}; do
+            if curl -f http://localhost:8000/health > /dev/null 2>&1; then
+              echo "Health check successful!"
+              curl -s http://localhost:8000/health | head -3
+              break
+            else
+              echo "Health check attempt $i failed, retrying in 3 seconds..."
+              sleep 3
+            fi
+          done
           
           echo "Backend deployment completed!"
