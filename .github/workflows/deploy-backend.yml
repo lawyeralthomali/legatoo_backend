@@ -1,184 +1,129 @@
 name: Auto-Deploy FastAPI Backend to Hostinger
 
 on:
-  push:
-    branches: [ main, master, develop ]
-  pull_request:
-    branches: [ main, master ]
+push:
+branches: [ main, master, develop ]
+pull_request:
+branches: [ main, master ]
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.8'
-        
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update -y
-        sudo apt-get install -y python3-dev build-essential pkg-config libffi-dev \
-            libssl-dev libjpeg-dev zlib1g-dev
-        
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip setuptools wheel
-        pip install -r requirements.txt
-        
-    - name: Create production deployment files
-      run: |
-        mkdir -p deploy_files
-        
-        # Create production startup script
-        cat > deploy_files/start_production.py << 'EOF'
-        #!/usr/bin/env python3.12
-        """
-        Production startup script for Legatoo FastAPI Backend
-        """
-        import os
-        import sys
-        import uvicorn
-        from pathlib import Path
-        
-        # Add the project root to Python path
-        project_root = Path(__file__).parent
-        sys.path.insert(0, str(project_root))
-        
-        # Add user site-packages to Python path for user-installed packages
-        import site
-        user_site = site.getusersitepackages()
-        if user_site not in sys.path:
-            sys.path.insert(0, user_site)
-        
-        # Set production environment variables
-        os.environ.setdefault('ENVIRONMENT', 'production')
-        os.environ.setdefault('LOG_LEVEL', 'INFO')
-        
-        if __name__ == "__main__":
-            print("🚀 Starting Legatoo FastAPI Backend - Production Mode")
-            print("📋 Deploying actual FastAPI backend with all endpoints")
-            print("🔄 Deployment triggered by: GitHub Actions Push")
-            print("🌐 API Documentation: https://legatoo.westlinktowing.com/api/docs")
-            print("📊 Swagger UI: https://legatoo.westlinktowing.com/api/swagger.html")
-            
-            # Start the FastAPI application
-            uvicorn.run(
-                "app.main:app",
-                host="0.0.0.0",
-                port=8000,
-                reload=False,
-                workers=1,
-                log_level="info"
-            )
-        EOF
-        
-        # Create production deployment script
-        cat > deploy_files/deploy_production.sh << 'EOF'
-        #!/bin/bash
-        echo "🚀 Starting Production FastAPI Backend Deployment..."
-        echo "📅 Deployment Time: $(date)"
-        echo "🔄 Triggered by: Push to Repository"
-        
-        cd /home/$USER/legatoo_backend
-        
-        # Stop old processes
-        echo "🛑 Stopping old backend processes..."
-        pkill -f "start_production.py" || true
-        pkill -f "exact_routes_backend.py" || true
-        pkill -f "deploy_backend.py" || true
-        pkill -f "run_fastapi.py" || true
-        pkill -f "uvicorn" || true
-        
-        # Check available Python versions and use the best one
-        echo "🐍 Checking available Python versions..."
-        PYTHON_BIN=""
-        
-        # Try different Python versions in order of preference
-        for version in python3.12 python3.11 python3.10 python3.9 python3.8 python3; do
-            if command -v $version &> /dev/null; then
-                PYTHON_BIN=$version
-                echo "✅ Found Python: $version"
-                break
-            fi
-        done
-        
-        if [ -z "$PYTHON_BIN" ]; then
-            echo "❌ No Python installation found!"
-            exit 1
-        fi
-        
-        # Check Python version
-        echo "🐍 Using Python: $PYTHON_BIN"
-        $PYTHON_BIN --version
-        
-        # Install Python dependencies
-        echo "📦 Installing Python dependencies..."
-        $PYTHON_BIN -m pip install --upgrade pip setuptools wheel
-        $PYTHON_BIN -m pip install --user -r requirements.txt
-        
-        # Verify installation
-        echo "✅ Verifying installation..."
-        $PYTHON_BIN -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencies installed successfully!')"
-        
-        # Create database if it doesn't exist
-        echo "🗄️ Initializing database..."
-        $PYTHON_BIN -c "
-        import asyncio
-        from app.db.database import create_tables
-        asyncio.run(create_tables())
-        print('Database tables created successfully!')
-        "
-        
-        # Start production backend
-        echo "▶️ Starting production FastAPI backend..."
-        nohup $PYTHON_BIN start_production.py > production.log 2>&1 &
-        
-        # Wait for startup
-        sleep 5
-        
-        # Test backend health
-        echo "🧪 Testing backend health..."
-        if curl -s http://localhost:8000/health > /dev/null; then
-            echo "✅ FastAPI Backend deployed successfully!"
-            echo "🌐 API: https://legatoo.westlinktowing.com/api"
-            echo "📚 Swagger UI: https://legatoo.westlinktowing.com/api/swagger.html"
-            echo "📖 API Docs: https://legatoo.westlinktowing.com/api/docs"
-            echo "🔐 Auth Endpoints: https://legatoo.westlinktowing.com/api/v1/auth/"
-        else
-            echo "❌ Backend health check failed"
-            echo "📋 Checking logs..."
-            tail -20 production.log
-            exit 1
-        fi
-        EOF
-        chmod +x deploy_files/deploy_production.sh
+deploy:
+runs-on: ubuntu-latest
 
-    - name: Upload files to Hostinger
-      uses: appleboy/scp-action@v0.1.4
-      with:
-        host: ${{ secrets.HOSTINGER_HOST }}
-        username: ${{ secrets.HOSTINGER_USERNAME }}
-        password: ${{ secrets.HOSTINGER_PASSWORD }}
-        port: ${{ secrets.HOSTINGER_PORT }}
-        source: "deploy_files/*"
-        target: "/home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend/"
-        strip_components: 1
+```
+steps:
+- name: Checkout code
+  uses: actions/checkout@v4
 
-    - name: Execute production deployment
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.HOSTINGER_HOST }}
-        username: ${{ secrets.HOSTINGER_USERNAME }}
-        password: ${{ secrets.HOSTINGER_PASSWORD }}
-        port: ${{ secrets.HOSTINGER_PORT }}
-        timeout: 60s
-        command_timeout: 60s
-        script: |
-          cd /home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend
-          chmod +x deploy_production.sh
-          ./deploy_production.sh
+- name: Set up Python
+  uses: actions/setup-python@v4
+  with:
+    python-version: '3.11' # تأكد السيرفر عندك يدعم هذا الإصدار
+
+- name: Install system dependencies
+  run: |
+    sudo apt-get update -y
+    sudo apt-get install -y python3-dev build-essential pkg-config libffi-dev \
+        libssl-dev libjpeg-dev zlib1g-dev
+
+- name: Install Python dependencies
+  run: |
+    python -m pip install --upgrade pip setuptools wheel
+    pip install -r requirements.txt
+
+- name: Prepare deployment files
+  run: |
+    mkdir -p deploy_files
+
+    # Startup script
+    cat > deploy_files/start_production.py << 'EOF'
+    #!/usr/bin/env python3
+    import os, sys
+    from pathlib import Path
+    import uvicorn, site
+
+    project_root = Path(__file__).parent.parent
+    sys.path.insert(0, str(project_root))
+
+    user_site = site.getusersitepackages()
+    if user_site not in sys.path:
+        sys.path.insert(0, user_site)
+
+    os.environ.setdefault('ENVIRONMENT', 'production')
+    os.environ.setdefault('LOG_LEVEL', 'INFO')
+
+    if __name__ == "__main__":
+        print("🚀 Starting FastAPI Backend")
+        uvicorn.run(
+            "app.main:app",
+            host="0.0.0.0",
+            port=8000,
+            reload=False,
+            workers=2,
+            log_level="info"
+        )
+    EOF
+
+    # Deployment script
+    cat > deploy_files/deploy_production.sh << 'EOF'
+    #!/bin/bash
+    echo "🚀 Starting Backend Deployment..."
+    cd /home/$USER/legatoo_backend
+
+    # Kill old processes
+    pkill -f "start_production.py" || true
+    pkill -f "uvicorn" || true
+
+    # Detect Python
+    PYTHON_BIN=$(command -v python3.11 || command -v python3.10 || command -v python3)
+    echo "🐍 Using Python: $PYTHON_BIN"
+
+    # Backend setup
+    echo "📦 Installing Python dependencies..."
+    $PYTHON_BIN -m pip install --user -r requirements.txt
+
+    echo "🗄️ Initializing database..."
+    $PYTHON_BIN -c "import asyncio; from app.db.database import create_tables; asyncio.run(create_tables())"
+
+    echo "▶️ Starting FastAPI backend..."
+    nohup $PYTHON_BIN ./deploy_files/start_production.py > backend.log 2>&1 &
+
+    sleep 5
+
+    echo "🧪 Checking backend health..."
+    if curl -s http://localhost:8000/health > /dev/null; then
+        echo "✅ Backend OK"
+    else
+        echo "❌ Backend failed"
+        tail -20 backend.log
+        exit 1
+    fi
+
+    echo "✅ Deployment finished"
+    EOF
+    chmod +x deploy_files/deploy_production.sh
+
+- name: Upload backend project to Hostinger
+  uses: appleboy/scp-action@v0.1.4
+  with:
+    host: ${{ secrets.HOSTINGER_HOST }}
+    username: ${{ secrets.HOSTINGER_USERNAME }}
+    password: ${{ secrets.HOSTINGER_PASSWORD }}
+    port: ${{ secrets.HOSTINGER_PORT }}
+    source: "./*"
+    target: "/home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend/"
+    strip_components: 0
+
+- name: Execute deployment script on Hostinger
+  uses: appleboy/ssh-action@v1.0.0
+  with:
+    host: ${{ secrets.HOSTINGER_HOST }}
+    username: ${{ secrets.HOSTINGER_USERNAME }}
+    password: ${{ secrets.HOSTINGER_PASSWORD }}
+    port: ${{ secrets.HOSTINGER_PORT }}
+    timeout: 120s
+    script: |
+      cd /home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend
+      chmod +x deploy_files/deploy_production.sh
+      ./deploy_production.sh
+```
