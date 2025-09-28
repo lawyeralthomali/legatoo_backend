@@ -83,24 +83,31 @@ jobs:
         pkill -f "uvicorn" || true
         sleep 2
         
-        # Check Python version
-        echo "🐍 Checking Python installation..."
-        PYTHON_BIN=""
+        # Install Python 3.12
+        echo "🐍 Installing Python 3.12..."
         
-        # Try different Python versions in order of preference
-        for version in python3.11 python3.10 python3.9 python3.8 python3; do
-            if command -v $version &> /dev/null; then
-                PYTHON_BIN=$version
-                echo "✅ Found Python: $version"
-                break
-            fi
-        done
+        # Update apt repositories
+        echo "📦 Updating apt repositories..."
+        sudo apt-get update -y
         
-        if [ -z "$PYTHON_BIN" ]; then
-            echo "❌ No Python installation found!"
-            exit 1
-        fi
+        # Install software-properties-common
+        echo "🔧 Installing software-properties-common..."
+        sudo apt-get install -y software-properties-common
         
+        # Add deadsnakes PPA for Python 3.12
+        echo "➕ Adding deadsnakes PPA..."
+        sudo add-apt-repository ppa:deadsnakes/ppa -y
+        
+        # Update repositories again after adding PPA
+        sudo apt-get update -y
+        
+        # Install Python 3.12 and required packages
+        echo "📥 Installing Python 3.12, python3.12-venv, and python3.12-dev..."
+        sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
+        
+        # Set Python binary to use 3.12
+        PYTHON_BIN="python3.12"
+        echo "✅ Python 3.12 installation completed!"
         $PYTHON_BIN --version
         
         # Install Python dependencies
@@ -110,7 +117,7 @@ jobs:
         
         # Verify critical dependencies
         echo "✅ Verifying dependencies..."
-        $PYTHON_BIN -c "import fastapi, uvicorn, sqlalchemy; print('Core dependencies verified!')"
+        $PYTHON_BIN -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencies verified successfully!')"
         
         # Run database migrations
         echo "🗄️ Running database migrations..."
