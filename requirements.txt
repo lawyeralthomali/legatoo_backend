@@ -1,5 +1,5 @@
 fastapi==0.68.0
-uvicorn[standard]==0.30.0
+uvicorn==0.15.0
 sqlalchemy==1.4.23
 aiosqlite==0.17.0
 alembic==1.7.7
@@ -18,4 +18,4 @@ numpy==1.24.3
 passlib[bcrypt]==1.7.4
 aiosmtplib==1.1.7
 jinja2==3.0.3
-aiofiles==23.2.1
+aiofiles==0.8.0
