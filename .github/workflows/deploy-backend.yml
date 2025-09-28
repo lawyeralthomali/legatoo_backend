@@ -82,10 +82,35 @@ jobs:
         pkill -f "run_fastapi.py" || true
         pkill -f "uvicorn" || true
         
-        # Install/update Python dependencies
+        # Check Python version and install dependencies
+        echo "🐍 Checking Python installation..."
+        python3 --version
+        
+        # Try different pip commands
         echo "📦 Installing Python dependencies..."
-        pip3 install --upgrade pip
-        pip3 install -r requirements.txt
+        if command -v pip3 &> /dev/null; then
+            echo "Using pip3..."
+            pip3 install --upgrade pip
+            pip3 install -r requirements.txt
+        elif command -v pip &> /dev/null; then
+            echo "Using pip..."
+            pip install --upgrade pip
+            pip install -r requirements.txt
+        elif command -v python3 -m pip &> /dev/null; then
+            echo "Using python3 -m pip..."
+            python3 -m pip install --upgrade pip
+            python3 -m pip install -r requirements.txt
+        else
+            echo "❌ No pip command found. Installing pip..."
+            curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+            python3 get-pip.py
+            python3 -m pip install --upgrade pip
+            python3 -m pip install -r requirements.txt
+        fi
+        
+        # Verify installation
+        echo "✅ Verifying installation..."
+        python3 -c "import fastapi, uvicorn, sqlalchemy; print('All dependencies installed successfully!')"
         
         # Create database if it doesn't exist
         echo "🗄️ Initializing database..."
