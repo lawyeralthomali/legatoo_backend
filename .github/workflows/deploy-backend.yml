@@ -94,20 +94,14 @@ jobs:
         pkill -f "run_fastapi.py" || true
         pkill -f "uvicorn" || true
         
-        # Use explicit Python 3.12
-        PYTHON_BIN=/usr/bin/python3.12
+        # Use available Python version (check what's available)
+        PYTHON_BIN=python3
         
         # Check Python version
         echo "🐍 Checking Python installation..."
         $PYTHON_BIN --version
         
-        # Install system dependencies
-        echo "📦 Installing system dependencies..."
-        sudo apt-get update -y
-        sudo apt-get install -y python3-dev build-essential pkg-config libffi-dev \
-            libssl-dev libjpeg-dev zlib1g-dev
-        
-        # Install Python dependencies
+        # Install Python dependencies (without system dependencies since no sudo)
         echo "📦 Installing Python dependencies..."
         $PYTHON_BIN -m pip install --upgrade pip setuptools wheel
         $PYTHON_BIN -m pip install --user -r requirements.txt
