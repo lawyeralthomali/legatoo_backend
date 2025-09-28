@@ -108,7 +108,8 @@ jobs:
             python3 -m pip install -r requirements.txt
         else
             echo "❌ No pip command found. Installing pip..."
-            curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+            # Use Python 3.6 specific pip installer
+            curl https://bootstrap.pypa.io/pip/3.6/get-pip.py -o get-pip.py
             python3 get-pip.py --user
             export PATH="$HOME/.local/bin:$PATH"
             python3 -m pip install --user --upgrade pip
@@ -118,7 +119,14 @@ jobs:
         # Verify installation
         echo "✅ Verifying installation..."
         export PYTHONPATH="$HOME/.local/lib/python3.6/site-packages:$PYTHONPATH"
-        python3 -c "import fastapi, uvicorn, sqlalchemy; print('All dependencies installed successfully!')"
+        if python3 -c "import fastapi, uvicorn, sqlalchemy; print('All dependencies installed successfully!')"; then
+            echo "✅ Dependencies verified successfully!"
+        else
+            echo "❌ Dependency verification failed. Trying alternative installation..."
+            # Try installing core packages individually with compatible versions
+            python3 -m pip install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4"
+            python3 -c "import fastapi, uvicorn, sqlalchemy; print('Core dependencies installed successfully!')"
+        fi
         
         # Create database if it doesn't exist
         echo "🗄️ Initializing database..."
