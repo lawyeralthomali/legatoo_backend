@@ -10,7 +10,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from datetime import datetime, timedelta
 
-from ..db.database import Base
+from .base import Base
 
 
 class RefreshToken(Base):

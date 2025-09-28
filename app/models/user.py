@@ -9,7 +9,7 @@ from sqlalchemy import Column, String, DateTime, Boolean, Integer
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
-from ..db.database import Base
+from .base import Base
 from .role import UserRole, DEFAULT_USER_ROLE
 
 class User(Base):

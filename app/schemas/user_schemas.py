@@ -2,16 +2,32 @@
 User schemas for API requests and responses.
 """
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime
+import re
 
 from ..models.role import UserRole
 
 
 class UserBase(BaseModel):
     """Base user schema."""
-    email: EmailStr
+    email: str = Field(..., description="Valid email address")
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        """Validate email format"""
+        if not v or not v.strip():
+            raise ValueError("Email address is required")
+        
+        v = v.strip().lower()
+        
+        # Basic email validation
+        if not re.match(r'^[a-zA-Z0-9._+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', v):
+            raise ValueError("Invalid email format")
+        
+        return v
 
 
 class UserCreate(UserBase):
@@ -21,7 +37,7 @@ class UserCreate(UserBase):
 
 class UserLogin(BaseModel):
     """Schema for user login."""
-    email: EmailStr
+    email: str = Field(..., description="User's email address")
     password: str
 
 
@@ -33,13 +49,12 @@ class UserResponse(UserBase):
     role: UserRole
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class UserUpdate(BaseModel):
     """Schema for updating user information."""
-    email: Optional[EmailStr] = None
+    email: Optional[str] = Field(None, description="User's email address")
     is_active: Optional[bool] = None
     is_verified: Optional[bool] = None
     role: Optional[UserRole] = None

@@ -17,7 +17,7 @@ engine = create_async_engine(
     future=True
 )
 
-# Create async session factory - SQLAlchemy 1.4.23 compatible
+# Create async session factory - SQLAlchemy 2.0 compatible
 from sqlalchemy.orm import sessionmaker
 AsyncSessionLocal = sessionmaker(
     bind=engine,
@@ -25,9 +25,8 @@ AsyncSessionLocal = sessionmaker(
     expire_on_commit=False
 )
 
-# Base class for all models - SQLAlchemy 1.4.23 compatible
-from sqlalchemy.ext.declarative import declarative_base
-Base = declarative_base()
+# Import Base from models.base
+from ..models.base import Base
 
 # Dependency to get database session
 async def get_db() -> AsyncSession:

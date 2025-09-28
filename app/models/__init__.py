@@ -1,5 +1,5 @@
 # Models package
-from ..db.database import Base
+from .base import Base
 from .user import User
 from .profile import Profile, AccountType
 from .refresh_token import RefreshToken

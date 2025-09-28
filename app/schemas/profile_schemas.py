@@ -2,10 +2,11 @@
 Profile schemas for API requests and responses.
 """
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
+import re
 from ..models.profile import AccountType
 from ..models.role import UserRole
 
@@ -19,8 +20,23 @@ class ProfileBase(BaseModel):
 
 class ProfileCreate(ProfileBase):
     """Schema for creating a new profile."""
-    email: EmailStr
+    email: str = Field(..., description="Valid email address")
     account_type: Optional[AccountType] = AccountType.PERSONAL
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        """Validate email format"""
+        if not v or not v.strip():
+            raise ValueError("Email address is required")
+        
+        v = v.strip().lower()
+        
+        # Basic email validation
+        if not re.match(r'^[a-zA-Z0-9._+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', v):
+            raise ValueError("Invalid email format")
+        
+        return v
 
 
 class ProfileUpdate(ProfileBase):
@@ -41,8 +57,7 @@ class ProfileResponse(ProfileBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 # Additional schemas that were in the old profile.py

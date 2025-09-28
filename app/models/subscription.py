@@ -2,7 +2,7 @@ import enum
 from datetime import datetime, timedelta
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Enum, Integer
 from sqlalchemy.orm import relationship
-from ..db.database import Base
+from .base import Base
 
 class StatusType(enum.Enum):
     """Subscription status enumeration"""
