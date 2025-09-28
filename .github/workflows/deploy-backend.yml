@@ -50,30 +50,20 @@ jobs:
         timeout: 600s
         command_timeout: 600s
         script: |
-          echo "🚀 Starting Legatoo Backend Deployment..."
-          
-          # Navigate to backend directory
+          echo "Starting Legatoo Backend Deployment..."
           cd /home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend
-          echo "📁 Current directory: $(pwd)"
+          echo "Current directory: $(pwd)"
           
-          # Pull latest changes
-          echo "📥 Pulling latest changes..."
+          echo "Pulling latest changes..."
           git pull origin main
-          echo "✅ Repository updated successfully"
+          echo "Repository updated successfully"
           
-          # Stop existing processes
-          echo "🛑 Stopping existing backend processes..."
-          pkill -f "deploy_backend.py" || echo "No existing backend processes found"
-          sleep 2
-          
-          # Create simple deployment script
-          echo "📝 Creating deployment script..."
+          echo "Creating deployment script..."
           cat > deploy_backend.py << 'EOF'
           #!/usr/bin/env python3
           import json
           from http.server import BaseHTTPRequestHandler, HTTPServer
           from datetime import datetime
-          import socket
           
           class APIHandler(BaseHTTPRequestHandler):
               def _send_json(self, data, status=200):
@@ -110,22 +100,14 @@ jobs:
               def log_message(self, format, *args):
                   pass
           
-          print("🚀 Starting Legatoo Backend on port 8000...")
+          print("Starting Legatoo Backend on port 8000...")
           server = HTTPServer(('', 8000), APIHandler)
           server.serve_forever()
           EOF
           
-          # Start backend
-          echo "🚀 Starting backend server..."
+          echo "Starting backend server..."
+          pkill -f "deploy_backend.py" || true
           nohup python3 deploy_backend.py > backend.log 2>&1 &
-          echo "✅ Backend started with PID: $!"
+          echo "Backend started with PID: $!"
           
-          # Quick health check
-          sleep 5
-          if curl -s http://localhost:8000/health > /dev/null; then
-            echo "✅ Health check passed!"
-          else
-            echo "⚠️ Health check failed, but backend may still be starting..."
-          fi
-          
-          echo "🎉 Deployment completed!"
+          echo "Deployment completed!"
