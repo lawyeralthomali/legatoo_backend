@@ -92,29 +92,9 @@ jobs:
         echo "🐍 Checking Python installation..."
         python3 --version
         
-        # Try different pip commands
-        echo "📦 Installing Python dependencies..."
-        if command -v pip3 &> /dev/null; then
-            echo "Using pip3..."
-            pip3 install --upgrade pip
-            pip3 install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4" "aiofiles==0.8.0" "python-multipart==0.0.5" "jinja2==3.1.2" "aiosmtplib==3.0.1"
-        elif command -v pip &> /dev/null; then
-            echo "Using pip..."
-            pip install --upgrade pip
-            pip install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4" "aiofiles==0.8.0" "python-multipart==0.0.5" "jinja2==3.1.2" "aiosmtplib==3.0.1"
-        elif python3 -m pip --version &> /dev/null; then
-            echo "Using python3 -m pip..."
-            python3 -m pip install --upgrade pip
-            python3 -m pip install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4" "aiofiles==0.8.0" "python-multipart==0.0.5" "jinja2==3.1.2" "aiosmtplib==3.0.1"
-        else
-            echo "❌ No pip command found. Installing pip..."
-            # Use Python 3.6 specific pip installer
-            curl https://bootstrap.pypa.io/pip/3.6/get-pip.py -o get-pip.py
-            python3 get-pip.py --user
-            export PATH="$HOME/.local/bin:$PATH"
-            python3 -m pip install --user --upgrade pip
-            python3 -m pip install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4" "aiofiles==0.8.0" "python-multipart==0.0.5" "jinja2==3.1.2" "aiosmtplib==3.0.1"
-        fi
+        # Install Python 3.6 compatible packages directly
+        echo "📦 Installing Python 3.6 compatible dependencies..."
+        python3 -m pip install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4" "aiofiles==0.8.0" "python-multipart==0.0.5" "jinja2==3.0.3" "aiosmtplib==3.0.1"
         
         # Verify installation
         echo "✅ Verifying installation..."
