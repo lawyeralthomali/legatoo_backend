@@ -88,32 +88,55 @@ jobs:
         pkill -f "run_fastapi.py" || true
         pkill -f "uvicorn" || true
         
-        # Check Python version and install dependencies
-        echo "🐍 Checking Python installation..."
-        python3 --version
+        # Install Python 3.13
+        echo "🐍 Installing Python 3.13..."
         
-        # Install Python 3.6 compatible packages directly
-        echo "📦 Installing Python 3.6 compatible dependencies..."
-        python3 -m pip install --user "fastapi==0.68.0" "uvicorn[standard]==0.15.0" "sqlalchemy==1.4.23" "aiosqlite==0.17.0" "passlib[bcrypt]==1.7.4" "aiofiles==0.8.0" "python-multipart==0.0.5" "jinja2==3.0.3" "aiosmtplib==3.0.1"
+        # Update system packages
+        sudo apt-get update -y
+        
+        # Install dependencies for Python compilation
+        sudo apt-get install -y build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev wget libbz2-dev
+        
+        # Download and compile Python 3.13
+        cd /tmp
+        wget https://www.python.org/ftp/python/3.13.0/Python-3.13.0.tgz
+        tar -xf Python-3.13.0.tgz
+        cd Python-3.13.0
+        
+        # Configure and compile Python 3.13
+        ./configure --enable-optimizations --prefix=/usr/local/python3.13
+        make -j $(nproc)
+        sudo make altinstall
+        
+        # Create symlink for python3.13
+        sudo ln -sf /usr/local/python3.13/bin/python3.13 /usr/local/bin/python3.13
+        sudo ln -sf /usr/local/python3.13/bin/pip3.13 /usr/local/bin/pip3.13
+        
+        # Verify Python 3.13 installation
+        echo "✅ Verifying Python 3.13 installation..."
+        python3.13 --version
+        pip3.13 --version
+        
+        # Install Python dependencies with Python 3.13
+        echo "📦 Installing Python dependencies with Python 3.13..."
+        pip3.13 install --user -r requirements.txt
         
         # Verify installation
         echo "✅ Verifying installation..."
-        export PYTHONPATH="$HOME/.local/lib/python3.6/site-packages:$PYTHONPATH"
-        python3 -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencies installed successfully!')"
+        python3.13 -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencies installed successfully!')"
         
         # Create database if it doesn't exist
         echo "🗄️ Initializing database..."
-        export PYTHONPATH="$HOME/.local/lib/python3.6/site-packages:$PYTHONPATH"
-        python3 -c "
+        python3.13 -c "
         import asyncio
         from app.db.database import create_tables
         asyncio.run(create_tables())
         print('Database tables created successfully!')
         "
         
-        # Start production backend
-        echo "▶️ Starting production FastAPI backend..."
-        nohup python3 start_production.py > production.log 2>&1 &
+        # Start production backend with Python 3.13
+        echo "▶️ Starting production FastAPI backend with Python 3.13..."
+        nohup python3.13 start_production.py > production.log 2>&1 &
         
         # Wait for startup
         sleep 5
