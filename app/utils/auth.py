@@ -14,10 +14,11 @@ load_dotenv("supabase.env")
 
 # JWT Configuration
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://otiivelflvidgyfshmjn.supabase.co")
 
 # Test JWT Configuration (for testing purposes)
-TEST_JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
+TEST_JWT_SECRET = os.getenv("JWT_SECRET", SECRET_KEY)
 
 # Security scheme
 security = HTTPBearer()
@@ -44,7 +45,7 @@ def verify_test_token(token: str) -> Optional[TokenData]:
         # Decode the JWT token
         payload = jwt.decode(
             token,
-            TEST_JWT_SECRET,
+            SECRET_KEY,  # Use the same secret as auth service
             algorithms=["HS256"]
         )
         

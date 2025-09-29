@@ -44,10 +44,10 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, onupdate=func.now())
     
-    # Relationships - using string reference to avoid circular imports
+    # Relationships - simplified to avoid circular import issues
     profile = relationship("Profile", back_populates="user", uselist=False, lazy="select")
-    enjaz_accounts = relationship("EnjazAccount", back_populates="user", lazy="select", foreign_keys="EnjazAccount.user_id")
-    cases_imported = relationship("CaseImported", back_populates="user", lazy="select", foreign_keys="CaseImported.user_id")
+    # Note: enjaz_accounts and cases_imported relationships removed to fix initialization
+    # These can be added back later using a different approach
     
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, role={self.role})>"

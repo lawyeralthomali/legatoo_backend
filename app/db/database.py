@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy import String
 import os
 from dotenv import load_dotenv
@@ -25,9 +25,9 @@ AsyncSessionLocal = sessionmaker(
     expire_on_commit=False
 )
 
-# Base class for all models - SQLAlchemy 1.4.23 compatible
-from sqlalchemy.ext.declarative import declarative_base
-Base = declarative_base()
+# Base class for all models - SQLAlchemy 2.0 compatible
+class Base(DeclarativeBase):
+    pass
 
 # Dependency to get database session
 async def get_db() -> AsyncSession:
@@ -40,6 +40,13 @@ async def get_db() -> AsyncSession:
 # Function to create database tables and initialize super admin
 async def create_tables():
     """Create all database tables and initialize super admin user."""
+    # Import all models to ensure they are registered with SQLAlchemy
+    from ..models import (
+        User, Profile, RefreshToken, LegalDocument, LegalDocumentChunk,
+        Subscription, Plan, Billing, UsageTracking, UserRole, Role,
+        EnjazAccount, CaseImported
+    )
+    
     async with engine.begin() as conn:
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)

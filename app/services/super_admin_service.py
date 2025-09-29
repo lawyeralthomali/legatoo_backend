@@ -13,6 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from passlib.context import CryptContext
 
+# Import all models to ensure they are registered with SQLAlchemy
+from ..models import (
+    User, Profile, RefreshToken, LegalDocument, LegalDocumentChunk,
+    Subscription, Plan, Billing, UsageTracking, UserRole, Role,
+    EnjazAccount, CaseImported
+)
+
 from ..models.user import User
 from ..models.role import UserRole
 from ..schemas.response import ApiResponse, raise_error_response

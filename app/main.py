@@ -11,6 +11,13 @@ import os
 from .config.enhanced_logging import setup_logging, get_logger
 from .db.database import create_tables
 
+# Import all models to ensure they are registered with SQLAlchemy before relationships are resolved
+from .models import (
+    User, Profile, RefreshToken, LegalDocument, LegalDocumentChunk,
+    Subscription, Plan, Billing, UsageTracking, UserRole, Role,
+    EnjazAccount, CaseImported
+)
+
 # Import routers
 from .routes.profile_router import router as profile_router
 from .routes.auth_routes import router as auth_routes
