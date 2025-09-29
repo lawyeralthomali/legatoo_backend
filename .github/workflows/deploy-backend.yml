@@ -1,10 +1,9 @@
-name: FastAPI Backend Deployment to Hostinger
+name: Deploy Backend to Production
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -14,24 +13,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Deploy to Hostinger VPS
-      uses: appleboy/scp-action@v0.1.4
+    - name: Deploy to server
+      uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.HOSTINGER_HOST }}
         username: ${{ secrets.HOSTINGER_USERNAME }}
-        password: ${{ secrets.HOSTINGER_PASSWORD }}
-        port: ${{ secrets.HOSTINGER_PORT }}
-        source: "."
-        target: "/home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend"
-        
-    - name: Run deployment script
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.HOSTINGER_HOST }}
-        username: ${{ secrets.HOSTINGER_USERNAME }}
-        password: ${{ secrets.HOSTINGER_PASSWORD }}
+        key: ${{ secrets.HOSTINGER_SSH_KEY }}
         port: ${{ secrets.HOSTINGER_PORT }}
         script: |
-          cd /home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend
-          chmod +x deploy_files/deploy_production_v2.sh
-          ./deploy_files/deploy_production_v2.sh
+          # Navigate to project directory
+          cd ~/legatoo_backend
+          
+          # Run deployment script
+          chmod +x deploy.sh
+          ./deploy.sh
