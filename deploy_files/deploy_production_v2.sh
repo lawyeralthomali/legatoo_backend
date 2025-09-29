@@ -66,13 +66,18 @@ if [ -z "$PYTHON_BIN" ]; then
     print_status "Installing Python 3.12..."
     
     # Detect package manager and install Python
-    if command -v apt &> /dev/null; then
+    if command -v apt &> /dev/null || command -v apt-get &> /dev/null; then
         print_status "Using apt package manager..."
-        apt update -y
-        apt install -y software-properties-common
+        if command -v apt &> /dev/null; then
+            PKG_MGR="apt"
+        else
+            PKG_MGR="apt-get"
+        fi
+        $PKG_MGR update -y
+        $PKG_MGR install -y software-properties-common
         add-apt-repository -y ppa:deadsnakes/ppa
-        apt update -y
-        apt install -y python3.12 python3.12-venv python3.12-dev
+        $PKG_MGR update -y
+        $PKG_MGR install -y python3.12 python3.12-venv python3.12-dev
         PYTHON_BIN=python3.12
     elif command -v yum &> /dev/null; then
         print_status "Using yum package manager..."
@@ -83,6 +88,11 @@ if [ -z "$PYTHON_BIN" ]; then
         print_status "Using dnf package manager..."
         dnf update -y
         dnf install -y python3.12 python3.12-devel
+        PYTHON_BIN=python3.12
+    elif command -v apk &> /dev/null; then
+        print_status "Using apk package manager..."
+        apk update
+        apk add python3.12 python3.12-dev
         PYTHON_BIN=python3.12
     else
         print_error "No supported package manager found. Cannot install Python 3.12."
@@ -101,10 +111,15 @@ $PYTHON_BIN --version
 print_status "Installing essential tools..."
 
 # Detect package manager and install tools
-if command -v apt &> /dev/null; then
+if command -v apt &> /dev/null || command -v apt-get &> /dev/null; then
     print_status "Using apt package manager..."
-    apt update -y
-    apt install -y python3-dev python3-pip build-essential git curl wget unzip
+    if command -v apt &> /dev/null; then
+        PKG_MGR="apt"
+    else
+        PKG_MGR="apt-get"
+    fi
+    $PKG_MGR update -y
+    $PKG_MGR install -y python3-dev python3-pip build-essential git curl wget unzip
 elif command -v yum &> /dev/null; then
     print_status "Using yum package manager..."
     yum update -y
@@ -113,30 +128,50 @@ elif command -v dnf &> /dev/null; then
     print_status "Using dnf package manager..."
     dnf update -y
     dnf install -y python3-devel python3-pip gcc gcc-c++ make git curl wget unzip
+elif command -v apk &> /dev/null; then
+    print_status "Using apk package manager..."
+    apk update
+    apk add python3-dev py3-pip build-base git curl wget unzip
 else
     print_warning "No supported package manager found. Skipping system package installation."
 fi
 
-# Create virtual environment
-print_status "Creating virtual environment..."
-$PYTHON_BIN -m venv venv
+# Create virtual environment (skip for old Python versions)
+VERSION_NUM=$($PYTHON_BIN -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
+MAJOR=$(echo $VERSION_NUM | cut -d. -f1)
+MINOR=$(echo $VERSION_NUM | cut -d. -f2)
 
-# Activate virtual environment
-print_status "Activating virtual environment..."
-source venv/bin/activate
-
-# Upgrade pip
-print_status "Upgrading pip..."
-pip install --upgrade pip setuptools wheel
+if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 8 ]; then
+    print_warning "Skipping virtual environment creation for Python $VERSION_NUM (too old)"
+    print_status "Using system Python with --break-system-packages flag"
+else
+    print_status "Creating virtual environment..."
+    $PYTHON_BIN -m venv venv
+    
+    # Activate virtual environment
+    print_status "Activating virtual environment..."
+    source venv/bin/activate
+    
+    # Upgrade pip
+    print_status "Upgrading pip..."
+    pip install --upgrade pip setuptools wheel
+fi
 
 # Install Rust compiler for tiktoken
 print_status "Installing Rust compiler..."
-if command -v apt &> /dev/null; then
-    apt install -y rustc
+if command -v apt &> /dev/null || command -v apt-get &> /dev/null; then
+    if command -v apt &> /dev/null; then
+        PKG_MGR="apt"
+    else
+        PKG_MGR="apt-get"
+    fi
+    $PKG_MGR install -y rustc
 elif command -v yum &> /dev/null; then
     yum install -y rustc
 elif command -v dnf &> /dev/null; then
     dnf install -y rustc
+elif command -v apk &> /dev/null; then
+    apk add rust
 else
     print_warning "No supported package manager found. Skipping Rust installation."
 fi
@@ -176,8 +211,13 @@ python -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencie
 
 # Configure firewall
 print_status "Configuring firewall..."
-if command -v apt &> /dev/null; then
-    apt install -y ufw
+if command -v apt &> /dev/null || command -v apt-get &> /dev/null; then
+    if command -v apt &> /dev/null; then
+        PKG_MGR="apt"
+    else
+        PKG_MGR="apt-get"
+    fi
+    $PKG_MGR install -y ufw
     ufw allow ssh
     ufw allow 8000
     ufw --force enable
@@ -195,6 +235,11 @@ elif command -v dnf &> /dev/null; then
     firewall-cmd --permanent --add-service=ssh
     firewall-cmd --permanent --add-port=8000/tcp
     firewall-cmd --reload
+elif command -v apk &> /dev/null; then
+    apk add ufw
+    ufw allow ssh
+    ufw allow 8000
+    ufw --force enable
 else
     print_warning "No supported package manager found. Skipping firewall configuration."
 fi
@@ -207,8 +252,14 @@ mkdir -p logs
 print_status "Starting FastAPI application..."
 print_status "The app will run in the background. Check logs with: tail -f logs/app.log"
 
-# Start the application in background
-nohup python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > logs/app.log 2>&1 &
+# Start the application in background (use correct Python path)
+if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 8 ]; then
+    # Use system Python for old versions
+    nohup $PYTHON_BIN -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > logs/app.log 2>&1 &
+else
+    # Use virtual environment Python for newer versions
+    nohup venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > logs/app.log 2>&1 &
+fi
 
 # Get the process ID
 APP_PID=$!
