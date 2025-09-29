@@ -84,6 +84,7 @@ class SuperAdminService:
             
             # Log security event
             log_security_event(
+                self.logger,
                 "Super admin user created",
                 user_id=super_admin.id,
                 email=self.super_admin_email,
