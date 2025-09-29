@@ -18,7 +18,7 @@ jobs:
       with:
         host: ${{ secrets.HOSTINGER_HOST }}
         username: ${{ secrets.HOSTINGER_USERNAME }}
-        key: ${{ secrets.HOSTINGER_SSH_KEY }}
+        password: ${{ secrets.HOSTINGER_PASSWORD }}
         port: ${{ secrets.HOSTINGER_PORT }}
         script: |
           # Navigate to project directory
