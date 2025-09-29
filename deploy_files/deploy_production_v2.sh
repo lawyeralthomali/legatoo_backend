@@ -54,18 +54,28 @@ done
 
 if [ -z "$PYTHON_BIN" ]; then
     print_error "No suitable Python version found (>= 3.8 required)!"
-    print_status "Installing Python 3.12 via deadsnakes PPA..."
-    
-    # Update apt repositories (no sudo needed as root)
-    print_status "Updating apt repositories..."
-    apt update -y
-    
-    # Install Python 3.12 (no sudo needed as root)
     print_status "Installing Python 3.12..."
-    apt install -y software-properties-common
-    add-apt-repository -y ppa:deadsnakes/ppa
-    apt update -y
-    apt install -y python3.12 python3.12-venv python3.12-dev
+    
+    # Detect package manager and install Python
+    if command -v apt &> /dev/null; then
+        print_status "Using apt package manager..."
+        apt update -y
+        apt install -y software-properties-common
+        add-apt-repository -y ppa:deadsnakes/ppa
+        apt update -y
+        apt install -y python3.12 python3.12-venv python3.12-dev
+    elif command -v yum &> /dev/null; then
+        print_status "Using yum package manager..."
+        yum update -y
+        yum install -y python3.12 python3.12-devel
+    elif command -v dnf &> /dev/null; then
+        print_status "Using dnf package manager..."
+        dnf update -y
+        dnf install -y python3.12 python3.12-devel
+    else
+        print_error "No supported package manager found. Cannot install Python 3.12."
+        exit 1
+    fi
     
     PYTHON_BIN=python3.12
     print_success "Python 3.12 installed successfully"
@@ -77,7 +87,23 @@ $PYTHON_BIN --version
 
 # Install essential tools
 print_status "Installing essential tools..."
-apt install -y python3-dev python3-pip build-essential git curl wget unzip
+
+# Detect package manager and install tools
+if command -v apt &> /dev/null; then
+    print_status "Using apt package manager..."
+    apt update -y
+    apt install -y python3-dev python3-pip build-essential git curl wget unzip
+elif command -v yum &> /dev/null; then
+    print_status "Using yum package manager..."
+    yum update -y
+    yum install -y python3-devel python3-pip gcc gcc-c++ make git curl wget unzip
+elif command -v dnf &> /dev/null; then
+    print_status "Using dnf package manager..."
+    dnf update -y
+    dnf install -y python3-devel python3-pip gcc gcc-c++ make git curl wget unzip
+else
+    print_warning "No supported package manager found. Skipping system package installation."
+fi
 
 # Create virtual environment
 print_status "Creating virtual environment..."
@@ -93,7 +119,15 @@ pip install --upgrade pip setuptools wheel
 
 # Install Rust compiler for tiktoken
 print_status "Installing Rust compiler..."
-apt install -y rustc
+if command -v apt &> /dev/null; then
+    apt install -y rustc
+elif command -v yum &> /dev/null; then
+    yum install -y rustc
+elif command -v dnf &> /dev/null; then
+    dnf install -y rustc
+else
+    print_warning "No supported package manager found. Skipping Rust installation."
+fi
 
 # Install Python dependencies
 print_status "Installing Python dependencies..."
@@ -113,10 +147,28 @@ python -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencie
 
 # Configure firewall
 print_status "Configuring firewall..."
-apt install -y ufw
-ufw allow ssh
-ufw allow 8000
-ufw --force enable
+if command -v apt &> /dev/null; then
+    apt install -y ufw
+    ufw allow ssh
+    ufw allow 8000
+    ufw --force enable
+elif command -v yum &> /dev/null; then
+    yum install -y firewalld
+    systemctl start firewalld
+    systemctl enable firewalld
+    firewall-cmd --permanent --add-service=ssh
+    firewall-cmd --permanent --add-port=8000/tcp
+    firewall-cmd --reload
+elif command -v dnf &> /dev/null; then
+    dnf install -y firewalld
+    systemctl start firewalld
+    systemctl enable firewalld
+    firewall-cmd --permanent --add-service=ssh
+    firewall-cmd --permanent --add-port=8000/tcp
+    firewall-cmd --reload
+else
+    print_warning "No supported package manager found. Skipping firewall configuration."
+fi
 
 # Create logs directory
 print_status "Creating logs directory..."
