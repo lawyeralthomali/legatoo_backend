@@ -37,7 +37,7 @@ class SuperAdminService:
         
         # Super admin credentials from environment
         self.super_admin_email = os.getenv("SUPER_ADMIN_EMAIL", "info@legatoo.westlinktowing.com")
-        self.super_admin_password = os.getenv("SUPER_ADMIN_PASSWORD", "Zaq1zaq1zaq@@")
+        self.super_admin_password = os.getenv("SUPER_ADMIN_PASSWORD", "Zaq1zaq1")
     
     async def create_super_admin(self, db: AsyncSession) -> ApiResponse:
         """
