@@ -236,15 +236,28 @@ fi
 print_status "Creating logs directory..."
 mkdir -p logs
 
+# Set up production environment
+print_status "Setting up production environment..."
+if [ -f "env.production.example" ]; then
+    if [ ! -f ".env.production" ]; then
+        cp env.production.example .env.production
+        print_success "Created .env.production from env.production.example"
+    else
+        print_warning ".env.production already exists, skipping creation"
+    fi
+else
+    print_warning "env.production.example not found, using default environment"
+fi
+
 # Start the application
 print_status "Starting FastAPI application..."
 print_status "The app will run in the background. Check logs with: tail -f logs/app.log"
 
-# Start the application in background
+# Start the application in background with production environment
 if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 8 ]; then
-    nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > logs/app.log 2>&1 &
+    nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --env-file .env.production > logs/app.log 2>&1 &
 else
-    nohup python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > logs/app.log 2>&1 &
+    nohup python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --env-file .env.production > logs/app.log 2>&1 &
 fi
 
 # Get the process ID

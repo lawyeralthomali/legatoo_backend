@@ -233,6 +233,40 @@ async def password_reset_page():
         raise HTTPException(status_code=404, detail="Password reset page not found")
 
 
+@app.get("/products.json")
+async def get_products():
+    """Get products data for frontend."""
+    return {
+        "success": True,
+        "message": "Products retrieved successfully",
+        "data": {
+            "products": [
+                {
+                    "id": 1,
+                    "name": "Basic Plan",
+                    "description": "Basic legal document processing",
+                    "price": 29.99,
+                    "features": ["Document upload", "Basic AI analysis"]
+                },
+                {
+                    "id": 2,
+                    "name": "Premium Plan", 
+                    "description": "Advanced legal document processing",
+                    "price": 59.99,
+                    "features": ["Document upload", "Advanced AI analysis", "Priority support"]
+                },
+                {
+                    "id": 3,
+                    "name": "Enterprise Plan",
+                    "description": "Full-featured legal document processing",
+                    "price": 99.99,
+                    "features": ["Document upload", "Advanced AI analysis", "Priority support", "API access"]
+                }
+            ]
+        }
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
