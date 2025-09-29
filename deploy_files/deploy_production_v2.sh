@@ -46,9 +46,18 @@ PYTHON_BIN=""
 # Try different Python versions in order of preference
 for version in python3.12 python3.11 python3.10 python3.9 python3.8 python3; do
     if command -v $version &> /dev/null; then
-        PYTHON_BIN=$version
-        print_success "Found Python: $version"
-        break
+        # Check if version is >= 3.8
+        VERSION_NUM=$($version -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
+        MAJOR=$(echo $VERSION_NUM | cut -d. -f1)
+        MINOR=$(echo $VERSION_NUM | cut -d. -f2)
+        
+        if [ "$MAJOR" -gt 3 ] || ([ "$MAJOR" -eq 3 ] && [ "$MINOR" -ge 8 ]); then
+            PYTHON_BIN=$version
+            print_success "Found suitable Python: $version (version $VERSION_NUM)"
+            break
+        else
+            print_warning "Python $version found but version $VERSION_NUM is too old (need >= 3.8)"
+        fi
     fi
 done
 
@@ -64,21 +73,24 @@ if [ -z "$PYTHON_BIN" ]; then
         add-apt-repository -y ppa:deadsnakes/ppa
         apt update -y
         apt install -y python3.12 python3.12-venv python3.12-dev
+        PYTHON_BIN=python3.12
     elif command -v yum &> /dev/null; then
         print_status "Using yum package manager..."
         yum update -y
         yum install -y python3.12 python3.12-devel
+        PYTHON_BIN=python3.12
     elif command -v dnf &> /dev/null; then
         print_status "Using dnf package manager..."
         dnf update -y
         dnf install -y python3.12 python3.12-devel
+        PYTHON_BIN=python3.12
     else
         print_error "No supported package manager found. Cannot install Python 3.12."
-        exit 1
+        print_status "Trying to use existing Python 3.6.8 with --break-system-packages..."
+        PYTHON_BIN=python3
     fi
     
-    PYTHON_BIN=python3.12
-    print_success "Python 3.12 installed successfully"
+    print_success "Python installation completed"
 fi
 
 # Check Python version
@@ -131,14 +143,31 @@ fi
 
 # Install Python dependencies
 print_status "Installing Python dependencies..."
-pip install uvicorn
-pip install tiktoken
-pip install fastapi sqlalchemy aiofiles
+
+# Check if we need to use --break-system-packages for old Python versions
+VERSION_NUM=$($PYTHON_BIN -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "0.0")
+MAJOR=$(echo $VERSION_NUM | cut -d. -f1)
+MINOR=$(echo $VERSION_NUM | cut -d. -f2)
+
+if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 8 ]; then
+    print_warning "Using Python $VERSION_NUM with --break-system-packages flag"
+    pip install --break-system-packages uvicorn
+    pip install --break-system-packages tiktoken
+    pip install --break-system-packages fastapi sqlalchemy aiofiles
+else
+    pip install uvicorn
+    pip install tiktoken
+    pip install fastapi sqlalchemy aiofiles
+fi
 
 # Install remaining dependencies from requirements.txt
 if [ -f "requirements.txt" ]; then
     print_status "Installing from requirements.txt..."
-    pip install -r requirements.txt
+    if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 8 ]; then
+        pip install --break-system-packages -r requirements.txt
+    else
+        pip install -r requirements.txt
+    fi
 fi
 
 # Verify installation
