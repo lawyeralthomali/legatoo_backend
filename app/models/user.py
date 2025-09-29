@@ -46,6 +46,8 @@ class User(Base):
     
     # Relationships - using string reference to avoid circular imports
     profile = relationship("Profile", back_populates="user", uselist=False, lazy="select")
+    enjaz_accounts = relationship("EnjazAccount", back_populates="user", lazy="select", foreign_keys="EnjazAccount.user_id")
+    cases_imported = relationship("CaseImported", back_populates="user", lazy="select", foreign_keys="CaseImported.user_id")
     
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, role={self.role})>"

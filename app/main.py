@@ -21,6 +21,7 @@ from .routes.subscription_router import router as subscription_router
 from .routes.premium_router import router as premium_router
 from .routes.legal_document_router import router as legal_document_router
 from .routes.legal_assistant_router import router as legal_assistant_router
+from .routes.enjaz_router import router as enjaz_router
 
 from pydantic import BaseModel
 from typing import List
@@ -148,6 +149,7 @@ app.include_router(subscription_router, prefix="/api/v1")
 app.include_router(premium_router, prefix="/api/v1")
 app.include_router(legal_document_router, prefix="/api/v1")
 app.include_router(legal_assistant_router, prefix="/api/v1")
+app.include_router(enjaz_router)
 
 @app.on_event("startup")
 async def startup_event():
@@ -183,7 +185,10 @@ async def root():
             "subscriptions": "/api/v1/subscriptions/status",
             "plans": "/api/v1/subscriptions/plans",
             "premium": "/api/v1/premium/status",
-            "features": "/api/v1/premium/feature-limits"
+            "features": "/api/v1/premium/feature-limits",
+            "enjaz_connect": "/api/v1/enjaz/connect",
+            "enjaz_sync": "/api/v1/enjaz/sync-cases",
+            "enjaz_cases": "/api/v1/enjaz/cases"
         }
     }
 

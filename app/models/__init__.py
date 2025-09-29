@@ -9,6 +9,8 @@ from .plan import Plan
 from .billing import Billing
 from .usage_tracking import UsageTracking
 from .role import UserRole, Role, ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER, DEFAULT_USER_ROLE, ROLE_HIERARCHY, get_role_level, has_permission
+from .enjaz_account import EnjazAccount
+from .case_imported import CaseImported
 
 # Import all models to ensure they are registered with SQLAlchemy
 __all__ = [
@@ -35,7 +37,9 @@ __all__ = [
     "DEFAULT_USER_ROLE", 
     "ROLE_HIERARCHY", 
     "get_role_level", 
-    "has_permission"
+    "has_permission",
+    "EnjazAccount",
+    "CaseImported"
 ]
 
 
