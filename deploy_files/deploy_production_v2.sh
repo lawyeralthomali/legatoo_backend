@@ -117,17 +117,42 @@ else
     print_warning "No supported package manager found. Skipping system package installation."
 fi
 
+# Install pip if it's missing
+if ! command -v pip &> /dev/null && ! command -v pip3 &> /dev/null; then
+    print_status "Installing pip..."
+    if command -v apt &> /dev/null; then
+        apt install -y python3-pip
+    elif command -v yum &> /dev/null; then
+        yum install -y python3-pip
+    elif command -v dnf &> /dev/null; then
+        dnf install -y python3-pip
+    else
+        # Fallback: install pip using get-pip.py
+        curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+        python3 get-pip.py --break-system-packages
+        rm get-pip.py
+    fi
+fi
+
 # Create virtual environment
 print_status "Creating virtual environment..."
-$PYTHON_BIN -m venv venv
-
-# Activate virtual environment
-print_status "Activating virtual environment..."
-source venv/bin/activate
+if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 8 ]; then
+    print_warning "Skipping virtual environment creation for Python $VERSION_NUM (too old)"
+    print_status "Using system Python with --break-system-packages flag"
+else
+    $PYTHON_BIN -m venv venv
+    # Activate virtual environment
+    print_status "Activating virtual environment..."
+    source venv/bin/activate
+fi
 
 # Upgrade pip
 print_status "Upgrading pip..."
-pip install --upgrade pip setuptools wheel
+if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 8 ]; then
+    pip3 install --break-system-packages --upgrade pip setuptools wheel
+else
+    pip install --upgrade pip setuptools wheel
+fi
 
 # Install Rust compiler for tiktoken
 print_status "Installing Rust compiler..."
@@ -151,9 +176,10 @@ MINOR=$(echo $VERSION_NUM | cut -d. -f2)
 
 if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 8 ]; then
     print_warning "Using Python $VERSION_NUM with --break-system-packages flag"
-    pip install --break-system-packages uvicorn
-    pip install --break-system-packages tiktoken
-    pip install --break-system-packages fastapi sqlalchemy aiofiles
+    pip3 install --break-system-packages uvicorn
+    pip3 install --break-system-packages fastapi sqlalchemy aiofiles
+    # Skip tiktoken for Python 3.6 as it requires newer Python
+    print_warning "Skipping tiktoken installation for Python 3.6"
 else
     pip install uvicorn
     pip install tiktoken
@@ -164,7 +190,10 @@ fi
 if [ -f "requirements.txt" ]; then
     print_status "Installing from requirements.txt..."
     if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 8 ]; then
-        pip install --break-system-packages -r requirements.txt
+        # Create a modified requirements file for Python 3.6
+        print_status "Creating Python 3.6 compatible requirements..."
+        grep -v "tiktoken\|playwright\|numpy" requirements.txt > requirements_py36.txt
+        pip3 install --break-system-packages -r requirements_py36.txt
     else
         pip install -r requirements.txt
     fi
@@ -172,7 +201,11 @@ fi
 
 # Verify installation
 print_status "Verifying installation..."
-python -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencies installed successfully!')"
+if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 8 ]; then
+    python3 -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencies installed successfully!')"
+else
+    python -c "import fastapi, uvicorn, sqlalchemy, aiofiles; print('All dependencies installed successfully!')"
+fi
 
 # Configure firewall
 print_status "Configuring firewall..."
@@ -208,7 +241,11 @@ print_status "Starting FastAPI application..."
 print_status "The app will run in the background. Check logs with: tail -f logs/app.log"
 
 # Start the application in background
-nohup python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > logs/app.log 2>&1 &
+if [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 8 ]; then
+    nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > logs/app.log 2>&1 &
+else
+    nohup python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > logs/app.log 2>&1 &
+fi
 
 # Get the process ID
 APP_PID=$!
