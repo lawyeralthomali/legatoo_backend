@@ -33,5 +33,5 @@ jobs:
         port: ${{ secrets.HOSTINGER_PORT }}
         script: |
           cd /home/${{ secrets.HOSTINGER_USERNAME }}/legatoo_backend
-          chmod +x deploy_files/deploy_production.sh
-          ./deploy_files/deploy_production.sh
+          chmod +x deploy_files/deploy_production_v2.sh
+          ./deploy_files/deploy_production_v2.sh
