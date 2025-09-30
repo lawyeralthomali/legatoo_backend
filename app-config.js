@@ -54,7 +54,7 @@
                 apiBaseUrl: this.getApiBaseUrl(),
                 frontendUrl: this.getFrontendUrl(),
                 authEndpoints: {
-                    login: this.getFrontendUrl() + '/auth/login',
+                    login: this.getFrontendUrl() + '/auth/login/',
                     signup: this.getFrontendUrl() + '/auth/signup',
                     forgotPassword: this.getFrontendUrl() + '/auth/forgot-password'
                 }

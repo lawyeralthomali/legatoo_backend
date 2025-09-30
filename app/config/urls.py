@@ -26,11 +26,17 @@ class URLConfig:
         self.backend_url = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
         self.api_base_url = f"{self.backend_url}/api/v1"
         
+        # For email verification and password reset, use backend URL since HTML files are served from backend
+        self.email_base_url = self.backend_url
+        
         # Production URLs (override for production)
         if self.environment == "production":
             self.frontend_url = os.getenv("FRONTEND_URL", "https://legatoo.westlinktowing.com")
             self.backend_url = os.getenv("BACKEND_URL", "http://srv1022733.hstgr.cloud:8000")
             self.api_base_url = f"{self.backend_url}/api/v1"
+            
+            # For email verification and password reset, use backend URL since HTML files are served from backend
+            self.email_base_url = self.backend_url
     
     @property
     def auth_urls(self) -> Dict[str, str]:
@@ -39,8 +45,8 @@ class URLConfig:
             "login": f"{self.frontend_url}/auth/login",
             "signup": f"{self.frontend_url}/auth/signup",
             "forgot_password": f"{self.frontend_url}/auth/forgot-password",
-            "email_verification": f"{self.frontend_url}/email-verification.html",
-            "password_reset": f"{self.frontend_url}/password-reset.html",
+            "email_verification": f"{self.email_base_url}/email-verification.html",
+            "password_reset": f"{self.email_base_url}/password-reset.html",
             "dashboard": f"{self.frontend_url}/dashboard",
         }
     
@@ -67,8 +73,8 @@ class URLConfig:
     def email_urls(self) -> Dict[str, str]:
         """Email template URLs."""
         return {
-            "verification": f"{self.frontend_url}/email-verification.html",
-            "password_reset": f"{self.frontend_url}/password-reset.html",
+            "verification": f"{self.email_base_url}/email-verification.html",
+            "password_reset": f"{self.email_base_url}/password-reset.html",
         }
     
     def get_verification_url(self, token: str) -> str:

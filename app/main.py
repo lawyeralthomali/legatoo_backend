@@ -245,6 +245,24 @@ async def password_reset_page():
         raise HTTPException(status_code=404, detail="Password reset page not found")
 
 
+@app.get("/app-config.js")
+async def app_config_js():
+    """Serve app configuration JavaScript file."""
+    if os.path.exists("app-config.js"):
+        return FileResponse("app-config.js", media_type="application/javascript")
+    else:
+        raise HTTPException(status_code=404, detail="App config file not found")
+
+
+@app.get("/logo.png")
+async def logo_png():
+    """Serve logo image file."""
+    if os.path.exists("logo.png"):
+        return FileResponse("logo.png", media_type="image/png")
+    else:
+        raise HTTPException(status_code=404, detail="Logo file not found")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
