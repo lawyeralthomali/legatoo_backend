@@ -35,7 +35,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # JWT settings
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 0.5  # 30 seconds for testing token expiration
+ACCESS_TOKEN_EXPIRE_MINUTES = 15  # 30 seconds for testing token expiration
 REFRESH_TOKEN_EXPIRE_DAYS = 7     # Long-lived refresh tokens
 
 # Security settings
