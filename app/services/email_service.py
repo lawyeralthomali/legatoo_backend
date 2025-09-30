@@ -91,6 +91,7 @@ class EmailService:
                     background-color: #f8fafc;
                     padding: 20px;
                 }}
+              
                 .email-container {{
                     max-width: 600px;
                     margin: 0 auto;
@@ -100,8 +101,8 @@ class EmailService:
                     overflow: hidden;
                 }}
                 .header {{
-                    background:#18295b;
-                    color: white;
+                    background:#679594;
+                    color: white !important;
                     padding: 40px 30px;
                     text-align: center;
                     position: relative;
@@ -116,8 +117,8 @@ class EmailService:
                     background: linear-gradient(90deg, #667eea, #764ba2);
                 }}
                 .logo {{
-                    width: 80px;
-                    height: 80px;
+                    width: 180px;
+                    height: auto;
                     background: rgba(255, 255, 255, 0.2);
                     border-radius: 20px;
                     margin: 0 auto 20px;
@@ -158,7 +159,7 @@ class EmailService:
                 .language-header {{
                     font-size: 20px;
                     font-weight: 700;
-                    color: #18295b;
+                    color: #679594;
                     margin-bottom: 20px;
                     text-align: center;
                     padding: 10px;
@@ -192,8 +193,8 @@ class EmailService:
                 }}
                 .button {{
                     display: inline-block;
-                    background: #18295b;
-                    color: white;
+                    background: #679594;
+                    color: white !important;
                     padding: 16px 32px;
                     text-decoration: none;
                     border-radius: 12px;
@@ -222,7 +223,7 @@ class EmailService:
                 }}
                 .link-text {{
                     word-break: break-all;
-                    background: #f1f5f9;
+                   
                     padding: 12px;
                     border-radius: 8px;
                     font-family: monospace;
@@ -267,6 +268,11 @@ class EmailService:
                     .brand-name {{
                         font-size: 28px;
                     }}
+                }}
+            a {{
+                    text-decoration: none;
+                    color: #18295b;
+
                 }}
             </style>
         </head>
@@ -381,12 +387,13 @@ class EmailService:
                     overflow: hidden;
                 }}
                 .header {{
-                    background: #18295b;
+                    background: #679594;
                     color: white;
                     padding: 40px 30px;
                     text-align: center;
                     position: relative;
                 }}
+          
                 .header::before {{
                     content: '';
                     position: absolute;
@@ -394,12 +401,12 @@ class EmailService:
                     left: 0;
                     right: 0;
                     height: 6px;
-                    background: #18295b;
+                    background: #679594;
                 }}
                 .logo {{
-                    width: 80px;
-                    height: 80px;
-                    background: rgba(255, 255, 255, 0.2);
+                    width: 180px;
+                    height:auto;
+              
                     border-radius: 20px;
                     margin: 0 auto 20px;
                     display: flex;
@@ -445,8 +452,8 @@ class EmailService:
                 }}
                 .button {{
                     display: inline-block;
-                    background: #18295b;
-                    color: white;
+                    background:#679594;
+                    color: white !important;
                     padding: 16px 32px;
                     text-decoration: none;
                     border-radius: 12px;
@@ -460,7 +467,7 @@ class EmailService:
                     box-shadow: 0 8px 24px rgba(24, 41, 91, 0.4);
                 }}
                 .link-fallback {{
-                    background: #f8fafc;
+                
                     border: 1px solid #e2e8f0;
                     border-radius: 12px;
                     padding: 20px;
@@ -473,9 +480,10 @@ class EmailService:
                     display: block;
                     margin-bottom: 8px;
                 }}
+             
                 .link-text {{
                     word-break: break-all;
-                    background: #f1f5f9;
+                  
                     padding: 12px;
                     border-radius: 8px;
                     font-family: monospace;
@@ -520,6 +528,11 @@ class EmailService:
                     .brand-name {{
                         font-size: 28px;
                     }}
+                }}
+              a {{
+                    text-decoration: none;
+                    color: #18295b;
+
                 }}
             </style>
         </head>
@@ -600,7 +613,7 @@ class EmailService:
                     overflow: hidden;
                 }}
                 .header {{
-                    background: #18295b;
+                    background: #679594;
                     color: white;
                     padding: 40px 30px;
                     text-align: center;
@@ -613,11 +626,11 @@ class EmailService:
                     left: 0;
                     right: 0;
                     height: 6px;
-                    background: #18295b;
+                    background: #679594;
                 }}
                 .logo {{
-                    width: 80px;
-                    height: 80px;
+                    width: 180px;
+                    height: auto;
                     background: rgba(255, 255, 255, 0.2);
                     border-radius: 20px;
                     margin: 0 auto 20px;
@@ -664,8 +677,8 @@ class EmailService:
                 }}
                 .button {{
                     display: inline-block;
-                    background: #18295b;
-                    color: white;
+                    background: #679594;
+                    color: white !important;
                     padding: 16px 32px;
                     text-decoration: none;
                     border-radius: 12px;
@@ -679,7 +692,7 @@ class EmailService:
                     box-shadow: 0 8px 24px rgba(24, 41, 91, 0.4);
                 }}
                 .link-fallback {{
-                    background: #f8fafc;
+               
                     border: 1px solid #e2e8f0;
                     border-radius: 12px;
                     padding: 20px;
@@ -688,13 +701,13 @@ class EmailService:
                     color: #6b7280;
                 }}
                 .link-fallback strong {{
-                    color: #374151;
+                    color: black;
                     display: block;
                     margin-bottom: 8px;
                 }}
                 .link-text {{
                     word-break: break-all;
-                    background: #f1f5f9;
+                
                     padding: 12px;
                     border-radius: 8px;
                     font-family: monospace;
@@ -739,6 +752,11 @@ class EmailService:
                     .brand-name {{
                         font-size: 28px;
                     }}
+                }}
+               a {{
+                    text-decoration: none;
+                    color: #18295b;
+
                 }}
             </style>
         </head>
@@ -1032,7 +1050,7 @@ Your trusted legal assistant platform
                     overflow: hidden;
                 }}
                 .header {{
-                    background: #18295b;
+                    background:#679594;
                     color: white;
                     padding: 40px 30px;
                     text-align: center;
@@ -1045,11 +1063,11 @@ Your trusted legal assistant platform
                     left: 0;
                     right: 0;
                     height: 6px;
-                    background: #18295b;
+                    background: #679594;
                 }}
                 .logo {{
-                    width: 80px;
-                    height: 80px;
+                    width: 180px;
+                    height: auto;
                     background: rgba(255, 255, 255, 0.2);
                     border-radius: 20px;
                     margin: 0 auto 20px;
@@ -1096,8 +1114,8 @@ Your trusted legal assistant platform
                 }}
                 .button {{
                     display: inline-block;
-                    background: #18295b;
-                    color: white;
+                    background: #679594;
+                    color: white important;
                     padding: 16px 32px;
                     text-decoration: none;
                     border-radius: 12px;
@@ -1126,7 +1144,7 @@ Your trusted legal assistant platform
                 }}
                 .link-text {{
                     word-break: break-all;
-                    background: #f1f5f9;
+               
                     padding: 12px;
                     border-radius: 8px;
                     font-family: monospace;

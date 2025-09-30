@@ -13,7 +13,7 @@
 
         body {
             font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #18295b;
+            background: #679594;
             min-height: 100vh;
             max-width: 100%;
             display: flex;
@@ -41,7 +41,7 @@
             left: 0;
             right: 0;
             height: 6px;
-            background: #18295b;
+            background: #679594;
         }
 
         .logo-container {
@@ -50,8 +50,8 @@
         }
 
         .logo {
-            width: 100px;
-            height: 100px;
+            width: 180px;
+            height:auto;
             border-radius: 24px;
             margin: 0 auto 16px;
             display: flex;
@@ -172,7 +172,7 @@
         }
 
         .button {
-            background: #18295b;
+            background: #679594;
             color: white;
             border: none;
             padding: 16px 32px;
@@ -302,10 +302,12 @@
         </div>
     </div>
 
+    <script src="app-config.js"></script>
     <script>
         class EmailVerification {
             constructor() {
-                this.apiBase = 'http://127.0.0.1:8000/api/v1/auth';
+                this.apiBase = window.APP_CONFIG.getApiBaseUrl();
+                this.frontendUrl = window.APP_CONFIG.getFrontendUrl();
                 this.token = this.getTokenFromUrl();
                 this.countdown = 5;
                 this.countdownInterval = null;
@@ -351,8 +353,8 @@
                 document.getElementById('statusMessage').innerHTML = 'Email verified successfully!';
                 document.getElementById('statusMessage').className = 'message success-message';
 
-                // Set login button URL
-                document.getElementById('loginButton').href = 'https://legatoo.westlinktowing.com/auth/login/';
+                // Set login button URL dynamically
+                document.getElementById('loginButton').href = this.frontendUrl + '/auth/login/';
 
                 // Show timer and buttons
                 document.getElementById('timerContainer').style.display = 'block';
@@ -390,7 +392,7 @@
 
                     if (this.countdown <= 0) {
                         clearInterval(this.countdownInterval);
-                        window.location.href = 'https://legatoo.westlinktowing.com/auth/login/';
+                        window.location.href = this.frontendUrl + '/auth/login/';
                     }
                 }, 1000);
             }
