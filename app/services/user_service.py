@@ -5,7 +5,7 @@ This module contains business logic for user-related operations,
 following the Single Responsibility Principle and Dependency Inversion.
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from uuid import UUID
 import logging
 
@@ -36,7 +36,7 @@ class UserService:
         self.user_repository = user_repository
         self.profile_repository = profile_repository
     
-    async def get_user_by_id(self, user_id: UUID) -> UserResponse:
+    async def get_user_by_id(self, user_id: Union[UUID, int]) -> UserResponse:
         """
         Get user by ID with business validation.
         
@@ -78,7 +78,7 @@ class UserService:
             )
         return user
     
-    async def get_user_profile(self, user_id: UUID) -> ProfileResponse:
+    async def get_user_profile(self, user_id: Union[UUID, int]) -> ProfileResponse:
         """
         Get user's profile with business validation.
         
@@ -170,7 +170,7 @@ class UserService:
             if query_lower in user.email.lower()
         ]
     
-    async def get_user_with_profile(self, user_id: UUID) -> Dict[str, Any]:
+    async def get_user_with_profile(self, user_id: Union[UUID, int]) -> Dict[str, Any]:
         """
         Get user with their profile in a single response.
         
@@ -191,7 +191,7 @@ class UserService:
             "profile": profile.dict()
         }
     
-    async def validate_user_exists(self, user_id: UUID) -> bool:
+    async def validate_user_exists(self, user_id: Union[UUID, int]) -> bool:
         """
         Validate that a user exists without returning full data.
         

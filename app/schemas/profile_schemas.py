@@ -3,7 +3,7 @@ Profile schemas for API requests and responses.
 """
 
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Union
 from datetime import datetime
 from uuid import UUID
 from ..models.profile import AccountType
@@ -48,7 +48,7 @@ class ProfileResponse(ProfileBase):
 # Additional schemas that were in the old profile.py
 class TokenData(BaseModel):
     """Schema for JWT token data."""
-    sub: UUID  # User ID
+    sub: Union[UUID, int]  # User ID (supports both UUID and Integer)
     email: Optional[str] = None
     phone: Optional[str] = None
     aud: Optional[str] = None

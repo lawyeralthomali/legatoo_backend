@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import List, Optional, Union
 from uuid import UUID
 from ..db.database import get_db
 from ..services.contract_template_service import ContractTemplateService
@@ -17,7 +17,7 @@ async def get_templates(
     search: Optional[str] = Query(None, description="Search in title and description"),
     is_featured: Optional[bool] = Query(None, description="Filter featured templates"),
     is_premium: Optional[bool] = Query(None, description="Filter premium templates"),
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Get templates with filtering and search options."""
@@ -40,7 +40,7 @@ async def get_templates(
 @router.get("/{template_id}", response_model=ApiResponse[TemplateResponse])
 async def get_template(
     template_id: int, 
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Get a specific template by ID."""
@@ -57,7 +57,7 @@ async def get_template(
 @router.post("/", response_model=ApiResponse[TemplateResponse])
 async def create_template(
     template: TemplateCreate, 
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new template."""
@@ -75,7 +75,7 @@ async def create_template(
 async def update_template(
     template_id: int, 
     template_update: TemplateUpdate, 
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Update an existing template."""
@@ -92,7 +92,7 @@ async def update_template(
 @router.delete("/{template_id}", response_model=ApiResponse[dict])
 async def delete_template(
     template_id: int, 
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Delete a template (soft delete)."""
@@ -108,7 +108,7 @@ async def delete_template(
 
 @router.get("/featured/", response_model=ApiResponse[List[TemplateResponse]])
 async def get_featured_templates(
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Get featured templates."""
@@ -124,7 +124,7 @@ async def get_featured_templates(
 
 @router.get("/premium/", response_model=ApiResponse[List[TemplateResponse]])
 async def get_premium_templates(
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Get premium templates."""
@@ -140,7 +140,7 @@ async def get_premium_templates(
 
 @router.get("/free/", response_model=ApiResponse[List[TemplateResponse]])
 async def get_free_templates(
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Get free templates."""
@@ -158,7 +158,7 @@ async def get_free_templates(
 async def generate_contract(
     template_id: int, 
     contract_data: ContractGenerationRequest, 
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Generate a contract from a template."""

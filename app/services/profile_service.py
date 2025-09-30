@@ -5,7 +5,7 @@ This module contains business rules and orchestration for profile operations,
 following the Single Responsibility Principle.
 """
 
-from typing import Optional
+from typing import Optional, Union
 from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 import logging
@@ -50,7 +50,7 @@ class ProfileService:
     
     async def create_profile_for_user(
         self, 
-        user_id: UUID, 
+        user_id: Union[UUID, int], 
         email: str,
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,

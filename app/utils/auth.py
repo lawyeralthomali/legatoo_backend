@@ -1,7 +1,7 @@
 from jose import JWTError, jwt
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 import os
 from datetime import datetime
 from uuid import UUID
@@ -56,7 +56,7 @@ def verify_test_token(token: str) -> Optional[TokenData]:
         
         # Create TokenData object
         token_data = TokenData(
-            sub=UUID(user_id),  # Convert string to UUID
+            sub=int(user_id),  # Convert string to int (User model uses Integer IDs)
             email=payload.get("email"),
             phone=payload.get("phone"),
             aud=payload.get("aud", "authenticated"),
@@ -114,7 +114,7 @@ def verify_supabase_token(token: str) -> TokenData:
         
         # Create TokenData object
         token_data = TokenData(
-            sub=UUID(user_id),
+            sub=int(user_id),  # Convert string to int (User model uses Integer IDs)
             email=payload.get("email"),
             phone=payload.get("phone"),
             aud=payload.get("aud", "authenticated"),
@@ -175,7 +175,7 @@ async def get_current_user(
 
 async def get_current_user_id(
     current_user: TokenData = Depends(get_current_user)
-) -> UUID:
+) -> Union[UUID, int]:
     """
     Dependency to get the current user's ID.
     
@@ -183,6 +183,6 @@ async def get_current_user_id(
         current_user: Current user's token data
         
     Returns:
-        UUID: Current user's ID
+        Union[UUID, int]: Current user's ID (supports both UUID and Integer)
     """
     return current_user.sub

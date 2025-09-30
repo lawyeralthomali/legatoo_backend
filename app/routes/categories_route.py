@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import List, Optional, Union
 from uuid import UUID
 from ..db.database import get_db
 from ..services.contract_category_service import ContractCategoryService
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/contracts/categories", tags=["categories"])
 async def get_categories(
     parent_id: Optional[int] = Query(None, description="Filter by parent category"),
     is_active: bool = Query(True, description="Filter by active status"),
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Get all categories with optional filtering."""
@@ -31,7 +31,7 @@ async def get_categories(
 @router.get("/{category_id}", response_model=ApiResponse[CategoryResponse])
 async def get_category(
     category_id: int, 
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Get a specific category by ID."""
@@ -48,7 +48,7 @@ async def get_category(
 @router.post("/", response_model=ApiResponse[CategoryResponse])
 async def create_category(
     category: CategoryCreate, 
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new category."""
@@ -66,7 +66,7 @@ async def create_category(
 async def update_category(
     category_id: int, 
     category_update: CategoryUpdate, 
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Update an existing category."""
@@ -83,7 +83,7 @@ async def update_category(
 @router.delete("/{category_id}", response_model=ApiResponse[dict])
 async def delete_category(
     category_id: int, 
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Delete a category (soft delete)."""
@@ -100,7 +100,7 @@ async def delete_category(
 @router.get("/search/", response_model=ApiResponse[List[CategoryResponse]])
 async def search_categories(
     q: str = Query(..., description="Search term"),
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Search categories by name."""
@@ -116,7 +116,7 @@ async def search_categories(
 
 @router.get("/hierarchy/", response_model=ApiResponse[List[CategoryResponse]])
 async def get_category_hierarchy(
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Get complete category hierarchy."""

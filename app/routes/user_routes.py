@@ -5,7 +5,7 @@ This module provides thin route handlers for user-related operations
 that delegate to services and return unified API responses.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Path
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,8 +45,8 @@ def get_user_service(
 
 @router.get("/{user_id}", response_model=ApiResponse)
 async def get_user(
-    user_id: UUID = Path(..., description="User ID"),
-    current_user_id: UUID = Depends(get_current_user_id),
+    user_id: Union[UUID, int] = Path(..., description="User ID"),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     user_service: UserService = Depends(get_user_service)
 ) -> ApiResponse:
     """
@@ -88,7 +88,7 @@ async def get_user(
 async def get_users(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     user_service: UserService = Depends(get_user_service)
 ) -> ApiResponse:
     """
@@ -139,7 +139,7 @@ async def search_users(
     query: str = Query(..., min_length=2, description="Search query"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     user_service: UserService = Depends(get_user_service)
 ) -> ApiResponse:
     """
@@ -189,8 +189,8 @@ async def search_users(
 
 @router.get("/{user_id}/profile", response_model=ApiResponse)
 async def get_user_profile(
-    user_id: UUID = Path(..., description="User ID"),
-    current_user_id: UUID = Depends(get_current_user_id),
+    user_id: Union[UUID, int] = Path(..., description="User ID"),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     user_service: UserService = Depends(get_user_service)
 ) -> ApiResponse:
     """
@@ -230,8 +230,8 @@ async def get_user_profile(
 
 @router.get("/{user_id}/complete", response_model=ApiResponse)
 async def get_user_complete(
-    user_id: UUID = Path(..., description="User ID"),
-    current_user_id: UUID = Depends(get_current_user_id),
+    user_id: Union[UUID, int] = Path(..., description="User ID"),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     user_service: UserService = Depends(get_user_service)
 ) -> ApiResponse:
     """

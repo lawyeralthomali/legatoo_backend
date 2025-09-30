@@ -4,7 +4,7 @@ Minimized version with only essential routes
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from uuid import UUID
 
 from ..db.database import get_db
@@ -73,7 +73,7 @@ async def get_assistant_status():
 @router.post("/chat", response_model=ChatResponse)
 async def assistant_chat(
     chat_request: ChatRequest,
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user_id: Union[UUID, int] = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
     """Handle chat requests and return AI responses with enhanced features"""
