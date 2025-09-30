@@ -15,7 +15,8 @@ from .db.database import create_tables
 from .models import (
     User, Profile, RefreshToken, LegalDocument, LegalDocumentChunk,
     Subscription, Plan, Billing, UsageTracking, UserRole, Role,
-    EnjazAccount, CaseImported
+    EnjazAccount, CaseImported, ContractCategory, ContractTemplate,
+    UserContract, UserFavorite
 )
 
 # Import routers
@@ -29,6 +30,10 @@ from .routes.premium_router import router as premium_router
 from .routes.legal_document_router import router as legal_document_router
 from .routes.legal_assistant_router import router as legal_assistant_router
 from .routes.enjaz_router import router as enjaz_router
+from .routes.categories_route import router as categories_router
+from .routes.templates_route import router as templates_router
+from .routes.user_contracts_router import router as user_contracts_router
+from .routes.favorites_router import router as favorites_router
 
 from pydantic import BaseModel
 from typing import List
@@ -157,7 +162,10 @@ app.include_router(premium_router, prefix="/api/v1")
 app.include_router(legal_document_router, prefix="/api/v1")
 app.include_router(legal_assistant_router, prefix="/api/v1")
 app.include_router(enjaz_router)
-
+app.include_router(categories_router)
+app.include_router(templates_router)
+app.include_router(user_contracts_router)
+app.include_router(favorites_router)
 @app.on_event("startup")
 async def startup_event():
     """Create database tables on startup."""
@@ -195,7 +203,11 @@ async def root():
             "features": "/api/v1/premium/feature-limits",
             "enjaz_connect": "/api/v1/enjaz/connect",
             "enjaz_sync": "/api/v1/enjaz/sync-cases",
-            "enjaz_cases": "/api/v1/enjaz/cases"
+            "enjaz_cases": "/api/v1/enjaz/cases",
+            "categories": "/api/contracts/categories",
+            "templates": "/api/contracts/templates",
+            "user_contracts": "/api/contracts/user-contracts",
+            "favorites": "/api/contracts/favorites"
         }
     }
 

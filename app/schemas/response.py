@@ -5,10 +5,12 @@ This module defines the standard response format that all endpoints must follow,
 ensuring consistency and predictability for API consumers.
 """
 
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, Generic, TypeVar
 from pydantic import BaseModel, Field
 from fastapi.responses import JSONResponse
 from fastapi import HTTPException
+
+T = TypeVar('T')
 
 
 class ErrorDetail(BaseModel):
@@ -17,30 +19,30 @@ class ErrorDetail(BaseModel):
     message: str = Field(..., description="Explanation of the error")
 
 
-class ApiResponse(BaseModel):
+class ApiResponse(BaseModel, Generic[T]):
     """Unified API response model for all endpoints."""
     success: bool = Field(..., description="Whether the operation was successful")
     message: str = Field(..., description="Human-readable message describing the result")
-    data: Optional[Any] = Field(None, description="Response data (dict, list, or null)")
+    data: Optional[T] = Field(None, description="Response data (dict, list, or null)")
     errors: Optional[List[ErrorDetail]] = Field(None, description="List of error details")
 
 
-class SuccessResponse(ApiResponse):
+class SuccessResponse(ApiResponse[T]):
     """Success response model with success=True."""
     success: bool = True
     errors: Optional[List[ErrorDetail]] = Field(default_factory=list)
 
 
-class ErrorResponse(ApiResponse):
+class ErrorResponse(ApiResponse[T]):
     """Error response model with success=False."""
     success: bool = False
-    data: Optional[Any] = None
+    data: Optional[T] = None
 
 
 def create_success_response(
     message: str = "Operation successful",
-    data: Optional[Any] = None
-) -> SuccessResponse:
+    data: Optional[T] = None
+) -> SuccessResponse[T]:
     """
     Create a standardized success response.
     
@@ -57,8 +59,8 @@ def create_success_response(
 def create_error_response(
     message: str = "Operation failed",
     errors: Optional[List[ErrorDetail]] = None,
-    data: Optional[Any] = None
-) -> ErrorResponse:
+    data: Optional[T] = None
+) -> ErrorResponse[T]:
     """
     Create a standardized error response.
     
@@ -79,7 +81,7 @@ def create_error_response(
 def create_validation_error_response(
     message: str = "Validation failed",
     field_errors: Dict[str, str] = None
-) -> ErrorResponse:
+) -> ErrorResponse[None]:
     """
     Create a validation error response with field-specific errors.
     
@@ -103,7 +105,7 @@ def create_validation_error_response(
 def create_not_found_response(
     resource: str = "Resource",
     field: Optional[str] = None
-) -> ErrorResponse:
+) -> ErrorResponse[None]:
     """
     Create a not found error response.
     
@@ -123,7 +125,7 @@ def create_not_found_response(
 def create_conflict_response(
     message: str = "Conflict",
     field: Optional[str] = None
-) -> ErrorResponse:
+) -> ErrorResponse[None]:
     """
     Create a conflict error response.
     

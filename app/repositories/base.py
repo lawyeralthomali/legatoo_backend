@@ -16,27 +16,27 @@ class IBaseRepository(ABC):
     """Base repository interface with common CRUD operations."""
     
     @abstractmethod
-    async def get_by_id(self, id: int) -> Optional[Any]:
+    async def get_by_id(self, db: AsyncSession, id: int) -> Optional[Any]:
         """Get entity by ID."""
         pass
     
     @abstractmethod
-    async def get_all(self, skip: int = 0, limit: int = 100) -> List[Any]:
+    async def get_all(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> List[Any]:
         """Get all entities with pagination."""
         pass
     
     @abstractmethod
-    async def create(self, entity_data: Dict[str, Any]) -> Any:
+    async def create(self, db: AsyncSession, entity_data: Dict[str, Any]) -> Any:
         """Create new entity."""
         pass
     
     @abstractmethod
-    async def update(self, id: int, entity_data: Dict[str, Any]) -> Optional[Any]:
+    async def update(self, db: AsyncSession, id: int, entity_data: Dict[str, Any]) -> Optional[Any]:
         """Update entity by ID."""
         pass
     
     @abstractmethod
-    async def delete(self, id: int) -> bool:
+    async def delete(self, db: AsyncSession, id: int) -> bool:
         """Delete entity by ID."""
         pass
 
@@ -45,17 +45,17 @@ class IUserRepository(ABC):
     """Repository interface for user-related operations."""
     
     @abstractmethod
-    async def get_by_email(self, email: str) -> Optional[Any]:
+    async def get_by_email(self, db: AsyncSession, email: str) -> Optional[Any]:
         """Get user by email address."""
         pass
     
     @abstractmethod
-    async def email_exists(self, email: str) -> bool:
+    async def email_exists(self, db: AsyncSession, email: str) -> bool:
         """Check if email already exists."""
         pass
     
     @abstractmethod
-    async def create_user(self, user_data: Dict[str, Any]) -> Any:
+    async def create_user(self, db: AsyncSession, user_data: Dict[str, Any]) -> Any:
         """Create new user."""
         pass
 
@@ -64,27 +64,27 @@ class IProfileRepository(ABC):
     """Repository interface for profile-related operations."""
     
     @abstractmethod
-    async def get_by_user_id(self, user_id: int) -> Optional[Any]:
+    async def get_by_user_id(self, db: AsyncSession, user_id: int) -> Optional[Any]:
         """Get profile by user ID."""
         pass
     
     @abstractmethod
-    async def email_exists(self, email: str) -> bool:
+    async def email_exists(self, db: AsyncSession, email: str) -> bool:
         """Check if email already exists in profiles."""
         pass
     
     @abstractmethod
-    async def create_profile(self, user_id: int, profile_data: Dict[str, Any]) -> Any:
+    async def create_profile(self, db: AsyncSession, user_id: int, profile_data: Dict[str, Any]) -> Any:
         """Create new profile."""
         pass
     
     @abstractmethod
-    async def update_profile(self, user_id: int, profile_data: Dict[str, Any]) -> Optional[Any]:
+    async def update_profile(self, db: AsyncSession, user_id: int, profile_data: Dict[str, Any]) -> Optional[Any]:
         """Update profile by user ID."""
         pass
     
     @abstractmethod
-    async def delete_profile(self, user_id: int) -> bool:
+    async def delete_profile(self, db: AsyncSession, user_id: int) -> bool:
         """Delete profile by user ID."""
         pass
 

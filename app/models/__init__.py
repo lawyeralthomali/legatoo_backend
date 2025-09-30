@@ -11,6 +11,10 @@ from .usage_tracking import UsageTracking
 from .role import UserRole, Role, ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER, DEFAULT_USER_ROLE, ROLE_HIERARCHY, get_role_level, has_permission
 from .enjaz_account import EnjazAccount
 from .case_imported import CaseImported
+from .contract_category import ContractCategory
+from .template import ContractTemplate
+from .user_contract import UserContract
+from .favorite import UserFavorite
 
 # Import all models to ensure they are registered with SQLAlchemy
 __all__ = [
@@ -39,7 +43,11 @@ __all__ = [
     "get_role_level", 
     "has_permission",
     "EnjazAccount",
-    "CaseImported"
+    "CaseImported",
+    "ContractCategory",
+    "ContractTemplate", 
+    "UserContract",
+    "UserFavorite"
 ]
 
 

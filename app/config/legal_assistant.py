@@ -212,47 +212,6 @@ WELCOME_MESSAGES = {
     "english": "Hello! I'm your legal AI assistant. I can help you with questions about legal documents, contracts, and legal matters. What would you like to know?"
 }
 
-# File Upload Messages
-FILE_UPLOAD_MESSAGES = {
-    "arabic": {
-        "success": "تم رفع الملف بنجاح",
-        "error": "خطأ في رفع الملف: {error}",
-        "type_not_supported": "نوع الملف غير مدعوم",
-        "size_too_large": "حجم الملف كبير جداً",
-        "success_hint": "تم رفع الملف بنجاح. يمكنك الآن معالجة الوثيقة."
-    },
-    "english": {
-        "success": "File uploaded successfully",
-        "error": "Error uploading file: {error}",
-        "type_not_supported": "File type not supported",
-        "size_too_large": "File size too large",
-        "success_hint": "File uploaded successfully. You can now process the document."
-    }
-}
-
-# Voice Recognition Messages
-VOICE_MESSAGES = {
-    "arabic": "التعرف على الصوت غير متاح في متصفحك الحالي",
-    "english": "Voice recognition is not available in your current browser"
-}
-
-# Export Messages
-EXPORT_MESSAGES = {
-    "arabic": {
-        "no_history": "لا يوجد تاريخ محادثة للتصدير",
-        "exporting": "جاري تصدير الوثيقة..."
-    },
-    "english": {
-        "no_history": "No chat history to export",
-        "exporting": "Exporting document..."
-    }
-}
-
-# Smart Form Notification
-SMART_FORM_NOTIFICATION = {
-    "arabic": "استخدم النموذج الذكي أدناه للحصول على إجابات سريعة على الأسئلة القانونية الشائعة",
-    "english": "Use the smart form below to get quick answers to common legal questions"
-}
 
 # Quality Text Messages
 QUALITY_TEXT_MESSAGES = {
@@ -307,11 +266,6 @@ def get_welcome_message(language: str) -> str:
     return WELCOME_MESSAGES.get(language, WELCOME_MESSAGES["english"])
 
 
-def get_file_upload_message(language: str, message_type: str, **kwargs) -> str:
-    """Get file upload message for the given language and message type"""
-    messages = FILE_UPLOAD_MESSAGES.get(language, FILE_UPLOAD_MESSAGES["english"])
-    message = messages.get(message_type, "Unknown message")
-    return message.format(**kwargs)
 
 
 def get_quality_text(language: str, quality: str) -> str:

@@ -44,7 +44,8 @@ async def create_tables():
     from ..models import (
         User, Profile, RefreshToken, LegalDocument, LegalDocumentChunk,
         Subscription, Plan, Billing, UsageTracking, UserRole, Role,
-        EnjazAccount, CaseImported
+        EnjazAccount, CaseImported, ContractCategory, ContractTemplate,
+        UserContract, UserFavorite
     )
     
     async with engine.begin() as conn:

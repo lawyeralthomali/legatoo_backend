@@ -61,3 +61,5 @@
 - Makes frontend handling of responses consistent.
 - Simplifies debugging and logging.
 - Enforces clean API standards across the project.
+
+-ensure the new code follows the same patterns as the existing codebase.
