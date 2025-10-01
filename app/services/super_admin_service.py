@@ -82,10 +82,22 @@ class SuperAdminService:
             await db.commit()
             await db.refresh(super_admin)
             
+            # Create profile for super admin
+            from ..models.profile import Profile, AccountType
+            super_admin_profile = Profile(
+                user_id=super_admin.id,
+                email=self.super_admin_email,
+                first_name="Super",
+                last_name="Admin",
+                account_type=AccountType.BUSINESS.value
+            )
+            db.add(super_admin_profile)
+            await db.commit()
+            
             # Log security event
             log_security_event(
                 self.logger,
-                "Super admin user created",
+                "Super admin user and profile created",
                 user_id=super_admin.id,
                 email=self.super_admin_email,
                 correlation_id=self.correlation_id

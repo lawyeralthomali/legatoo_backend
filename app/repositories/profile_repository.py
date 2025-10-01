@@ -52,7 +52,7 @@ class ProfileRepository:
             self.logger.info(f"Fetching profile for user ID: {user_id}")
             
             result = await self.db.execute(
-                select(Profile).where(Profile.id == user_id)
+                select(Profile).where(Profile.user_id == user_id)
             )
             profile = result.scalar_one_or_none()
             
@@ -213,7 +213,7 @@ class ProfileRepository:
             
             # Check if profile exists
             result = await self.db.execute(
-                select(Profile).where(Profile.id == user_id)
+                select(Profile).where(Profile.user_id == user_id)
             )
             profile = result.scalar_one_or_none()
             
@@ -274,7 +274,7 @@ class ProfileRepository:
             self.logger.info(f"Deleting profile for user ID: {user_id}")
             
             result = await self.db.execute(
-                select(Profile).where(Profile.id == user_id)
+                select(Profile).where(Profile.user_id == user_id)
             )
             profile = result.scalar_one_or_none()
             
