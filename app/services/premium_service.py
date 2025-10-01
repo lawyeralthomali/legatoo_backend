@@ -54,8 +54,8 @@ class PremiumService:
         feature_usage = await verify_feature_access("file_upload", {"sub": user_id}, db)
         
         # Increment usage
-        await SubscriptionService.increment_feature_usage(
-            db=db,
+        subscription_service = SubscriptionService(db)
+        await subscription_service.increment_feature_usage(
             user_id=user_id,
             feature="file_upload",
             amount=1
@@ -78,8 +78,8 @@ class PremiumService:
         feature_usage = await verify_feature_access("ai_chat", {"sub": user_id}, db)
         
         # Increment usage
-        await SubscriptionService.increment_feature_usage(
-            db=db,
+        subscription_service = SubscriptionService(db)
+        await subscription_service.increment_feature_usage(
             user_id=user_id,
             feature="ai_chat",
             amount=1
@@ -102,8 +102,8 @@ class PremiumService:
         feature_usage = await verify_feature_access("contract", {"sub": user_id}, db)
         
         # Increment usage
-        await SubscriptionService.increment_feature_usage(
-            db=db,
+        subscription_service = SubscriptionService(db)
+        await subscription_service.increment_feature_usage(
             user_id=user_id,
             feature="contract",
             amount=1
@@ -125,8 +125,8 @@ class PremiumService:
         feature_usage = await verify_feature_access("report", {"sub": user_id}, db)
         
         # Increment usage
-        await SubscriptionService.increment_feature_usage(
-            db=db,
+        subscription_service = SubscriptionService(db)
+        await subscription_service.increment_feature_usage(
             user_id=user_id,
             feature="report",
             amount=1
@@ -149,8 +149,8 @@ class PremiumService:
         feature_usage = await verify_feature_access("token", {"sub": user_id}, db)
         
         # Increment usage
-        await SubscriptionService.increment_feature_usage(
-            db=db,
+        subscription_service = SubscriptionService(db)
+        await subscription_service.increment_feature_usage(
             user_id=user_id,
             feature="token",
             amount=amount
@@ -171,8 +171,8 @@ class PremiumService:
         feature_usage = await verify_feature_access("multi_user", {"sub": user_id}, db)
         
         # Increment usage
-        await SubscriptionService.increment_feature_usage(
-            db=db,
+        subscription_service = SubscriptionService(db)
+        await subscription_service.increment_feature_usage(
             user_id=user_id,
             feature="multi_user",
             amount=1

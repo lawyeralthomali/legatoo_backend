@@ -1,6 +1,4 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete, and_
-from sqlalchemy.orm import selectinload
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime, timedelta
@@ -9,106 +7,85 @@ from ..models.subscription import Subscription, StatusType
 from ..models.usage_tracking import UsageTracking
 from ..models.billing import Billing
 from ..repositories.plan_repository import PlanRepository
+from ..repositories.subscription_repository import SubscriptionRepository
+from ..repositories.usage_tracking_repository import UsageTrackingRepository
+from ..repositories.billing_repository import BillingRepository
 
 
 class SubscriptionService:
-    """Enhanced subscription service with plan-based system"""
+    """
+    Enhanced subscription service with plan-based system.
+    
+    Follows Dependency Inversion Principle by using repository abstractions
+    for all data access operations.
+    """
     
     def __init__(self, db: AsyncSession):
         """
-        Initialize subscription service.
+        Initialize subscription service with repositories.
         
         Args:
             db: Database session
         """
         self.db = db
+        self.subscription_repository = SubscriptionRepository(db)
+        self.usage_tracking_repository = UsageTrackingRepository(db)
+        self.billing_repository = BillingRepository(db)
         self.plan_repository = PlanRepository(db)
 
     async def get_user_subscription(
         self,
         user_id: UUID
     ) -> Optional[Subscription]:
-        """Get user's current active subscription"""
-        result = await self.db.execute(
-            select(Subscription)
-            .options(selectinload(Subscription.plan))
-            .where(Subscription.user_id == user_id)
-            .where(Subscription.status == StatusType.ACTIVE)
-            .where(
-                (Subscription.end_date.is_(None)) | 
-                (Subscription.end_date > datetime.utcnow())
-            )
-            .order_by(Subscription.start_date.desc())
-        )
-        return result.scalar_one_or_none()
+        """Get user's current active subscription (via repository)."""
+        return await self.subscription_repository.get_user_active_subscription(user_id)
 
-    @staticmethod
     async def get_user_subscriptions(
-        db: AsyncSession, 
+        self,
         user_id: UUID
     ) -> List[Subscription]:
-        """Get all user subscriptions"""
-        result = await db.execute(
-            select(Subscription)
-            .options(selectinload(Subscription.plan))
-            .where(Subscription.user_id == user_id)
-            .order_by(Subscription.start_date.desc())
-        )
-        return result.scalars().all()
+        """Get all user subscriptions (via repository)."""
+        return await self.subscription_repository.get_all_user_subscriptions(user_id)
 
-    @staticmethod
     async def create_subscription(
-        db: AsyncSession, 
+        self,
         user_id: UUID, 
         plan_id: UUID,
         duration_days: int = None
     ) -> Subscription:
-        """Create a new subscription for a user"""
-        # Validate plan exists (via plan repository)
-        plan_repo = PlanRepository(db)
-        if not await plan_repo.is_plan_active(plan_id):
+        """Create a new subscription for a user."""
+        # Validate plan exists (via repository)
+        if not await self.plan_repository.is_plan_active(plan_id):
             raise ValueError(f"Plan {plan_id} does not exist or is not active")
         
-        # Deactivate any existing active subscriptions
-        await db.execute(
-            update(Subscription)
-            .where(Subscription.user_id == user_id)
-            .where(Subscription.status == StatusType.ACTIVE)
-            .values(status=StatusType.CANCELLED, updated_at=datetime.utcnow())
-        )
+        # Deactivate any existing active subscriptions (via repository)
+        await self.subscription_repository.deactivate_user_subscriptions(user_id)
         
-        subscription = Subscription.create_subscription(
-            user_id=str(user_id), 
-            plan_id=str(plan_id),
+        # Create new subscription (via repository)
+        return await self.subscription_repository.create_subscription(
+            user_id=user_id,
+            plan_id=plan_id,
             duration_days=duration_days
         )
-        
-        db.add(subscription)
-        await db.commit()
-        await db.refresh(subscription)
-        
-        return subscription
 
 
-    @staticmethod
     async def check_feature_access(
-        db: AsyncSession, 
+        self,
         user_id: UUID, 
         feature: str
     ) -> bool:
-        """Check if user can access a specific feature"""
-        subscription = await SubscriptionService.get_user_subscription(db, user_id)
+        """Check if user can access a specific feature."""
+        # Get active subscription (via repository)
+        subscription = await self.subscription_repository.get_user_active_subscription(user_id)
         
         if not subscription or not subscription.plan:
             return False
         
-        # Get usage tracking record for this feature
-        result = await db.execute(
-            select(UsageTracking)
-            .where(UsageTracking.subscription_id == subscription.subscription_id)
-            .where(UsageTracking.feature == feature)
+        # Get usage tracking record (via repository)
+        usage_record = await self.usage_tracking_repository.get_by_subscription_and_feature(
+            subscription.subscription_id, 
+            feature
         )
-        usage_record = result.scalar_one_or_none()
         
         if not usage_record:
             return True  # No usage record means no limit
@@ -120,14 +97,14 @@ class SubscriptionService:
         
         return usage_record.used_count < limit
 
-    @staticmethod
     async def get_feature_usage(
-        db: AsyncSession, 
+        self,
         user_id: UUID, 
         feature: str
     ) -> Dict[str, Any]:
-        """Get feature usage information"""
-        subscription = await SubscriptionService.get_user_subscription(db, user_id)
+        """Get feature usage information."""
+        # Get active subscription (via repository)
+        subscription = await self.subscription_repository.get_user_active_subscription(user_id)
         
         if not subscription or not subscription.plan:
             return {
@@ -137,13 +114,11 @@ class SubscriptionService:
                 'remaining': 0
             }
         
-        # Get usage tracking record for this feature
-        result = await db.execute(
-            select(UsageTracking)
-            .where(UsageTracking.subscription_id == subscription.subscription_id)
-            .where(UsageTracking.feature == feature)
+        # Get usage tracking record (via repository)
+        usage_record = await self.usage_tracking_repository.get_by_subscription_and_feature(
+            subscription.subscription_id,
+            feature
         )
-        usage_record = result.scalar_one_or_none()
         
         current_usage = usage_record.used_count if usage_record else 0
         limit = subscription.plan.get_limit(feature)
@@ -157,55 +132,55 @@ class SubscriptionService:
             'remaining': remaining
         }
 
-    @staticmethod
     async def increment_feature_usage(
-        db: AsyncSession, 
+        self,
         user_id: UUID, 
         feature: str,
         amount: int = 1
     ) -> bool:
-        """Increment feature usage for a user"""
-        subscription = await SubscriptionService.get_user_subscription(db, user_id)
+        """Increment feature usage for a user."""
+        # Get active subscription (via repository)
+        subscription = await self.subscription_repository.get_user_active_subscription(user_id)
         
         if not subscription or not subscription.plan:
             return False
         
         # Check if user can use the feature
-        can_use = await SubscriptionService.check_feature_access(db, user_id, feature)
+        can_use = await self.check_feature_access(user_id, feature)
         if not can_use:
             return False
         
-        # Get or create usage tracking record
-        result = await db.execute(
-            select(UsageTracking)
-            .where(UsageTracking.subscription_id == subscription.subscription_id)
-            .where(UsageTracking.feature == feature)
+        # Get usage record (via repository)
+        usage_record = await self.usage_tracking_repository.get_by_subscription_and_feature(
+            subscription.subscription_id,
+            feature
         )
-        usage_record = result.scalar_one_or_none()
         
         if not usage_record:
-            # Create new usage tracking record
-            usage_record = UsageTracking(
+            # Create new usage tracking record (via repository)
+            await self.usage_tracking_repository.create_usage_record(
                 subscription_id=subscription.subscription_id,
                 feature=feature,
                 used_count=amount,
-                reset_cycle='monthly'  # Default reset cycle
+                reset_cycle='monthly'
             )
-            db.add(usage_record)
         else:
-            # Increment existing usage
-            usage_record.used_count += amount
+            # Increment existing usage (via repository)
+            await self.usage_tracking_repository.increment_usage(
+                subscription.subscription_id,
+                feature,
+                amount
+            )
         
-        await db.commit()
         return True
 
-    @staticmethod
     async def get_subscription_status(
-        db: AsyncSession, 
+        self,
         user_id: UUID
     ) -> Dict[str, Any]:
-        """Get comprehensive subscription status"""
-        subscription = await SubscriptionService.get_user_subscription(db, user_id)
+        """Get comprehensive subscription status."""
+        # Get active subscription (via repository)
+        subscription = await self.subscription_repository.get_user_active_subscription(user_id)
         
         if not subscription:
             return {
@@ -220,11 +195,10 @@ class SubscriptionService:
         feature_usage = {}
         
         for feature in features:
-            feature_usage[feature] = await SubscriptionService.get_feature_usage(db, user_id, feature)
+            feature_usage[feature] = await self.get_feature_usage(user_id, feature)
         
-        # Get plan information (via plan repository)
-        plan_repo = PlanRepository(db)
-        plan = await plan_repo.get_by_plan_id(subscription.plan_id)
+        # Get plan information (via repository)
+        plan = await self.plan_repository.get_by_plan_id(subscription.plan_id)
         
         return {
             'has_subscription': True,
@@ -245,157 +219,108 @@ class SubscriptionService:
             'end_date': subscription.end_date
         }
 
-    @staticmethod
     async def extend_subscription(
-        db: AsyncSession, 
+        self,
         user_id: UUID, 
         days: int
     ) -> Optional[Subscription]:
-        """Extend user's subscription"""
-        subscription = await SubscriptionService.get_user_subscription(db, user_id)
+        """Extend user's subscription."""
+        # Get active subscription (via repository)
+        subscription = await self.subscription_repository.get_user_active_subscription(user_id)
         
         if not subscription:
             return None
         
-        subscription.extend_subscription(days)
-        await db.commit()
-        await db.refresh(subscription)
-        
-        return subscription
+        # Extend subscription (via repository)
+        return await self.subscription_repository.extend_subscription(subscription.subscription_id, days)
 
-    @staticmethod
     async def cancel_subscription(
-        db: AsyncSession, 
+        self,
         user_id: UUID
     ) -> bool:
-        """Cancel user's subscription"""
-        subscription = await SubscriptionService.get_user_subscription(db, user_id)
+        """Cancel user's subscription."""
+        # Get active subscription (via repository)
+        subscription = await self.subscription_repository.get_user_active_subscription(user_id)
         
         if not subscription:
             return False
         
-        subscription.cancel_subscription()
-        await db.commit()
-        
-        return True
+        # Cancel subscription (via repository)
+        return await self.subscription_repository.cancel_subscription(subscription.subscription_id)
 
-    @staticmethod
     async def create_invoice(
-        db: AsyncSession, 
+        self,
         subscription_id: UUID, 
         amount: float, 
         currency: str = 'SAR',
         payment_method: str = None
     ) -> Billing:
-        """Create a new invoice"""
-        invoice = Billing.create_invoice(
-            subscription_id=str(subscription_id),
+        """Create a new invoice (via repository)."""
+        return await self.billing_repository.create_invoice(
+            subscription_id=subscription_id,
             amount=amount,
             currency=currency,
             payment_method=payment_method
         )
-        
-        db.add(invoice)
-        await db.commit()
-        await db.refresh(invoice)
-        
-        return invoice
 
-    @staticmethod
     async def get_user_invoices(
-        db: AsyncSession, 
+        self,
         user_id: UUID
     ) -> List[Billing]:
-        """Get user's invoices"""
-        result = await db.execute(
-            select(Billing)
-            .join(Subscription, Billing.subscription_id == Subscription.subscription_id)
-            .where(Subscription.user_id == user_id)
-            .order_by(Billing.invoice_date.desc())
-        )
-        return result.scalars().all()
+        """Get user's invoices (via repository)."""
+        return await self.billing_repository.get_user_invoices(user_id)
 
-    @staticmethod
-    async def cleanup_expired_subscriptions(db: AsyncSession) -> int:
-        """Mark expired subscriptions as expired"""
-        now = datetime.utcnow()
-        result = await db.execute(
-            update(Subscription)
-            .where(Subscription.status == StatusType.ACTIVE)
-            .where(Subscription.end_date < now)
-            .values(status=StatusType.EXPIRED, updated_at=now)
-        )
-        
-        await db.commit()
-        return result.rowcount
+    async def cleanup_expired_subscriptions(self) -> int:
+        """Mark expired subscriptions as expired (via repository)."""
+        return await self.subscription_repository.cleanup_expired_subscriptions()
 
-    @staticmethod
     async def get_usage_tracking(
-        db: AsyncSession, 
+        self,
         user_id: UUID
     ) -> List[UsageTracking]:
-        """Get user's usage tracking records"""
-        result = await db.execute(
-            select(UsageTracking)
-            .join(Subscription, UsageTracking.subscription_id == Subscription.subscription_id)
-            .where(Subscription.user_id == user_id)
-            .order_by(UsageTracking.last_reset.desc())
-        )
-        return result.scalars().all()
+        """Get user's usage tracking records (via repository)."""
+        return await self.usage_tracking_repository.get_user_usage_tracking(user_id)
 
-    @staticmethod
     async def reset_usage_tracking(
-        db: AsyncSession, 
+        self,
         subscription_id: UUID
     ) -> int:
-        """Reset usage tracking for a subscription"""
-        result = await db.execute(
-            update(UsageTracking)
-            .where(UsageTracking.subscription_id == subscription_id)
-            .values(used_count=0, last_reset=datetime.utcnow())
-        )
-        
-        await db.commit()
-        return result.rowcount
+        """Reset usage tracking for a subscription (via repository)."""
+        return await self.usage_tracking_repository.reset_subscription_usage(subscription_id)
 
-    @staticmethod
     async def validate_plan_for_subscription(
-        db: AsyncSession, 
+        self,
         plan_id: UUID
     ) -> bool:
-        """Validate that a plan exists and is active for subscription creation"""
-        plan_repo = PlanRepository(db)
-        return await plan_repo.is_plan_active(plan_id)
+        """Validate that a plan exists and is active (via repository)."""
+        return await self.plan_repository.is_plan_active(plan_id)
 
-    @staticmethod
     async def validate_subscription_ownership(
-        db: AsyncSession, 
+        self,
         user_id: UUID, 
         subscription_id: UUID
     ) -> bool:
-        """Validate that a subscription belongs to a user"""
-        subscriptions = await SubscriptionService.get_user_subscriptions(db, user_id)
+        """Validate that a subscription belongs to a user."""
+        subscriptions = await self.subscription_repository.get_all_user_subscriptions(user_id)
         subscription_ids = [str(sub.subscription_id) for sub in subscriptions]
         return str(subscription_id) in subscription_ids
 
-    @staticmethod
     async def validate_feature_usage_request(
-        db: AsyncSession, 
+        self,
         user_id: UUID, 
         feature: str, 
         amount: int = 1
     ) -> bool:
-        """Validate if user can use a feature"""
-        return await SubscriptionService.check_feature_access(db, user_id, feature)
+        """Validate if user can use a feature."""
+        return await self.check_feature_access(user_id, feature)
 
-    @staticmethod
     async def validate_extend_subscription_request(
-        db: AsyncSession, 
+        self,
         user_id: UUID, 
         days: int
     ) -> bool:
-        """Validate extend subscription request"""
+        """Validate extend subscription request."""
         if days <= 0:
             return False
-        subscription = await SubscriptionService.get_user_subscription(db, user_id)
+        subscription = await self.subscription_repository.get_user_active_subscription(user_id)
         return subscription is not None

@@ -18,6 +18,11 @@ def get_plan_service(db: AsyncSession = Depends(get_db)) -> PlanService:
     return PlanService(db)
 
 
+def get_subscription_service(db: AsyncSession = Depends(get_db)) -> SubscriptionService:
+    """Dependency to get subscription service."""
+    return SubscriptionService(db)
+
+
 @router.get("/status", response_model=Dict[str, Any])
 async def get_my_subscription_status(
     current_user: TokenData = Depends(get_current_user),
@@ -60,19 +65,18 @@ async def subscribe_to_plan(
     plan_id: UUID,
     duration_days: int = None,
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
 ):
     """Subscribe to a plan"""
     # Validate plan exists and is active
-    if not await SubscriptionService.validate_plan_for_subscription(db, plan_id):
+    if not await subscription_service.validate_plan_for_subscription(plan_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Plan not found or not active"
         )
     
     # Create subscription
-    subscription = await SubscriptionService.create_subscription(
-        db=db,
+    subscription = await subscription_service.create_subscription(
         user_id=current_user.sub,
         plan_id=plan_id,
         duration_days=duration_days
@@ -94,10 +98,10 @@ async def subscribe_to_plan(
 @router.get("/my-subscriptions", response_model=List[Dict[str, Any]])
 async def get_my_subscriptions(
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
 ):
     """Get current user's all subscriptions"""
-    subscriptions = await SubscriptionService.get_user_subscriptions(db, current_user.sub)
+    subscriptions = await subscription_service.get_user_subscriptions(current_user.sub)
     return [
         {
             "subscription_id": str(sub.subscription_id),
@@ -120,10 +124,10 @@ async def get_my_subscriptions(
 async def get_feature_usage(
     feature: str,
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
 ):
     """Get feature usage information"""
-    return await SubscriptionService.get_feature_usage(db, current_user.sub, feature)
+    return await subscription_service.get_feature_usage(current_user.sub, feature)
 
 
 @router.post("/features/{feature}/use")
@@ -131,19 +135,18 @@ async def use_feature(
     feature: str,
     amount: int = 1,
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
 ):
     """Use a feature (increment usage)"""
     # Validate feature usage
-    if not await SubscriptionService.validate_feature_usage_request(db, current_user.sub, feature, amount):
+    if not await subscription_service.validate_feature_usage_request(current_user.sub, feature, amount):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Cannot use feature '{feature}'. Check your subscription limits."
         )
     
     # Increment usage
-    success = await SubscriptionService.increment_feature_usage(
-        db=db,
+    success = await subscription_service.increment_feature_usage(
         user_id=current_user.sub,
         feature=feature,
         amount=amount
@@ -156,19 +159,18 @@ async def use_feature(
 async def extend_subscription(
     days: int,
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
 ):
     """Extend current subscription"""
     # Validate extend request
-    if not await SubscriptionService.validate_extend_subscription_request(db, current_user.sub, days):
+    if not await subscription_service.validate_extend_subscription_request(current_user.sub, days):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid extend request or no active subscription found"
         )
     
     # Extend subscription
-    subscription = await SubscriptionService.extend_subscription(
-        db=db,
+    subscription = await subscription_service.extend_subscription(
         user_id=current_user.sub,
         days=days
     )
@@ -183,12 +185,11 @@ async def extend_subscription(
 @router.put("/cancel")
 async def cancel_subscription(
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
 ):
     """Cancel current subscription"""
     # Cancel subscription
-    success = await SubscriptionService.cancel_subscription(
-        db=db,
+    success = await subscription_service.cancel_subscription(
         user_id=current_user.sub
     )
     
@@ -204,10 +205,10 @@ async def cancel_subscription(
 @router.get("/invoices", response_model=List[Dict[str, Any]])
 async def get_my_invoices(
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
 ):
     """Get current user's invoices"""
-    invoices = await SubscriptionService.get_user_invoices(db, current_user.sub)
+    invoices = await subscription_service.get_user_invoices(current_user.sub)
     return [
         {
             "invoice_id": str(invoice.invoice_id),
@@ -228,19 +229,18 @@ async def create_invoice(
     currency: str = "SAR",
     payment_method: str = None,
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
 ):
     """Create a new invoice"""
     # Validate subscription ownership
-    if not await SubscriptionService.validate_subscription_ownership(db, current_user.sub, subscription_id):
+    if not await subscription_service.validate_subscription_ownership(current_user.sub, subscription_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Subscription not found or access denied"
         )
     
     # Create invoice
-    invoice = await SubscriptionService.create_invoice(
-        db=db,
+    invoice = await subscription_service.create_invoice(
         subscription_id=subscription_id,
         amount=amount,
         currency=currency,
@@ -260,10 +260,10 @@ async def create_invoice(
 @router.get("/usage-tracking", response_model=List[Dict[str, Any]])
 async def get_usage_tracking(
     current_user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
 ):
     """Get usage tracking information"""
-    usage_records = await SubscriptionService.get_usage_tracking(db, current_user.sub)
+    usage_records = await subscription_service.get_usage_tracking(current_user.sub)
     return [
         {
             "usage_id": str(record.usage_id),
@@ -279,10 +279,10 @@ async def get_usage_tracking(
 # Admin endpoints
 @router.post("/admin/cleanup-expired")
 async def cleanup_expired_subscriptions(
-    db: AsyncSession = Depends(get_db)
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
 ):
     """Clean up expired subscriptions (admin endpoint)"""
-    count = await SubscriptionService.cleanup_expired_subscriptions(db)
+    count = await subscription_service.cleanup_expired_subscriptions()
     return {"message": f"Cleaned up {count} expired subscriptions"}
 
 

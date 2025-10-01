@@ -24,8 +24,9 @@ async def verify_active_subscription(
     try:
         user_id = current_user.sub
         
-        # Get subscription status
-        subscription_status = await SubscriptionService.get_subscription_status(db, user_id)
+        # Get subscription status (via service instance)
+        subscription_service = SubscriptionService(db)
+        subscription_status = await subscription_service.get_subscription_status(user_id)
         
         # Check if user has an active subscription
         if not subscription_status['has_subscription']:
@@ -80,12 +81,15 @@ async def verify_feature_access(
     try:
         user_id = current_user.sub
         
+        # Create service instance
+        subscription_service = SubscriptionService(db)
+        
         # Check if user can access the feature
-        can_access = await SubscriptionService.check_feature_access(db, user_id, feature)
+        can_access = await subscription_service.check_feature_access(user_id, feature)
         
         if not can_access:
             # Get usage information for better error message
-            usage_info = await SubscriptionService.get_feature_usage(db, user_id, feature)
+            usage_info = await subscription_service.get_feature_usage(user_id, feature)
             
             if usage_info['limit'] == 0:
                 raise HTTPException(
@@ -101,7 +105,8 @@ async def verify_feature_access(
                 )
         
         # Get detailed usage information
-        usage_info = await SubscriptionService.get_feature_usage(db, user_id, feature)
+        subscription_service = SubscriptionService(db)
+        usage_info = await subscription_service.get_feature_usage(user_id, feature)
         
         return usage_info
         
@@ -126,7 +131,8 @@ async def get_subscription_status(
     """
     try:
         user_id = current_user.sub
-        return await SubscriptionService.get_subscription_status(db, user_id)
+        subscription_service = SubscriptionService(db)
+        return await subscription_service.get_subscription_status(user_id)
         
     except Exception as e:
         # Return a default status if there's an error
@@ -160,7 +166,8 @@ async def require_plan_type(
         user_id = current_user.sub
         
         # Get subscription status
-        subscription_status = await SubscriptionService.get_subscription_status(db, user_id)
+        subscription_service = SubscriptionService(db)
+        subscription_status = await subscription_service.get_subscription_status(user_id)
         
         if not subscription_status['has_subscription']:
             raise HTTPException(
@@ -222,7 +229,8 @@ async def require_enterprise_plan(
         user_id = current_user.sub
         
         # Get subscription status
-        subscription_status = await SubscriptionService.get_subscription_status(db, user_id)
+        subscription_service = SubscriptionService(db)
+        subscription_status = await subscription_service.get_subscription_status(user_id)
         
         if not subscription_status['has_subscription']:
             raise HTTPException(
