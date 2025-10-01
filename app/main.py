@@ -238,6 +238,36 @@ async def health_check():
     return {"status": "healthy", "service": "sqlite-auth-fastapi"}
 
 
+@app.get("/test-deployment")
+async def test_deployment():
+    """Simple test endpoint to verify deployment is working."""
+    import datetime
+    import socket
+    
+    hostname = socket.gethostname()
+    timestamp = datetime.datetime.now().isoformat()
+    
+    return {
+        "status": "🎉 SUCCESS!",
+        "message": "Hello from Legatoo Backend! 😊",
+        "emoji": "🚀✨🎯",
+        "deployment_info": {
+            "hostname": hostname,
+            "deployed_at": timestamp,
+            "environment": "production",
+            "server": "Hostinger VPS",
+            "status": "Live and Running! 🟢"
+        },
+        "test_message": "If you can see this message, your deployment is working perfectly! 🎉",
+        "next_steps": [
+            "✅ Backend is deployed and running",
+            "✅ API endpoints are accessible", 
+            "✅ Ready for frontend integration",
+            "🚀 Time to build amazing features!"
+        ]
+    }
+
+
 # Frontend HTML pages for testing
 @app.get("/email-verification.html")
 async def email_verification_page():
