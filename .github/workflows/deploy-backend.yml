@@ -1,5 +1,5 @@
 name: Deploy Backend via SSH/RSYNC
-
+#test
 on:
   push:
     branches: [ main ] # يتم التشغيل عند الرفع على الفرع الرئيسي
@@ -21,14 +21,17 @@ jobs:
           username: root       # اسم المستخدم الذي أضفت له مفتاح SSH
           key: ${{ secrets.SSH_PRIVATE_KEY }} # المفتاح الخاص المخزن في GitHub
           script: |
-            # 1. نقل ملفات الباك إند الجديدة (يستخدم RSYNC للنقل الفعال)
-            # النقل من مجلد الكود إلى مسار الباك إند
-            rsync -avz --delete ./ /root/legatoo_backend/
+            # 1. Navigate to the backend directory
+            cd /root/legatoo_backend
             
-            # 2. تثبيت حزم Python جديدة (إذا لزم الأمر)
-            echo "Installing Python dependencies..."
-            source /root/legatoo_backend/venv/bin/activate
-            pip install -r /root/legatoo_backend/requirements.txt
+            # 2. Pull latest code from git
+            git pull origin main
             
-            # 3. إعادة تشغيل خدمة FastAPI
-            sudo systemctl restart fastapi # إعادة تشغيل الباك إند لتحميل التغييرات
+            # 3. Make deployment script executable and run it
+            chmod +x deploy_files/deploy_simple.sh
+            ./deploy_files/deploy_simple.sh
+            
+            # 4. Verify deployment
+            echo "Deployment completed. Checking status..."
+            sleep 5
+            curl -s http://localhost:8000/health || echo "Health check failed"
