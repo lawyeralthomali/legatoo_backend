@@ -8,19 +8,28 @@ from datetime import datetime, timedelta
 from ..models.subscription import Subscription, StatusType
 from ..models.usage_tracking import UsageTracking
 from ..models.billing import Billing
-from .plan_service import PlanService
+from ..repositories.plan_repository import PlanRepository
 
 
 class SubscriptionService:
     """Enhanced subscription service with plan-based system"""
+    
+    def __init__(self, db: AsyncSession):
+        """
+        Initialize subscription service.
+        
+        Args:
+            db: Database session
+        """
+        self.db = db
+        self.plan_repository = PlanRepository(db)
 
-    @staticmethod
     async def get_user_subscription(
-        db: AsyncSession, 
+        self,
         user_id: UUID
     ) -> Optional[Subscription]:
         """Get user's current active subscription"""
-        result = await db.execute(
+        result = await self.db.execute(
             select(Subscription)
             .options(selectinload(Subscription.plan))
             .where(Subscription.user_id == user_id)
@@ -55,8 +64,9 @@ class SubscriptionService:
         duration_days: int = None
     ) -> Subscription:
         """Create a new subscription for a user"""
-        # Validate plan exists
-        if not await PlanService.validate_plan_exists(db, plan_id):
+        # Validate plan exists (via plan repository)
+        plan_repo = PlanRepository(db)
+        if not await plan_repo.is_plan_active(plan_id):
             raise ValueError(f"Plan {plan_id} does not exist or is not active")
         
         # Deactivate any existing active subscriptions
@@ -212,8 +222,9 @@ class SubscriptionService:
         for feature in features:
             feature_usage[feature] = await SubscriptionService.get_feature_usage(db, user_id, feature)
         
-        # Get plan information using PlanService
-        plan = await PlanService.get_plan(db, subscription.plan_id)
+        # Get plan information (via plan repository)
+        plan_repo = PlanRepository(db)
+        plan = await plan_repo.get_by_plan_id(subscription.plan_id)
         
         return {
             'has_subscription': True,
@@ -353,8 +364,8 @@ class SubscriptionService:
         plan_id: UUID
     ) -> bool:
         """Validate that a plan exists and is active for subscription creation"""
-        plan = await PlanService.get_plan(db, plan_id)
-        return plan is not None and plan.is_active
+        plan_repo = PlanRepository(db)
+        return await plan_repo.is_plan_active(plan_id)
 
     @staticmethod
     async def validate_subscription_ownership(

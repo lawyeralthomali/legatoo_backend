@@ -15,6 +15,10 @@ from .user_contract_repository import UserContractRepository
 from .user_favorite_repository import UserFavoriteRepository
 from .legal_document_repository import LegalDocumentRepository
 from .refresh_token_repository import RefreshTokenRepository
+from .plan_repository import PlanRepository
+from .subscription_repository import SubscriptionRepository
+from .usage_tracking_repository import UsageTrackingRepository
+from .billing_repository import BillingRepository
 
 __all__ = [
     "BaseRepository",
@@ -26,5 +30,9 @@ __all__ = [
     "UserContractRepository",
     "UserFavoriteRepository",
     "LegalDocumentRepository",
-    "RefreshTokenRepository"
+    "RefreshTokenRepository",
+    "PlanRepository",
+    "SubscriptionRepository",
+    "UsageTrackingRepository",
+    "BillingRepository"
 ]

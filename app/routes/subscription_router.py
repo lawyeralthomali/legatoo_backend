@@ -13,6 +13,11 @@ from fastapi import HTTPException, status
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
 
+def get_plan_service(db: AsyncSession = Depends(get_db)) -> PlanService:
+    """Dependency to get plan service."""
+    return PlanService(db)
+
+
 @router.get("/status", response_model=Dict[str, Any])
 async def get_my_subscription_status(
     current_user: TokenData = Depends(get_current_user),
@@ -25,10 +30,10 @@ async def get_my_subscription_status(
 @router.get("/plans", response_model=List[Dict[str, Any]])
 async def get_available_plans(
     active_only: bool = True,
-    db: AsyncSession = Depends(get_db)
+    plan_service: PlanService = Depends(get_plan_service)
 ):
     """Get all available subscription plans"""
-    plans = await PlanService.get_plans(db, active_only=active_only)
+    plans = await plan_service.get_plans(active_only=active_only)
     return [
         {
             "plan_id": str(plan.plan_id),

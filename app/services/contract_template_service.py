@@ -63,16 +63,9 @@ class ContractTemplateService:
                 errors=[{"field": "contract_structure", "message": "Template must have a valid structure"}]
             )
         
-        # Create template
+        # Create template (via repository)
         template_dict = template_data.dict()
-        template_dict['created_by'] = created_by
-        template = ContractTemplate(**template_dict)
-        
-        db.add(template)
-        await db.commit()
-        await db.refresh(template)
-        
-        return template
+        return await self.repository.create_template(db, template_dict, created_by)
     
     async def update_template(
         self, 
@@ -81,16 +74,27 @@ class ContractTemplateService:
         update_data: TemplateUpdate
     ) -> ContractTemplate:
         """Update template with validation."""
-        template = await self.get_template_by_id(db, template_id)
+        # Validate template exists
+        template = await self.repository.get_by_id(db, template_id)
+        if not template:
+            raise ApiException(
+                status_code=404,
+                message="Template not found",
+                errors=[{"field": "template_id", "message": "Template does not exist"}]
+            )
         
-        # Update fields
+        # Update template (via repository)
         update_dict = update_data.dict(exclude_unset=True)
-        for field, value in update_dict.items():
-            setattr(template, field, value)
+        updated_template = await self.repository.update_template(db, template_id, update_dict)
         
-        await db.commit()
-        await db.refresh(template)
-        return template
+        if not updated_template:
+            raise ApiException(
+                status_code=500,
+                message="Failed to update template",
+                errors=[{"field": "template_id", "message": "Update operation failed"}]
+            )
+        
+        return updated_template
     
     async def delete_template(
         self, 
@@ -98,10 +102,17 @@ class ContractTemplateService:
         template_id: int
     ) -> bool:
         """Soft delete a template."""
-        template = await self.get_template_by_id(db, template_id)
-        template.is_active = False
-        await db.commit()
-        return True
+        # Validate template exists first
+        template = await self.repository.get_by_id(db, template_id)
+        if not template:
+            raise ApiException(
+                status_code=404,
+                message="Template not found",
+                errors=[{"field": "template_id", "message": "Template does not exist"}]
+            )
+        
+        # Soft delete (via repository)
+        return await self.repository.soft_delete_template(db, template_id)
     
     async def get_featured_templates(
         self, 
@@ -180,6 +191,7 @@ class ContractTemplateService:
         user_id: int
     ) -> Dict[str, Any]:
         """Generate a contract from a template."""
+        # Get template (already uses repository)
         template = await self.get_template_by_id(db, template_id)
         
         # Validate contract data against template variables
@@ -189,19 +201,14 @@ class ContractTemplateService:
         # Process template and generate final content
         final_content = self._process_template(template.contract_structure, contract_data)
         
-        # Create user contract record
-        from ..models.user_contract import UserContract
-        user_contract = UserContract(
+        # Create user contract record (via repository)
+        user_contract = await self.repository.create_user_contract_from_template(
+            db=db,
             user_id=user_id,
             template_id=template_id,
             contract_data=contract_data,
-            final_content=final_content,
-            status="draft"
+            final_content=final_content
         )
-        
-        db.add(user_contract)
-        await db.commit()
-        await db.refresh(user_contract)
         
         return {
             "user_contract_id": user_contract.user_contract_id,

@@ -173,3 +173,124 @@ class ContractTemplateRepository:
             .limit(limit)
         )
         return result.scalars().all()
+    
+    # ==================== CRUD Operations ====================
+    
+    async def create_template(
+        self,
+        db: AsyncSession,
+        template_data: dict,
+        created_by: int
+    ) -> ContractTemplate:
+        """
+        Create a new contract template.
+        
+        Args:
+            db: Database session
+            template_data: Template data dictionary
+            created_by: User ID who created the template
+            
+        Returns:
+            Created ContractTemplate model
+        """
+        template_data['created_by'] = created_by
+        template = ContractTemplate(**template_data)
+        
+        db.add(template)
+        await db.commit()
+        await db.refresh(template)
+        
+        return template
+    
+    async def update_template(
+        self,
+        db: AsyncSession,
+        template_id: int,
+        update_data: dict
+    ) -> Optional[ContractTemplate]:
+        """
+        Update a contract template.
+        
+        Args:
+            db: Database session
+            template_id: Template ID
+            update_data: Dictionary of fields to update
+            
+        Returns:
+            Updated ContractTemplate model or None if not found
+        """
+        template = await self.get_by_id(db, template_id)
+        
+        if not template:
+            return None
+        
+        for field, value in update_data.items():
+            if hasattr(template, field):
+                setattr(template, field, value)
+        
+        await db.commit()
+        await db.refresh(template)
+        
+        return template
+    
+    async def soft_delete_template(
+        self,
+        db: AsyncSession,
+        template_id: int
+    ) -> bool:
+        """
+        Soft delete a template (set is_active to False).
+        
+        Args:
+            db: Database session
+            template_id: Template ID
+            
+        Returns:
+            True if deleted, False if not found
+        """
+        template = await self.get_by_id(db, template_id)
+        
+        if not template:
+            return False
+        
+        template.is_active = False
+        await db.commit()
+        
+        return True
+    
+    async def create_user_contract_from_template(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        template_id: int,
+        contract_data: dict,
+        final_content: str
+    ):
+        """
+        Create a user contract from a template.
+        
+        Args:
+            db: Database session
+            user_id: User ID
+            template_id: Template ID
+            contract_data: Contract data dictionary
+            final_content: Processed final content
+            
+        Returns:
+            Created UserContract model
+        """
+        from ..models.user_contract import UserContract
+        
+        user_contract = UserContract(
+            user_id=user_id,
+            template_id=template_id,
+            contract_data=contract_data,
+            final_content=final_content,
+            status="draft"
+        )
+        
+        db.add(user_contract)
+        await db.commit()
+        await db.refresh(user_contract)
+        
+        return user_contract
