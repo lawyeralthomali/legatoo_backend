@@ -101,7 +101,9 @@ else:
         "http://srv1022733.hstgr.cloud:8000",
         "https://srv1022733.hstgr.cloud:8000",
         "http://srv1022733.hstgr.cloud",
-        "https://srv1022733.hstgr.cloud"
+        "https://srv1022733.hstgr.cloud",
+        "http://api.westlinktowing.com",
+        "https://api.westlinktowing.com"
     ]
 
 app.add_middleware(
