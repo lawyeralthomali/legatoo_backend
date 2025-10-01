@@ -92,8 +92,17 @@ if cors_origins and cors_origins[0]:
     cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
     allow_origins = cors_origins
 else:
-    # Development mode - allow all origins
-    allow_origins = ["*"]
+    # Production mode - allow common origins
+    allow_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000", 
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://srv1022733.hstgr.cloud:8000",
+        "https://srv1022733.hstgr.cloud:8000",
+        "http://srv1022733.hstgr.cloud",
+        "https://srv1022733.hstgr.cloud"
+    ]
 
 app.add_middleware(
     CORSMiddleware,
