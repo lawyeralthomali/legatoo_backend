@@ -104,7 +104,9 @@ else:
         "http://srv1022733.hstgr.cloud",
         "https://srv1022733.hstgr.cloud",
         "http://api.westlinktowing.com",
-        "https://api.westlinktowing.com"
+        "https://api.westlinktowing.com",
+        "http://legatoo.westlinktowing.com",
+        "https://legatoo.westlinktowing.com"
     ]
 
 app.add_middleware(
