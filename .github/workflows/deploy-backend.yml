@@ -15,7 +15,21 @@ jobs:
         uses: actions/checkout@v3
           
       # ----------------------------------------
-      # 2. النشر عبر SSH (إلى الخادم)
+      # 2. التحقق من وجود مفتاح SSH
+      # ----------------------------------------
+      - name: Verify SSH Key
+        run: |
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "❌ Error: SSH_PRIVATE_KEY secret is not set!"
+            echo "Please add your SSH private key to repository secrets."
+            exit 1
+          else
+            echo "✅ SSH_PRIVATE_KEY is configured"
+            echo "Key length: $(echo '${{ secrets.SSH_PRIVATE_KEY }}' | wc -c) characters"
+          fi
+      
+      # ----------------------------------------
+      # 3. النشر عبر SSH (إلى الخادم)
       # ----------------------------------------
       - name: Deploy Backend via SSH
         uses: appleboy/ssh-action@v0.1.7
@@ -23,6 +37,8 @@ jobs:
           host: 72.60.197.118 
           username: root       
           key: ${{ secrets.SSH_PRIVATE_KEY }} # المفتاح الخاص المخزن كـ Secret
+          port: 22
+          timeout: 30s
           script: |
             echo "Starting Backend Deployment..."
             
