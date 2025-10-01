@@ -11,7 +11,7 @@ from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 
-from ..config.logging_config import get_logger
+from ..config.enhanced_logging import get_logger
 from ..models.profile import Profile
 from ..schemas.profile_schemas import ProfileCreate, ProfileResponse, ProfileUpdate
 
@@ -379,4 +379,85 @@ class ProfileRepository:
             raise e
         except Exception as e:
             self.logger.exception(f"Error searching profiles with query '{query}': {str(e)}")
+            raise e
+    
+    # ==================== Auth-specific methods ====================
+    
+    async def phone_exists(self, phone_number: str) -> bool:
+        """
+        Check if phone number already exists.
+        
+        Args:
+            phone_number: Phone number to check
+            
+        Returns:
+            True if phone exists, False otherwise
+        """
+        try:
+            result = await self.db.execute(
+                select(Profile.id).where(Profile.phone_number == phone_number)
+            )
+            return result.scalar_one_or_none() is not None
+        except Exception as e:
+            self.logger.exception(f"Error checking phone existence: {str(e)}")
+            raise e
+    
+    async def get_profile_model_by_user_id(self, user_id: int) -> Optional[Profile]:
+        """
+        Get profile model (not ProfileResponse) by user ID for auth operations.
+        
+        Args:
+            user_id: User ID
+            
+        Returns:
+            Profile model if found, None otherwise
+        """
+        try:
+            result = await self.db.execute(
+                select(Profile).where(Profile.user_id == user_id)
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            self.logger.exception(f"Error getting profile model for user {user_id}: {str(e)}")
+            raise e
+    
+    async def create_profile_for_signup(
+        self,
+        user_id: int,
+        email: str,
+        first_name: str,
+        last_name: str,
+        phone_number: Optional[str],
+        account_type: str
+    ) -> Profile:
+        """
+        Create profile for new user signup.
+        
+        Args:
+            user_id: User ID
+            email: User email
+            first_name: First name
+            last_name: Last name
+            phone_number: Phone number (optional)
+            account_type: Account type
+            
+        Returns:
+            Created Profile model
+        """
+        try:
+            profile = Profile(
+                user_id=user_id,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                phone_number=phone_number,
+                account_type=account_type
+            )
+            
+            self.db.add(profile)
+            # Note: Commit will be done by the service/caller
+            return profile
+            
+        except Exception as e:
+            self.logger.exception(f"Error creating profile for user {user_id}: {str(e)}")
             raise e

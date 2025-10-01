@@ -33,6 +33,7 @@ except ImportError:
     TIKTOKEN_AVAILABLE = False
 
 from ..models.legal_document import LegalDocumentChunk, LegalDocument
+from ..repositories.legal_document_repository import LegalDocumentRepository
 from ..config.legal_assistant import (
     get_config, get_system_prompt, get_user_prompt_template, 
     get_error_message, ERROR_MESSAGES
@@ -156,21 +157,14 @@ class LegalAssistantService:
     ) -> List[LegalDocumentChunk]:
         """Retrieve top-k most relevant chunks for a given question with enhanced filtering"""
         try:
+            # Initialize repository
+            repository = LegalDocumentRepository(db)
+            
             # Generate embedding for the question
             question_embedding = LegalAssistantService.get_embedding(question, openai_api_key)
             
-            # Get all chunks with embeddings
-            result = await db.execute(
-                select(LegalDocumentChunk)
-                .join(LegalDocument)
-                .where(
-                    and_(
-                        LegalDocumentChunk.embedding.isnot(None),
-                        LegalDocumentChunk.embedding != []
-                    )
-                )
-            )
-            chunks = result.scalars().all()
+            # Get all chunks with embeddings using repository
+            chunks = await repository.get_chunks_with_embeddings()
             
             if not chunks:
                 return []

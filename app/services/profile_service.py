@@ -8,13 +8,13 @@ following the Single Responsibility Principle.
 from typing import Optional, Union
 from uuid import UUID
 from sqlalchemy.exc import IntegrityError
-import logging
 
 from ..repositories.profile_repository import ProfileRepository
 from ..models.profile import AccountType
 from ..schemas.profile_schemas import ProfileResponse
+from ..config.enhanced_logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ProfileService:

@@ -5,7 +5,6 @@ This module provides global exception handlers that transform all exceptions
 into the unified ApiResponse format, ensuring consistent error responses.
 """
 
-import logging
 from typing import Union
 from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
@@ -23,8 +22,9 @@ from .exceptions import (
     ConflictException, AuthenticationException, DatabaseException,
     ExternalServiceException
 )
+from ..config.enhanced_logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:

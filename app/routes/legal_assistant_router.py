@@ -9,6 +9,7 @@ from uuid import UUID
 
 from ..db.database import get_db
 from ..utils.auth import get_current_user_id
+from ..repositories.legal_document_repository import LegalDocumentRepository
 from ..services.legal_assistant_service import LegalAssistantService
 from ..schemas.legal_assistant import (
     ChatRequest,
@@ -20,6 +21,11 @@ from ..schemas.legal_assistant import (
 from ..config.legal_assistant import get_error_message
 
 router = APIRouter(prefix="/legal-assistant", tags=["Legal Assistant"])
+
+
+def get_legal_document_repository(db: AsyncSession = Depends(get_db)) -> LegalDocumentRepository:
+    """Dependency to get legal document repository."""
+    return LegalDocumentRepository(db)
 
 
 @router.get("/status", response_model=AssistantStatusResponse)
@@ -74,7 +80,7 @@ async def get_assistant_status():
 async def assistant_chat(
     chat_request: ChatRequest,
     current_user_id: Union[UUID, int] = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db)
+    repository: LegalDocumentRepository = Depends(get_legal_document_repository)
 ):
     """Handle chat requests and return AI responses with enhanced features"""
     # Get OpenAI API key from environment
@@ -96,7 +102,7 @@ async def assistant_chat(
             })
     
     result = await LegalAssistantService.process_chat_request(
-        db=db,
+        db=repository.db,
         question=chat_request.question,
         conversation_history=conversation_history,
         openai_api_key=openai_api_key

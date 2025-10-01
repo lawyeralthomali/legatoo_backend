@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 import secrets
 import string
 
-from ..config.logging_config import get_logger
+from ..config.enhanced_logging import get_logger
 from ..config.urls import get_url_config
 from ..utils.exceptions import ExternalServiceException
 from ..utils.api_exceptions import ApiException

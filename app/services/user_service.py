@@ -7,15 +7,15 @@ following the Single Responsibility Principle and Dependency Inversion.
 
 from typing import Optional, List, Dict, Any, Union
 from uuid import UUID
-import logging
 
 from ..repositories.user_repository import IUserRepository
 from ..repositories.profile_repository import ProfileRepository
 from ..schemas.user_schemas import UserResponse
 from ..schemas.profile_schemas import ProfileResponse
 from ..utils.exceptions import NotFoundException, ValidationException
+from ..config.enhanced_logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class UserService:
