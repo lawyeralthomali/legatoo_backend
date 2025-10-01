@@ -1,4 +1,4 @@
-name: Full Stack CI/CD Deployment
+name: Backend CI/CD Deployment
 
 # تشغيل عند الدفع (Push) إلى الفرع الرئيسي
 on:
@@ -13,64 +13,29 @@ jobs:
       # 1. سحب كود الباك إند (المستودع الحالي)
       - name: Checkout Backend Code
         uses: actions/checkout@v3
-        with:
-          # المسار الافتراضي هو ./
-          path: backend 
-
-      # 2. سحب كود الفرونت إند (من المستودع المنفصل)
-      # هذا يتطلب إعداد سري (Secret) باسم FASTAPI_REPO_TOKEN
-      - name: Checkout Frontend Code
-        uses: actions/checkout@v3
-        with:
-          repository: lawyeralthomali/legatoo # 🛑 عنوان مستودع الواجهة الأمامية
-          token: ${{ secrets.FASTAPI_REPO_TOKEN }} 
-          path: frontend 
-
-      # ----------------------------------------
-      # 3. بناء الواجهة الأمامية وتصديرها
-      # ----------------------------------------
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18' 
-
-      - name: Install Frontend Dependencies and Build
-        run: |
-          cd frontend
-          npm install
-          # 🛑 هذا الأمر ينشئ مجلد 'out' بعد تفعيل التصدير الثابت 🛑
-          npm run deploy
           
       # ----------------------------------------
-      # 4. النشر عبر SSH (إلى الخادم)
+      # 2. النشر عبر SSH (إلى الخادم)
       # ----------------------------------------
-      - name: Deploy and Restart Services via SSH
+      - name: Deploy Backend via SSH
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: 72.60.197.118 
           username: root       
           key: ${{ secrets.SSH_PRIVATE_KEY }} # المفتاح الخاص المخزن كـ Secret
           script: |
-            echo "Starting Unified Deployment..."
+            echo "Starting Backend Deployment..."
             
-            # --- 1. تحديث ونشر الواجهة الأمامية (Frontend) ---
-            # حذف الملفات القديمة ونقل محتويات مجلد 'out' إلى مسار Nginx
-            # المسار المطلق لملف البناء في بيئة الـ Action هو /github/workspace/frontend/out/
-            sudo rsync -avz --delete ./frontend/out/ /var/www/legatoo_frontend/
-            sudo chown -R www-data:www-data /var/www/legatoo_frontend
-            
-            # --- 2. تحديث ونشر الواجهة الخلفية (Backend) ---
+            # --- تحديث ونشر الواجهة الخلفية (Backend) ---
             # نقل كود الباك إند إلى مجلد العمل النهائي
-            rsync -avz --delete ./backend/ /root/legatoo_backend/
+            rsync -avz --delete /github/workspace/ /root/legatoo_backend/
             
-            # 3. تثبيت حزم Python جديدة (إذا لزم الأمر)
+            # تثبيت حزم Python جديدة (إذا لزم الأمر)
             echo "Installing Python dependencies..."
             source /root/legatoo_backend/venv/bin/activate
             pip install -r /root/legatoo_backend/requirements.txt
             
-            # 🛑 4. إعادة تشغيل خدمة FastAPI (لتطبيق كود CORS الجديد) 🛑
+            # إعادة تشغيل خدمة FastAPI
             sudo systemctl restart fastapi 
             
-            # 5. إعادة تحميل Nginx (لضمان رؤية ملفات الفرونت إند الجديدة)
-            sudo systemctl reload nginx
-            echo "Deployment Complete."
+            echo "Backend Deployment Complete."
