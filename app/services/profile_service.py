@@ -18,16 +18,23 @@ logger = get_logger(__name__)
 
 
 class ProfileService:
-    """Service class for profile business logic operations."""
+    """
+    Service class for profile business logic operations.
     
-    def __init__(self, profile_repository: ProfileRepository):
+    Following clean architecture: Services create and manage their own repositories.
+    """
+    
+    def __init__(self, db):
         """
-        Initialize profile service.
+        Initialize profile service with database session.
+        
+        Creates repository internally, following dependency inversion principle.
         
         Args:
-            profile_repository: Repository for profile data access
+            db: Async database session
         """
-        self.profile_repository = profile_repository
+        from ..repositories.profile_repository import ProfileRepository
+        self.profile_repository = ProfileRepository(db)
     
     async def check_email_uniqueness(self, email: str) -> bool:
         """

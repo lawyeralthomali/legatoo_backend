@@ -10,7 +10,6 @@ from ..schemas.response import (
     create_success_response, create_error_response
 )
 from ..services.profile_service import ProfileService
-from ..repositories.profile_repository import ProfileRepository
 from ..utils.auth import get_current_user_id, get_current_user, TokenData
 
 router = APIRouter(prefix="/profiles", tags=["Profiles"])
@@ -39,8 +38,8 @@ async def get_current_profile(
     Creates a profile if it doesn't exist.
     """
     try:
-        profile_repository = ProfileRepository(db)
-        profile_service = ProfileService(profile_repository)
+        # Service creates its own repository internally (clean architecture)
+        profile_service = ProfileService(db)
         
         # Try to get existing profile
         profile = await profile_service.get_profile_response_by_id(current_user_id)
@@ -71,8 +70,8 @@ async def create_profile(
     Create a new profile for the current user using unified response structure.
     """
     try:
-        profile_repository = ProfileRepository(db)
-        profile_service = ProfileService(profile_repository)
+        # Service creates its own repository internally (clean architecture)
+        profile_service = ProfileService(db)
         profile = await profile_service.create_profile(current_user_id, profile_data)
         
         return create_success_response(
@@ -108,8 +107,8 @@ async def update_profile(
     Update the current user's profile using unified response structure.
     """
     try:
-        profile_repository = ProfileRepository(db)
-        profile_service = ProfileService(profile_repository)
+        # Service creates its own repository internally (clean architecture)
+        profile_service = ProfileService(db)
         
         updated_profile = await profile_service.update_profile(current_user_id, profile_update)
         
@@ -140,8 +139,8 @@ async def delete_profile(
     Delete the current user's profile using unified response structure.
     """
     try:
-        profile_repository = ProfileRepository(db)
-        profile_service = ProfileService(profile_repository)
+        # Service creates its own repository internally (clean architecture)
+        profile_service = ProfileService(db)
         
         deleted = await profile_service.delete_profile(current_user_id)
         
@@ -172,8 +171,8 @@ async def get_profile_by_id(
     Get a profile by user ID using unified response structure (public endpoint).
     """
     try:
-        profile_repository = ProfileRepository(db)
-        profile_service = ProfileService(profile_repository)
+        # Service creates its own repository internally (clean architecture)
+        profile_service = ProfileService(db)
         
         profile = await profile_service.get_profile_response_by_id(user_id)
         

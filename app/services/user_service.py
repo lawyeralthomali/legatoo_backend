@@ -7,8 +7,9 @@ following the Single Responsibility Principle and Dependency Inversion.
 
 from typing import Optional, List, Dict, Any, Union
 from uuid import UUID
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..repositories.user_repository import IUserRepository
+from ..repositories.user_repository import UserRepository
 from ..repositories.profile_repository import ProfileRepository
 from ..schemas.user_schemas import UserResponse
 from ..schemas.profile_schemas import ProfileResponse
@@ -19,22 +20,24 @@ logger = get_logger(__name__)
 
 
 class UserService:
-    """Service class for user business logic operations."""
+    """
+    Service class for user business logic operations.
     
-    def __init__(
-        self,
-        user_repository: IUserRepository,
-        profile_repository: ProfileRepository
-    ):
+    Following clean architecture: Services create and manage their own repositories.
+    Routes should not know about repositories.
+    """
+    
+    def __init__(self, db: AsyncSession):
         """
-        Initialize user service.
+        Initialize user service with database session.
+        
+        Creates repository instances internally, following dependency inversion principle.
         
         Args:
-            user_repository: User data repository
-            profile_repository: Profile data repository
+            db: Async database session
         """
-        self.user_repository = user_repository
-        self.profile_repository = profile_repository
+        self.user_repository = UserRepository(db)
+        self.profile_repository = ProfileRepository(db)
     
     async def get_user_by_id(self, user_id: Union[UUID, int]) -> UserResponse:
         """

@@ -12,8 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
 from ..schemas.response import ApiResponse, create_success_response, create_error_response
-from ..repositories.user_repository import UserRepository
-from ..repositories.profile_repository import ProfileRepository
 from ..services.user_service import UserService
 from ..utils.exceptions import (
     NotFoundException, ValidationException, AppException
@@ -24,23 +22,15 @@ from ..schemas.profile_schemas import TokenData
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-# Dependency injection functions
-def get_user_repository(db: AsyncSession = Depends(get_db)) -> UserRepository:
-    """Dependency provider for user repository."""
-    return UserRepository(db)
-
-
-def get_profile_repository(db: AsyncSession = Depends(get_db)) -> ProfileRepository:
-    """Dependency provider for profile repository."""
-    return ProfileRepository(db)
-
-
-def get_user_service(
-    user_repo: UserRepository = Depends(get_user_repository),
-    profile_repo: ProfileRepository = Depends(get_profile_repository)
-) -> UserService:
-    """Dependency provider for user service."""
-    return UserService(user_repo, profile_repo)
+# Dependency injection function - Only inject service, not repositories
+def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
+    """
+    Dependency provider for user service.
+    
+    Following clean architecture: Routes depend only on Services.
+    Services handle their own repository dependencies internally.
+    """
+    return UserService(db)
 
 
 @router.get("/{user_id}", response_model=ApiResponse)
