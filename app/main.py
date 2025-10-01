@@ -235,7 +235,15 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "sqlite-auth-fastapi"}
+    import datetime
+    return {
+        "status": "healthy", 
+        "service": "sqlite-auth-fastapi",
+        "test_message": "🎉 Deployment Test SUCCESS! 😊",
+        "emoji": "🚀✨🎯",
+        "deployment_time": datetime.datetime.now().isoformat(),
+        "message": "Hello from Legatoo Backend! If you see this, deployment is working perfectly! 🎉"
+    }
 
 
 @app.get("/test-deployment")
