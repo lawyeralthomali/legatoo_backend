@@ -3,55 +3,56 @@
 
 const config = {
   // Production Backend URL
-  BACKEND_URL: 'http://srv1022733.hstgr.cloud:8000',
-  API_BASE_URL: 'http://srv1022733.hstgr.cloud:8000/api/v1',
+  BACKEND_URL: 'https://api.westlinktowing.com',
+  API_BASE_URL: 'https://api.westlinktowing.com/api/v1',
   
   // Authentication Endpoints
   AUTH_ENDPOINTS: {
-    LOGIN: 'http://srv1022733.hstgr.cloud:8000/api/v1/auth/login',
-    SIGNUP: 'http://srv1022733.hstgr.cloud:8000/api/v1/auth/signup',
-    REFRESH_TOKEN: 'http://srv1022733.hstgr.cloud:8000/api/v1/auth/refresh-token',
-    LOGOUT: 'http://srv1022733.hstgr.cloud:8000/api/v1/auth/logout',
-    FORGOT_PASSWORD: 'http://srv1022733.hstgr.cloud:8000/api/v1/auth/forgot-password',
-    CONFIRM_PASSWORD_RESET: 'http://srv1022733.hstgr.cloud:8000/api/v1/auth/confirm-password-reset',
-    VERIFY_EMAIL: 'http://srv1022733.hstgr.cloud:8000/api/v1/auth/verify-email'
+    LOGIN: 'https://api.westlinktowing.com/api/v1/auth/login',
+    SIGNUP: 'https://api.westlinktowing.com/api/v1/auth/signup',
+    REFRESH_TOKEN: 'https://api.westlinktowing.com/api/v1/auth/refresh-token',
+    LOGOUT: 'https://api.westlinktowing.com/api/v1/auth/logout',
+    FORGOT_PASSWORD: 'https://api.westlinktowing.com/api/v1/auth/forgot-password',
+    CONFIRM_PASSWORD_RESET: 'https://api.westlinktowing.com/api/v1/auth/confirm-password-reset',
+    VERIFY_EMAIL: 'https://api.westlinktowing.com/api/v1/auth/verify-email'
   },
   
   // User Management Endpoints
   USER_ENDPOINTS: {
-    PROFILE: 'http://srv1022733.hstgr.cloud:8000/api/v1/profiles/me',
-    USERS: 'http://srv1022733.hstgr.cloud:8000/api/v1/users',
-    SEARCH_USERS: 'http://srv1022733.hstgr.cloud:8000/api/v1/users/search'
+    PROFILE: 'https://api.westlinktowing.com/api/v1/profiles/me',
+    USERS: 'https://api.westlinktowing.com/api/v1/users',
+    SEARCH_USERS: 'https://api.westlinktowing.com/api/v1/users/search'
   },
   
   // Contract Management Endpoints
   CONTRACT_ENDPOINTS: {
-    CATEGORIES: 'http://srv1022733.hstgr.cloud:8000/api/contracts/categories',
-    TEMPLATES: 'http://srv1022733.hstgr.cloud:8000/api/contracts/templates',
-    USER_CONTRACTS: 'http://srv1022733.hstgr.cloud:8000/api/v1/user-contracts',
-    FAVORITES: 'http://srv1022733.hstgr.cloud:8000/api/v1/favorites'
+    CATEGORIES: 'https://api.westlinktowing.com/api/contracts/categories',
+    TEMPLATES: 'https://api.westlinktowing.com/api/contracts/templates',
+    USER_CONTRACTS: 'https://api.westlinktowing.com/api/v1/user-contracts',
+    FAVORITES: 'https://api.westlinktowing.com/api/v1/favorites'
   },
   
-  // Legal Assistant Endpoints
+  // Legal Assistant Endpoints (Updated for new implementation)
   LEGAL_ASSISTANT_ENDPOINTS: {
-    CHAT: 'http://srv1022733.hstgr.cloud:8000/api/v1/legal-assistant/chat',
-    STATUS: 'http://srv1022733.hstgr.cloud:8000/api/v1/legal-assistant/status',
-    DETECT_LANGUAGE: 'http://srv1022733.hstgr.cloud:8000/api/v1/legal-assistant/detect-language'
+    UPLOAD: 'https://api.westlinktowing.com/api/v1/legal-assistant/documents/upload',
+    SEARCH: 'https://api.westlinktowing.com/api/v1/legal-assistant/documents/search',
+    DOCUMENTS: 'https://api.westlinktowing.com/api/v1/legal-assistant/documents',
+    STATISTICS: 'https://api.westlinktowing.com/api/v1/legal-assistant/statistics'
   },
   
   // Subscription & Premium Endpoints
   SUBSCRIPTION_ENDPOINTS: {
-    STATUS: 'http://srv1022733.hstgr.cloud:8000/api/v1/subscriptions/status',
-    PLANS: 'http://srv1022733.hstgr.cloud:8000/api/v1/subscriptions/plans',
-    PREMIUM_STATUS: 'http://srv1022733.hstgr.cloud:8000/api/v1/premium/status',
-    FEATURE_LIMITS: 'http://srv1022733.hstgr.cloud:8000/api/v1/premium/feature-limits'
+    STATUS: 'https://api.westlinktowing.com/api/v1/subscriptions/status',
+    PLANS: 'https://api.westlinktowing.com/api/v1/subscriptions/plans',
+    PREMIUM_STATUS: 'https://api.westlinktowing.com/api/v1/premium/status',
+    FEATURE_LIMITS: 'https://api.westlinktowing.com/api/v1/premium/feature-limits'
   },
   
   // Enjaz Integration Endpoints
   ENJAZ_ENDPOINTS: {
-    CONNECT: 'http://srv1022733.hstgr.cloud:8000/api/v1/enjaz/connect',
-    SYNC_CASES: 'http://srv1022733.hstgr.cloud:8000/api/v1/enjaz/sync-cases',
-    CASES: 'http://srv1022733.hstgr.cloud:8000/api/v1/enjaz/cases'
+    CONNECT: 'https://api.westlinktowing.com/api/v1/enjaz/connect',
+    SYNC_CASES: 'https://api.westlinktowing.com/api/v1/enjaz/sync-cases',
+    CASES: 'https://api.westlinktowing.com/api/v1/enjaz/cases'
   },
   
   // Frontend URLs

@@ -10,7 +10,7 @@
         getEnvironment: function() {
             const hostname = window.location.hostname;
             
-            if (hostname.includes('srv1022733.hstgr.cloud')) {
+            if (hostname.includes('westlinktowing.com') || hostname.includes('srv1022733.hstgr.cloud')) {
                 return 'production';
             } else if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
                 return 'development';
@@ -25,11 +25,11 @@
             
             switch (environment) {
                 case 'production':
-                    return 'http://srv1022733.hstgr.cloud:8000/api/v1/auth';
+                    return 'https://api.westlinktowing.com/api/v1/auth';
                 case 'development':
                     return 'http://127.0.0.1:8000/api/v1/auth';
                 default:
-                    return 'http://srv1022733.hstgr.cloud:8000/api/v1/auth';
+                    return 'https://api.westlinktowing.com/api/v1/auth';
             }
         },
         

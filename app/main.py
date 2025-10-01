@@ -13,11 +13,13 @@ from .db.database import create_tables
 
 # Import all models to ensure they are registered with SQLAlchemy before relationships are resolved
 from .models import (
-    User, Profile, RefreshToken, #LegalDocument, LegalDocumentChunk,
+    User, Profile, RefreshToken,
     Subscription, Plan, Billing, UsageTracking, UserRole, Role,
     EnjazAccount, CaseImported, ContractCategory, ContractTemplate,
     UserContract, UserFavorite
 )
+# Import Legal AI Assistant models
+from .models.legal_document2 import LegalDocument, LegalDocumentChunk
 
 # Import routers
 from .routes.profile_router import router as profile_router

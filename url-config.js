@@ -51,7 +51,7 @@ class URLConfig {
 
     getDefaultBackendUrl() {
         if (this.environment === 'production') {
-            return 'https://api.legatoo.westlinktowing.com';
+            return 'https://api.westlinktowing.com';
         }
         return 'http://127.0.0.1:8000';
     }

@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..repositories.profile_repository import ProfileRepository
 from ..models.profile import AccountType
-from ..schemas.profile_schemas import ProfileResponse
+from ..schemas.profile_schemas import ProfileResponse, ProfileCreate, ProfileUpdate
 from ..config.enhanced_logging import get_logger
 
 logger = get_logger(__name__)
