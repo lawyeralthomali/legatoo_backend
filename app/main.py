@@ -194,8 +194,9 @@ async def root():
     local_ip = socket.gethostbyname(hostname)
     
     return {
-        "message": "Welcome to SQLite Auth FastAPI",
+        "message": "Welcome to SQLite Auth FastAPI - 🎉 DEPLOYMENT TEST SUCCESS! 😊",
         "version": "1.0.0",
+        "test_info": "🚀✨🎯 If you see this message, your deployment is working perfectly! 🎉",
         "server_info": {
             "hostname": hostname,
             "local_ip": local_ip,
