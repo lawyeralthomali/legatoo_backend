@@ -13,7 +13,7 @@ from .db.database import create_tables
 
 # Import all models to ensure they are registered with SQLAlchemy before relationships are resolved
 from .models import (
-    User, Profile, RefreshToken, LegalDocument, LegalDocumentChunk,
+    User, Profile, RefreshToken, #LegalDocument, LegalDocumentChunk,
     Subscription, Plan, Billing, UsageTracking, UserRole, Role,
     EnjazAccount, CaseImported, ContractCategory, ContractTemplate,
     UserContract, UserFavorite
@@ -27,7 +27,6 @@ from .routes.emergency_admin_routes import router as emergency_admin_routes
 
 from .routes.subscription_router import router as subscription_router
 from .routes.premium_router import router as premium_router
-from .routes.legal_document_router import router as legal_document_router
 from .routes.legal_assistant_router import router as legal_assistant_router
 from .routes.enjaz_router import router as enjaz_router
 from .routes.categories_route import router as categories_router
@@ -84,6 +83,8 @@ default_origins = [
     "http://192.168.100.109:8080", # Your frontend IP (Vue)
     "http://localhost:8000",      # Self-reference local
     "http://127.0.0.1:8000",     # Self-reference local
+    "https://api.westlinktowing.com",
+    "https://legatoo.westlinktowing.com",
 ]
 
 # Use environment CORS origins if available, otherwise use defaults
@@ -170,8 +171,7 @@ app.include_router(user_routes, prefix="/api/v1")
 app.include_router(emergency_admin_routes)  # Emergency admin routes
 app.include_router(subscription_router, prefix="/api/v1")
 app.include_router(premium_router, prefix="/api/v1")
-app.include_router(legal_document_router, prefix="/api/v1")
-app.include_router(legal_assistant_router, prefix="/api/v1")
+app.include_router(legal_assistant_router)  # Legal AI Assistant
 app.include_router(enjaz_router)
 app.include_router(categories_router)
 app.include_router(templates_router)
@@ -218,7 +218,13 @@ async def root():
             "categories": "/api/contracts/categories",
             "templates": "/api/contracts/templates",
             "user_contracts": "/api/contracts/user-contracts",
-            "favorites": "/api/contracts/favorites"
+            "favorites": "/api/contracts/favorites",
+            "legal_assistant": {
+                "upload": "/api/v1/legal-assistant/documents/upload",
+                "search": "/api/v1/legal-assistant/documents/search",
+                "documents": "/api/v1/legal-assistant/documents",
+                "statistics": "/api/v1/legal-assistant/statistics"
+            }
         }
     }
 

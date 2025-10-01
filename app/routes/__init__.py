@@ -11,7 +11,6 @@ from .profile_router import router as profile_router
 from .emergency_admin_routes import router as emergency_admin_router
 from .subscription_router import router as subscription_router
 from .premium_router import router as premium_router
-from .legal_document_router import router as legal_document_router
 from .legal_assistant_router import router as legal_assistant_router
 from .enjaz_router import router as enjaz_router
 from .categories_route import router as categories_router
@@ -26,7 +25,6 @@ __all__ = [
     "emergency_admin_router",
     "subscription_router",
     "premium_router",
-    "legal_document_router",
     "legal_assistant_router",
     "enjaz_router",
     "categories_router",

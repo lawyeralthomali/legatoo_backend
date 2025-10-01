@@ -9,7 +9,9 @@ from .auth_service import AuthService
 from .email_service import EmailService
 from .enjaz_service import EnjazService
 from .legal_assistant_service import LegalAssistantService
-from .legal_document_service import LegalDocumentService
+from .document_processing_service import DocumentProcessingService
+from .embedding_service import EmbeddingService
+from .semantic_search_service import SemanticSearchService
 from .plan_service import PlanService
 from .premium_service import PremiumService
 from .profile_service import ProfileService
@@ -26,7 +28,9 @@ __all__ = [
     "EmailService",
     "EnjazService",
     "LegalAssistantService",
-    "LegalDocumentService",
+    "DocumentProcessingService",
+    "EmbeddingService",
+    "SemanticSearchService",
     "PlanService",
     "PremiumService",
     "ProfileService",

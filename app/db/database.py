@@ -42,7 +42,7 @@ async def create_tables():
     """Create all database tables and initialize super admin user."""
     # Import all models to ensure they are registered with SQLAlchemy
     from ..models import (
-        User, Profile, RefreshToken, LegalDocument, LegalDocumentChunk,
+        User, Profile, RefreshToken, #LegalDocument, LegalDocumentChunk,
         Subscription, Plan, Billing, UsageTracking, UserRole, Role,
         EnjazAccount, CaseImported, ContractCategory, ContractTemplate,
         UserContract, UserFavorite
