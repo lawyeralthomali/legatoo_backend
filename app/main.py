@@ -276,6 +276,48 @@ async def test_deployment():
         ]
     }
 
+@app.get("/debug-auth")
+async def debug_auth():
+    """Debug endpoint to test authentication service components."""
+    import os
+    from .services.auth_service import AuthService
+    from .db.database import get_db_session
+    
+    try:
+        # Test environment variables
+        env_check = {
+            "SECRET_KEY": bool(os.getenv("SECRET_KEY")),
+            "JWT_SECRET": bool(os.getenv("JWT_SECRET")),
+            "DATABASE_URL": bool(os.getenv("DATABASE_URL")),
+        }
+        
+        # Test database connection
+        async with get_db_session() as db:
+            auth_service = AuthService(db, "debug-test")
+            
+            # Test user repository
+            test_email = "Ahmedkaml117m@gmail.com"
+            user = await auth_service.user_repository.get_user_model_by_email(test_email)
+            
+            return {
+                "status": "Debug Info",
+                "environment_check": env_check,
+                "database_connection": "✅ Connected",
+                "user_exists": user is not None,
+                "user_email": test_email,
+                "user_id": user.id if user else None,
+                "user_verified": user.is_verified if user else None,
+                "message": "Authentication service debug info"
+            }
+            
+    except Exception as e:
+        return {
+            "status": "❌ Error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "message": "Debug endpoint failed - this shows the login issue"
+        }
+
 
 # Frontend HTML pages for testing
 @app.get("/email-verification.html")
