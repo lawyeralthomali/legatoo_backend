@@ -21,6 +21,13 @@ class ProfileCreate(ProfileBase):
     """Schema for creating a new profile."""
     email: EmailStr
     account_type: Optional[AccountType] = AccountType.PERSONAL
+    
+    def model_dump(self, **kwargs):
+        """Override model_dump to serialize AccountType enum to string."""
+        data = super().model_dump(**kwargs)
+        if 'account_type' in data and isinstance(data['account_type'], AccountType):
+            data['account_type'] = data['account_type'].value
+        return data
 
 
 class ProfileUpdate(ProfileBase):
@@ -30,6 +37,13 @@ class ProfileUpdate(ProfileBase):
     phone_number: Optional[str] = None
     avatar_url: Optional[str] = None
     account_type: Optional[AccountType] = None
+    
+    def model_dump(self, **kwargs):
+        """Override model_dump to serialize AccountType enum to string."""
+        data = super().model_dump(**kwargs)
+        if 'account_type' in data and isinstance(data['account_type'], AccountType):
+            data['account_type'] = data['account_type'].value
+        return data
 
 
 class ProfileResponse(ProfileBase):

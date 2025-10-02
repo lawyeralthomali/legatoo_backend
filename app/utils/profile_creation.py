@@ -7,6 +7,7 @@ from uuid import UUID
 
 from ..services.profile_service import ProfileService
 from ..models.profile import AccountType
+from ..schemas.profile_schemas import ProfileCreate, ProfileUpdate
 
 
 async def ensure_user_profile(
@@ -57,7 +58,15 @@ async def ensure_user_profile(
         )
         
         try:
-            profile = await profile_service.create_profile(user_id, profile_data)
+            # Use the new create_or_update_profile method
+            profile_update = ProfileUpdate(
+                first_name=first_name or "User",
+                last_name=last_name or "User",
+                avatar_url=avatar_url,
+                phone_number=phone_number,
+                account_type=account_type
+            )
+            profile = await profile_service.create_or_update_profile(user_id, profile_update)
             return {
                 "profile": profile,
                 "created": True,

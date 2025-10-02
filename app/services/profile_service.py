@@ -108,44 +108,133 @@ class ProfileService:
             logger.error(f"Profile service error: {str(e)}")
             raise
     
-    async def get_profile_by_id(self, user_id: UUID) -> Optional[ProfileResponse]:
+    async def get_profile_by_id(self, user_id: Union[UUID, int]) -> Optional[ProfileResponse]:
         """
         Get profile by user ID.
         
         Args:
-            user_id: User ID to search for
+            user_id: User ID to search for (UUID or int)
             
         Returns:
             ProfileResponse if found, None otherwise
         """
-        profile = await self.profile_repository.get_by_user_id(user_id)
+        # Convert UUID to int if needed (assuming UUID can be converted to int)
+        if isinstance(user_id, UUID):
+            # Convert UUID to int for database operations
+            user_id_int = int(str(user_id).replace('-', ''), 16)
+        else:
+            user_id_int = user_id
+            
+        profile = await self.profile_repository.get_by_user_id(user_id_int)
         return profile
     
-    async def get_profile_response_by_id(self, user_id: UUID) -> Optional[ProfileResponse]:
+    async def get_profile_response_by_id(self, user_id: Union[UUID, int]) -> Optional[ProfileResponse]:
         """
         Get profile response by user ID.
         
         Args:
-            user_id: User ID to search for
+            user_id: User ID to search for (UUID or int)
             
         Returns:
             ProfileResponse if found, None otherwise
         """
         return await self.get_profile_by_id(user_id)
     
-    async def create_profile_if_not_exists(self, user_id: UUID) -> ProfileResponse:
+    async def create_profile_if_not_exists(self, user_id: Union[UUID, int]) -> ProfileResponse:
         """
-        Create a default profile if it doesn't exist.
+        Create a default profile if it doesn't exist for the user.
+        
+        This method is used when retrieving a profile and none exists.
+        It creates a minimal profile with default values.
         
         Args:
-            user_id: User ID to create profile for
+            user_id: User ID (UUID or int)
             
         Returns:
-            Created ProfileResponse
+            ProfileResponse with created profile data
         """
-        return await self.create_profile_for_user(
-            user_id=user_id,
-            email="default@example.com",  # Default email for auto-created profiles
-            first_name="User",
-            last_name="User"
-        )
+        try:
+            logger.info(f"Creating default profile for user ID: {user_id}")
+            
+            # Convert UUID to int if needed
+            if isinstance(user_id, UUID):
+                user_id_int = int(str(user_id).replace('-', ''), 16)
+            else:
+                user_id_int = user_id
+            
+            # Create a minimal profile with default values
+            profile_data = ProfileCreate(
+                email=f"user_{user_id_int}@example.com",  # Default email
+                first_name="User",
+                last_name="User",
+                phone_number=None,
+                avatar_url=None,
+                account_type=AccountType.PERSONAL
+            )
+            
+            # Create the profile
+            created_profile = await self.profile_repository.create_profile(user_id_int, profile_data)
+            return created_profile
+                
+        except Exception as e:
+            logger.error(f"Error creating default profile for user {user_id}: {str(e)}")
+            raise
+
+    async def create_or_update_profile(
+        self, 
+        user_id: Union[UUID, int], 
+        profile_data: ProfileUpdate
+    ) -> ProfileResponse:
+        """
+        Create or update profile for a user.
+        
+        If profile exists, update it. If not, create a new one.
+        
+        Args:
+            user_id: User ID (UUID or int)
+            profile_data: Profile update data
+            
+        Returns:
+            ProfileResponse with created/updated profile data
+        """
+        try:
+            # Convert UUID to int if needed
+            if isinstance(user_id, UUID):
+                user_id_int = int(str(user_id).replace('-', ''), 16)
+            else:
+                user_id_int = user_id
+            
+            # First, try to get existing profile
+            existing_profile = await self.profile_repository.get_by_user_id(user_id_int)
+            
+            if existing_profile:
+                # Profile exists, update it
+                logger.info(f"Updating existing profile for user ID: {user_id_int}")
+                updated_profile = await self.profile_repository.update_profile(user_id_int, profile_data)
+                if updated_profile:
+                    return updated_profile
+                else:
+                    # This shouldn't happen since we just found the profile
+                    raise Exception("Failed to update existing profile")
+            else:
+                # Profile doesn't exist, create it
+                logger.info(f"Creating new profile for user ID: {user_id_int}")
+                
+                # Convert ProfileUpdate to ProfileCreate for creation
+                profile_dict = profile_data.model_dump(exclude_unset=True)
+                
+                # Set required fields with defaults if not provided
+                profile_dict["email"] = profile_dict.get("email", f"user_{user_id_int}@example.com")
+                profile_dict["first_name"] = profile_dict.get("first_name", "User")
+                profile_dict["last_name"] = profile_dict.get("last_name", "User")
+                
+                # Create ProfileCreate object
+                create_data = ProfileCreate(**profile_dict)
+                
+                # Create the profile
+                created_profile = await self.profile_repository.create_profile(user_id_int, create_data)
+                return created_profile
+                
+        except Exception as e:
+            logger.error(f"Error in create_or_update_profile for user {user_id}: {str(e)}")
+            raise

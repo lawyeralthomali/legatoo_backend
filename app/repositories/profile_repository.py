@@ -150,7 +150,8 @@ class ProfileRepository:
                 )
             
             # Prepare profile data with all required fields
-            profile_dict["id"] = user_id  # Primary key (same as Supabase user_id)
+            # Don't set 'id' - let it auto-increment
+            profile_dict["user_id"] = user_id  # Foreign key to users table
             
             # Ensure all required fields are present
             required_fields = ["first_name", "last_name", "email"]
