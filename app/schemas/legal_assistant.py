@@ -9,6 +9,7 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, validator
 from datetime import datetime
 from enum import Enum
+from ..utils.arabic_text_processor import ArabicTextProcessor
 
 
 class DocumentTypeEnum(str, Enum):
@@ -58,7 +59,7 @@ class DocumentUploadRequest(BaseModel):
 
 
 class DocumentChunkResponse(BaseModel):
-    """Response model for a document chunk."""
+    """Response model for a document chunk with RTL support."""
     id: int = Field(..., description="Chunk ID")
     chunk_index: int = Field(..., description="Index of the chunk in the document")
     content: str = Field(..., description="Text content of the chunk")
@@ -66,6 +67,50 @@ class DocumentChunkResponse(BaseModel):
     section_title: Optional[str] = Field(None, description="Section title if detected")
     keywords: List[str] = Field(default_factory=list, description="Extracted keywords")
     similarity_score: Optional[float] = Field(None, description="Similarity score (for search results)")
+    
+    # RTL and formatting fields
+    is_rtl: bool = Field(default=False, description="Whether text is right-to-left (Arabic)")
+    text_direction: str = Field(default="ltr", description="Text direction: 'rtl' or 'ltr'")
+    formatted_content: Optional[str] = Field(None, description="HTML formatted content with proper direction")
+    normalized_content: Optional[str] = Field(None, description="Normalized text content")
+    
+    @validator('content', pre=True)
+    def process_content(cls, v, values):
+        """Process content for RTL handling and normalization."""
+        if not v:
+            return v
+        
+        # Get language from document if available
+        language = "ar"  # Default to Arabic for legal documents
+        
+        # Process Arabic text
+        processed = ArabicTextProcessor.format_arabic_chunk(v, language)
+        
+        # Set RTL fields
+        values['is_rtl'] = processed['is_rtl']
+        values['text_direction'] = processed['language'] if processed['is_rtl'] else 'ltr'
+        values['formatted_content'] = processed['formatted_content']
+        values['normalized_content'] = processed['content']
+        
+        return processed['content']
+    
+    @validator('keywords', pre=True)
+    def process_keywords(cls, v, values):
+        """Process keywords for Arabic text."""
+        if not v:
+            return v
+        
+        # If content is Arabic, enhance keywords
+        if values.get('is_rtl', False):
+            content = values.get('content', '')
+            if content:
+                arabic_keywords = ArabicTextProcessor.extract_arabic_keywords(content)
+                # Merge with existing keywords, removing duplicates
+                existing_keywords = v if isinstance(v, list) else []
+                all_keywords = list(dict.fromkeys(existing_keywords + arabic_keywords))
+                return all_keywords[:15]  # Limit to 15 keywords
+        
+        return v
 
     class Config:
         from_attributes = True

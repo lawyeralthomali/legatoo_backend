@@ -44,10 +44,11 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, onupdate=func.now())
     
-    # Relationships - simplified to avoid circular import issues
+    # Relationships - using string references to avoid circular imports
     profile = relationship("Profile", back_populates="user", uselist=False, lazy="select")
     user_contracts = relationship("UserContract", back_populates="user", lazy="select")
     favorites = relationship("UserFavorite", back_populates="user", lazy="select")
+    uploaded_documents = relationship("LegalDocument", back_populates="uploaded_by", lazy="select")
     # Note: enjaz_accounts and cases_imported relationships removed to fix initialization
     # These can be added back later using a different approach
     

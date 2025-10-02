@@ -3,7 +3,7 @@ from ..db.database import Base
 from .user import User
 from .profile import Profile, AccountType
 from .refresh_token import RefreshToken
-# from .legal_document import LegalDocument, LegalDocumentChunk, DocumentTypeEnum, LanguageEnum, ProcessingStatusEnum
+from .legal_document2 import LegalDocument, LegalDocumentChunk, DocumentTypeEnum, LanguageEnum, ProcessingStatusEnum
 from .subscription import Subscription, StatusType
 from .plan import Plan
 from .billing import Billing

@@ -32,7 +32,7 @@ class URLConfig:
         # Production URLs (override for production)
         if self.environment == "production":
             self.frontend_url = os.getenv("FRONTEND_URL", "https://legatoo.westlinktowing.com")
-            self.backend_url = os.getenv("BACKEND_URL", "http://srv1022733.hstgr.cloud:8000")
+            self.backend_url = os.getenv("BACKEND_URL", "https://api.westlinktowing.com")
             self.api_base_url = f"{self.backend_url}/api/v1"
             
             # For email verification and password reset, use backend URL since HTML files are served from backend

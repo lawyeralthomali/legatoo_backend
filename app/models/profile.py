@@ -32,7 +32,8 @@ class Profile(Base):
     
     # Relationships - using string references to avoid circular imports
     user = relationship("User", back_populates="profile", lazy="select")
-    uploaded_documents = relationship("LegalDocument", back_populates="uploaded_by", lazy="select")
+    # Note: uploaded_documents relationship moved to User model
+    # Legal documents are now linked to User, not Profile
     
     # Table constraints (will be added after migration)
     # __table_args__ = (

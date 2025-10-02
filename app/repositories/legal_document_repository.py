@@ -52,6 +52,8 @@ class LegalDocumentRepository:
         Returns:
             Created LegalDocument instance
         """
+        from ..models.legal_document2 import ProcessingStatusEnum
+        
         document = LegalDocument(
             title=title,
             file_path=file_path,
@@ -60,7 +62,7 @@ class LegalDocumentRepository:
             uploaded_by_id=uploaded_by_id,
             notes=notes,
             is_processed=False,
-            processing_status="pending"
+            processing_status=ProcessingStatusEnum.PENDING
         )
         self.db.add(document)
         await self.db.commit()
@@ -114,11 +116,26 @@ class LegalDocumentRepository:
         
         filters = []
         if document_type:
-            filters.append(LegalDocument.document_type == document_type)
+            from ..models.legal_document2 import DocumentTypeEnum
+            try:
+                doc_type_enum = DocumentTypeEnum(document_type)
+                filters.append(LegalDocument.document_type == doc_type_enum)
+            except ValueError:
+                pass
         if language:
-            filters.append(LegalDocument.language == language)
+            from ..models.legal_document2 import LanguageEnum
+            try:
+                lang_enum = LanguageEnum(language)
+                filters.append(LegalDocument.language == lang_enum)
+            except ValueError:
+                pass
         if processing_status:
-            filters.append(LegalDocument.processing_status == processing_status)
+            from ..models.legal_document2 import ProcessingStatusEnum
+            try:
+                status_enum = ProcessingStatusEnum(processing_status)
+                filters.append(LegalDocument.processing_status == status_enum)
+            except ValueError:
+                pass
         if uploaded_by_id:
             filters.append(LegalDocument.uploaded_by_id == uploaded_by_id)
         

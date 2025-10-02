@@ -13,8 +13,14 @@ DATABASE_URL = "sqlite+aiosqlite:///./app.db"
 # Create async engine
 engine = create_async_engine(
     DATABASE_URL,
-    echo=True,  # Set to False in production
-    future=True
+    echo=False,  # Set to False to reduce noise
+    future=True,
+    pool_pre_ping=True,  # Verify connections before use
+    pool_recycle=3600,   # Recycle connections every hour
+    connect_args={
+        "check_same_thread": False,  # SQLite specific
+        "timeout": 30  # Connection timeout
+    }
 )
 
 # Create async session factory - SQLAlchemy 1.4.23 compatible
@@ -22,7 +28,9 @@ from sqlalchemy.orm import sessionmaker
 AsyncSessionLocal = sessionmaker(
     bind=engine,
     class_=AsyncSession,
-    expire_on_commit=False
+    expire_on_commit=False,
+    autoflush=False,  # Disable autoflush to prevent premature commits
+    autocommit=False  # Explicit transaction control
 )
 
 # Base class for all models - SQLAlchemy 2.0 compatible
@@ -34,15 +42,17 @@ async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         try:
             yield session
-        finally:
-            await session.close()
+        except Exception:
+            await session.rollback()
+            raise
+        # Don't explicitly close - let the context manager handle it
 
 # Function to create database tables and initialize super admin
 async def create_tables():
     """Create all database tables and initialize super admin user."""
     # Import all models to ensure they are registered with SQLAlchemy
     from ..models import (
-        User, Profile, RefreshToken, #LegalDocument, LegalDocumentChunk,
+        User, Profile, RefreshToken, LegalDocument, LegalDocumentChunk,
         Subscription, Plan, Billing, UsageTracking, UserRole, Role,
         EnjazAccount, CaseImported, ContractCategory, ContractTemplate,
         UserContract, UserFavorite

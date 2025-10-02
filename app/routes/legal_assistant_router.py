@@ -36,10 +36,14 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Upload a legal document for processing."""
+    """
+    Upload a legal document for processing.
+    
+    ✅ Phase 3 & 4: Now supports PDF, DOCX, Images (OCR), TXT
+    """
     try:
-        # Validate file extension
-        allowed_ext = {'.pdf', '.docx', '.doc', '.txt'}
+        # ✅ UPDATED: Support more formats including images for OCR
+        allowed_ext = {'.pdf', '.docx', '.doc', '.txt', '.jpg', '.jpeg', '.png'}
         file_ext = Path(file.filename).suffix.lower()
         
         if file_ext not in allowed_ext:
@@ -67,7 +71,7 @@ async def upload_document(
             title=title,
             document_type=document_type,
             language=language,
-            uploaded_by_id=current_user.id,
+            uploaded_by_id=current_user.sub,
             notes=notes,
             process_immediately=process_immediately
         )

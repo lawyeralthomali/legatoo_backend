@@ -61,8 +61,8 @@ class URLConfig {
             login: `${this.frontendUrl}/auth/login`,
             signup: `${this.frontendUrl}/auth/signup`,
             forgotPassword: `${this.frontendUrl}/auth/forgot-password`,
-            emailVerification: `${this.frontendUrl}/email-verification.html`,
-            passwordReset: `${this.frontendUrl}/password-reset.html`,
+            emailVerification: `${this.backendUrl}/email-verification.html`,
+            passwordReset: `${this.backendUrl}/password-reset.html`,
             dashboard: `${this.frontendUrl}/dashboard`,
         };
     }

@@ -1,8 +1,14 @@
 """
-Legal Assistant Service - Main orchestration layer.
+Legal Assistant Service - Main orchestration layer (Updated for Phase 3 & 4).
 
 This service coordinates document processing, embedding generation,
 and search operations for the Legal AI Assistant.
+
+✅ Phase 3 & 4 Integration:
+- Uses CompleteLegalAIService for enhanced document processing
+- Supports multi-format files (PDF, DOCX, Images with OCR)
+- FAISS vector search for fast semantic search
+- Real-time processing with progress tracking
 """
 
 import logging
@@ -13,16 +19,18 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..repositories.legal_document_repository import LegalDocumentRepository
-from .document_processing_service import DocumentProcessingService
-from .embedding_service import EmbeddingService
-from .semantic_search_service import SemanticSearchService
+from .complete_legal_ai_service import CompleteLegalAIService
 from ..models.legal_document2 import LegalDocument, LegalDocumentChunk
 
 logger = logging.getLogger(__name__)
 
 
 class LegalAssistantService:
-    """Main service for legal assistant operations."""
+    """
+    Main service for legal assistant operations.
+    
+    ✅ Updated to use Phase 3 & 4 implementation (CompleteLegalAIService)
+    """
 
     def __init__(self, db: AsyncSession):
         """
@@ -32,20 +40,23 @@ class LegalAssistantService:
             db: Database session
         """
         self.db = db
-        self.repository = LegalDocumentRepository(db)
-        self.doc_processor = DocumentProcessingService()
-        self.embedding_service = EmbeddingService()
-        self.search_service = SemanticSearchService(
-            self.repository,
-            self.embedding_service
-        )
+        
+        # ✅ NEW: Use CompleteLegalAIService (Phase 3 & 4)
+        self.ai_service = CompleteLegalAIService(db)
+        
+        # Keep repository for direct access if needed
+        self.repository = self.ai_service.repository
         
         # Configuration
         self.upload_dir = Path(os.getenv("UPLOAD_DIR", "uploads/legal_documents"))
-        self.allowed_extensions = ['.pdf', '.docx', '.doc', '.txt']
+        
+        # ✅ UPDATED: Support more formats (including images for OCR)
+        self.allowed_extensions = ['.pdf', '.docx', '.doc', '.txt', '.jpg', '.jpeg', '.png']
         
         # Ensure upload directory exists
         self.upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        logger.info("LegalAssistantService initialized with Phase 3 & 4 support")
 
     async def upload_document(
         self,
@@ -60,6 +71,8 @@ class LegalAssistantService:
     ) -> LegalDocument:
         """
         Upload and optionally process a legal document.
+        
+        ✅ Phase 3 & 4: Now supports PDF, DOCX, Images (OCR), TXT
         
         Args:
             file_path: Path to the uploaded file
@@ -82,22 +95,19 @@ class LegalAssistantService:
         if file_extension not in self.allowed_extensions:
             raise ValueError(f"Unsupported file format: {file_extension}")
         
-        # Create document record
-        document = await self.repository.create_document(
-            title=title,
+        # ✅ Use CompleteLegalAIService (Phase 3 & 4)
+        document = await self.ai_service.upload_and_process_document(
             file_path=file_path,
+            original_filename=original_filename,
+            title=title,
             document_type=document_type,
             language=language,
             uploaded_by_id=uploaded_by_id,
-            notes=notes
+            notes=notes,
+            process_immediately=process_immediately
         )
         
-        logger.info(f"Document {document.id} uploaded: {title}")
-        
-        # Process document if requested
-        if process_immediately:
-            # Process asynchronously in background
-            asyncio.create_task(self.process_document(document.id))
+        logger.info(f"✅ Document {document.id} uploaded with Phase 3 & 4: {title}")
         
         return document
 
@@ -105,7 +115,14 @@ class LegalAssistantService:
         """
         Process a document: extract text, chunk, generate embeddings.
         
-        This is the main processing pipeline for legal documents.
+        ✅ Phase 3 & 4: Enhanced processing with OCR, FAISS indexing
+        
+        This is the main processing pipeline for legal documents:
+        1. Extract text (PDF/DOCX/Images with OCR)
+        2. Clean and normalize text
+        3. Intelligent chunking (300-500 words)
+        4. Generate embeddings
+        5. Add to FAISS index
         
         Args:
             document_id: ID of the document to process
@@ -113,95 +130,8 @@ class LegalAssistantService:
         Returns:
             True if successful, False otherwise
         """
-        try:
-            # Update status to processing
-            await self.repository.update_document(
-                document_id,
-                processing_status="processing"
-            )
-            
-            # Get document
-            document = await self.repository.get_document_by_id(document_id)
-            if not document:
-                logger.error(f"Document {document_id} not found")
-                return False
-            
-            logger.info(f"Starting processing for document {document_id}")
-            
-            # Step 1: Extract text
-            file_extension = Path(document.file_path).suffix
-            text_content = await self.doc_processor.extract_text_from_file(
-                document.file_path,
-                file_extension
-            )
-            
-            if not text_content or len(text_content.strip()) < 100:
-                raise ValueError("Extracted text is too short or empty")
-            
-            logger.info(f"Extracted {len(text_content)} characters from document {document_id}")
-            
-            # Step 2: Detect language if not specified or verify
-            detected_language = await self.doc_processor.detect_document_language(text_content[:1000])
-            if document.language == 'ar' and detected_language != 'ar':
-                logger.warning(f"Language mismatch for document {document_id}")
-            
-            # Step 3: Chunk the text
-            chunks_data = await self.doc_processor.chunk_text(
-                text_content,
-                document.language,
-                min_chunk_size=200,
-                max_chunk_size=500,
-                overlap=50
-            )
-            
-            logger.info(f"Created {len(chunks_data)} chunks for document {document_id}")
-            
-            # Step 4: Create chunk records
-            created_chunks = []
-            for chunk_data in chunks_data:
-                chunk = await self.repository.create_chunk(
-                    document_id=document_id,
-                    chunk_index=chunk_data['chunk_index'],
-                    content=chunk_data['content'],
-                    article_number=chunk_data.get('article_number'),
-                    section_title=chunk_data.get('section_title'),
-                    keywords=chunk_data.get('keywords', [])
-                )
-                created_chunks.append(chunk)
-            
-            # Step 5: Generate embeddings for all chunks
-            chunk_texts = [chunk.content for chunk in created_chunks]
-            embeddings = await self.embedding_service.generate_embeddings_batch(
-                chunk_texts,
-                batch_size=50
-            )
-            
-            logger.info(f"Generated {len(embeddings)} embeddings for document {document_id}")
-            
-            # Step 6: Update chunks with embeddings
-            for chunk, embedding in zip(created_chunks, embeddings):
-                await self.repository.update_chunk_embedding(chunk.id, embedding)
-            
-            # Step 7: Mark document as processed
-            await self.repository.update_document(
-                document_id,
-                is_processed=True,
-                processing_status="done"
-            )
-            
-            logger.info(f"Successfully processed document {document_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error processing document {document_id}: {str(e)}")
-            
-            # Mark as error
-            await self.repository.update_document(
-                document_id,
-                processing_status="error"
-            )
-            
-            return False
+        # ✅ Use CompleteLegalAIService (Phase 3 & 4)
+        return await self.ai_service.process_document(document_id)
 
     async def search_documents(
         self,
@@ -215,42 +145,41 @@ class LegalAssistantService:
         """
         Search legal documents using semantic search.
         
+        ✅ Phase 4: Now uses FAISS vector search for faster results
+        
         Args:
             query: Search query
             document_type: Filter by document type
             language: Filter by language
-            article_number: Filter by article number
+            article_number: Filter by article number (optional, for post-filtering)
             limit: Maximum number of results
             similarity_threshold: Minimum similarity score
             
         Returns:
             Tuple of (search results with metadata, query time in ms)
         """
-        results, query_time = await self.search_service.search(
+        # ✅ Use CompleteLegalAIService with FAISS search (Phase 4)
+        results, query_time = await self.ai_service.semantic_search(
             query=query,
+            top_k=limit,
             document_type=document_type,
             language=language,
-            article_number=article_number,
-            limit=limit,
             similarity_threshold=similarity_threshold
         )
         
-        # Enhance results with document metadata
-        enhanced_results = []
-        for result in results:
-            chunk = result['chunk']
-            
-            # Get document (should be preloaded)
-            document = await self.repository.get_document_by_id(chunk.document_id)
-            
-            enhanced_results.append({
-                'chunk': chunk,
-                'document': document,
-                'similarity_score': result['similarity_score'],
-                'highlights': result['highlights']
-            })
+        # Post-filter by article number if specified
+        if article_number and results:
+            results = [
+                r for r in results 
+                if r.get('chunk') and r['chunk'].article_number == article_number
+            ]
         
-        return enhanced_results, query_time
+        # Add highlights (empty for now, can be enhanced later)
+        for result in results:
+            if 'highlights' not in result:
+                result['highlights'] = []
+        
+        return results, query_time
 
     async def get_document(self, document_id: int) -> Optional[LegalDocument]:
         """
@@ -344,31 +273,16 @@ class LegalAssistantService:
         """
         Delete document and all its chunks.
         
+        ✅ Phase 4: Also removes vectors from FAISS index
+        
         Args:
             document_id: Document ID
             
         Returns:
             True if deleted, False if not found
         """
-        # Get document to delete file
-        document = await self.repository.get_document_by_id(document_id)
-        if not document:
-            return False
-        
-        # Delete from database (cascades to chunks)
-        success = await self.repository.delete_document(document_id)
-        
-        if success:
-            # Delete file from disk
-            try:
-                file_path = Path(document.file_path)
-                if file_path.exists():
-                    file_path.unlink()
-                    logger.info(f"Deleted file: {document.file_path}")
-            except Exception as e:
-                logger.warning(f"Failed to delete file {document.file_path}: {str(e)}")
-        
-        return success
+        # ✅ Use CompleteLegalAIService (removes from FAISS too)
+        return await self.ai_service.delete_document(document_id)
 
     async def get_chunk(self, chunk_id: int) -> Optional[Dict]:
         """
@@ -426,58 +340,30 @@ class LegalAssistantService:
         """
         Get statistics about the legal document system.
         
+        ✅ Phase 4: Now includes FAISS index statistics
+        
         Returns:
-            Dictionary with statistics
+            Dictionary with statistics including:
+            - Total documents/chunks
+            - Processing status counts
+            - FAISS index info (vectors, dimension, etc.)
+            - Embedding provider info
         """
-        return await self.repository.get_document_stats()
+        # ✅ Use CompleteLegalAIService (includes FAISS stats)
+        return await self.ai_service.get_statistics()
 
     async def get_processing_progress(self, document_id: int) -> Dict:
         """
         Get processing progress for a document.
         
+        ✅ Phase 3 & 4: Enhanced progress tracking
+        
         Args:
             document_id: Document ID
             
         Returns:
-            Progress information
+            Progress information with detailed status
         """
-        document = await self.repository.get_document_by_id(document_id)
-        if not document:
-            return {
-                'document_id': document_id,
-                'status': 'not_found',
-                'progress_percentage': 0.0,
-                'message': 'Document not found'
-            }
-        
-        # Count chunks
-        chunks = await self.repository.get_chunks_by_document(document_id, limit=10000)
-        chunks_with_embeddings = sum(1 for chunk in chunks if chunk.embedding and len(chunk.embedding) > 0)
-        
-        # Calculate progress
-        if document.processing_status == 'done':
-            progress = 100.0
-            message = "Processing complete"
-        elif document.processing_status == 'error':
-            progress = 0.0
-            message = "Processing failed"
-        elif document.processing_status == 'processing':
-            if len(chunks) > 0:
-                progress = (chunks_with_embeddings / len(chunks)) * 100
-                message = f"Processing chunks: {chunks_with_embeddings}/{len(chunks)}"
-            else:
-                progress = 50.0
-                message = "Extracting and chunking text..."
-        else:  # pending
-            progress = 0.0
-            message = "Waiting to process"
-        
-        return {
-            'document_id': document_id,
-            'status': document.processing_status,
-            'progress_percentage': progress,
-            'chunks_processed': chunks_with_embeddings,
-            'total_chunks': len(chunks),
-            'message': message
-        }
+        # ✅ Use CompleteLegalAIService
+        return await self.ai_service.get_processing_progress(document_id)
 
