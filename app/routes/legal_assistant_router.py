@@ -114,8 +114,17 @@ async def search_documents(
         
         search_results = []
         for r in results:
-            chunk_resp = DocumentChunkResponse.from_orm(r["chunk"])
-            chunk_resp.similarity_score = r["similarity_score"]
+            # Use proper validation instead of from_orm to trigger RTL processing
+            chunk_data = {
+                "id": r["chunk"].id,
+                "chunk_index": r["chunk"].chunk_index,
+                "content": r["chunk"].content,
+                "article_number": r["chunk"].article_number,
+                "section_title": r["chunk"].section_title,
+                "keywords": r["chunk"].keywords or [],
+                "similarity_score": r["similarity_score"]
+            }
+            chunk_resp = DocumentChunkResponse(**chunk_data)
             doc_resp = DocumentResponse.from_orm(r["document"])
             
             search_results.append(
@@ -334,7 +343,19 @@ async def get_document_chunks(
             page_size=page_size
         )
         
-        chunk_responses = [DocumentChunkResponse.from_orm(c) for c in chunks]
+        # Use proper validation instead of from_orm to trigger RTL processing
+        chunk_responses = []
+        for c in chunks:
+            chunk_data = {
+                "id": c.id,
+                "chunk_index": c.chunk_index,
+                "content": c.content,
+                "article_number": c.article_number,
+                "section_title": c.section_title,
+                "keywords": c.keywords or []
+            }
+            chunk_resp = DocumentChunkResponse(**chunk_data)
+            chunk_responses.append(chunk_resp)
         
         return ApiResponse(
             success=True,
@@ -376,8 +397,19 @@ async def get_chunk(
                 errors=[]
             )
         
+        # Use proper validation instead of from_orm to trigger RTL processing
+        chunk_data = {
+            "id": result["chunk"].id,
+            "chunk_index": result["chunk"].chunk_index,
+            "content": result["chunk"].content,
+            "article_number": result["chunk"].article_number,
+            "section_title": result["chunk"].section_title,
+            "keywords": result["chunk"].keywords or []
+        }
+        chunk_resp = DocumentChunkResponse(**chunk_data)
+        
         response = ChunkDetailResponse(
-            chunk=DocumentChunkResponse.from_orm(result["chunk"]),
+            chunk=chunk_resp,
             document=DocumentResponse.from_orm(result["document"]),
             previous_chunk_id=result["previous_chunk_id"],
             next_chunk_id=result["next_chunk_id"]
@@ -400,7 +432,129 @@ async def get_chunk(
         )
 
 
-@router.get("/documents/{document_id}/progress", response_model=ApiResponse)
+@router.post("/test-arabic-hardcoded", response_model=ApiResponse)
+async def test_arabic_hardcoded(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Test Arabic text processing with hardcoded Arabic text.
+    """
+    try:
+        from ..utils.arabic_text_processor import ArabicTextProcessor
+        
+        # Hardcoded Arabic text to avoid encoding issues
+        arabic_text = "مرحبا بالعالم"  # Hello World in Arabic
+        
+        # Test the processing pipeline
+        result = ArabicTextProcessor.format_arabic_chunk(arabic_text, "ar")
+        
+        # Test chunk response
+        chunk_data = {
+            "id": 1,
+            "chunk_index": 0,
+            "content": arabic_text,
+            "article_number": None,
+            "section_title": None,
+            "keywords": []
+        }
+        
+        chunk_response = DocumentChunkResponse(**chunk_data)
+        
+        return ApiResponse(
+            success=True,
+            message="Arabic text processing test completed",
+            data={
+                "original_text": arabic_text,
+                "processor_result": result,
+                "chunk_response": chunk_response.model_dump()
+            },
+            errors=[]
+        )
+        
+    except Exception as e:
+        logger.error(f"Arabic hardcoded test error: {e}")
+        return ApiResponse(
+            success=False,
+            message=str(e),
+            data=None,
+            errors=[]
+        )
+async def test_chunk_response(
+    text: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Test DocumentChunkResponse with Arabic text processing.
+    """
+    try:
+        # Create chunk data similar to what comes from database
+        chunk_data = {
+            "id": 1,
+            "chunk_index": 0,
+            "content": text,
+            "article_number": None,
+            "section_title": None,
+            "keywords": []
+        }
+        
+        # Create DocumentChunkResponse (this should trigger the validator)
+        chunk_response = DocumentChunkResponse(**chunk_data)
+        
+        return ApiResponse(
+            success=True,
+            message="DocumentChunkResponse test completed",
+            data={
+                "original_text": text,
+                "chunk_response": chunk_response.model_dump()
+            },
+            errors=[]
+        )
+        
+    except Exception as e:
+        logger.error(f"Chunk response test error: {e}")
+        return ApiResponse(
+            success=False,
+            message=str(e),
+            data=None,
+            errors=[]
+        )
+async def test_arabic_processing(
+    text: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Test endpoint for Arabic text processing.
+    """
+    try:
+        from ..utils.arabic_text_processor import ArabicTextProcessor
+        
+        # Test Arabic text processing
+        result = ArabicTextProcessor.format_arabic_chunk(text, "ar")
+        
+        return ApiResponse(
+            success=True,
+            message="Arabic text processing test completed",
+            data={
+                "original_text": text,
+                "is_arabic": result['is_rtl'],
+                "text_direction": result['language'],
+                "formatted_content": result['formatted_content'],
+                "normalized_content": result['content']
+            },
+            errors=[]
+        )
+        
+    except Exception as e:
+        logger.error(f"Arabic test error: {e}")
+        return ApiResponse(
+            success=False,
+            message=str(e),
+            data=None,
+            errors=[]
+        )
 async def get_processing_progress(
     document_id: int,
     db: AsyncSession = Depends(get_db),

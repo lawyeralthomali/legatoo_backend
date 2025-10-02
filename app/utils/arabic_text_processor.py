@@ -3,13 +3,16 @@ Arabic Text Processing Utilities
 
 This module provides utilities for handling Arabic text, including:
 - RTL (Right-to-Left) text direction handling
-- Arabic text normalization
+- Arabic text normalization and reshaping
 - Proper text formatting for display
+- Bidirectional text processing
 """
 
 import re
 from typing import Optional, List
 from unicodedata import normalize
+import arabic_reshaper
+from bidi.algorithm import get_display
 
 
 class ArabicTextProcessor:
@@ -72,6 +75,95 @@ class ArabicTextProcessor:
         return text.strip()
     
     @classmethod
+    def reshape_arabic_text(cls, text: str) -> str:
+        """
+        Reshape Arabic text to connect letters properly.
+        
+        This is crucial for Arabic text display as Arabic letters change shape
+        based on their position in the word (isolated, initial, medial, final).
+        
+        Args:
+            text: Arabic text to reshape
+            
+        Returns:
+            Properly reshaped Arabic text
+        """
+        if not text or not cls.is_arabic_text(text):
+            return text
+        
+        try:
+            # Configure arabic_reshaper for better results
+            config = arabic_reshaper.config_for_true_type_font('arial.ttf')
+            reshaper = arabic_reshaper.ArabicReshaper(config)
+            
+            # Reshape the text
+            reshaped = reshaper.reshape(text)
+            return reshaped
+        except Exception:
+            # Fallback to default configuration
+            try:
+                reshaped = arabic_reshaper.reshape(text)
+                return reshaped
+            except Exception:
+                # If reshaping fails, return original text
+                return text
+    
+    @classmethod
+    def process_bidirectional_text(cls, text: str) -> str:
+        """
+        Process text for proper bidirectional display.
+        
+        This ensures that Arabic text displays correctly in RTL context
+        while preserving the order of numbers and symbols.
+        
+        Args:
+            text: Text to process for bidirectional display
+            
+        Returns:
+            Text processed for proper bidirectional display
+        """
+        if not text:
+            return text
+        
+        try:
+            # Use python-bidi to process bidirectional text
+            processed = get_display(text)
+            return processed
+        except Exception:
+            # If bidi processing fails, return original text
+            return text
+    
+    @classmethod
+    def preprocess_arabic_text(cls, text: str) -> str:
+        """
+        Complete Arabic text preprocessing pipeline.
+        
+        This method applies all necessary transformations:
+        1. Normalize Unicode characters
+        2. Reshape Arabic letters for proper connection
+        3. Process bidirectional text for correct display
+        
+        Args:
+            text: Raw Arabic text
+            
+        Returns:
+            Fully processed Arabic text ready for display
+        """
+        if not text:
+            return text
+        
+        # Step 1: Normalize the text
+        normalized = cls.normalize_arabic_text(text)
+        
+        # Step 2: Reshape Arabic letters
+        reshaped = cls.reshape_arabic_text(normalized)
+        
+        # Step 3: Process bidirectional text
+        processed = cls.process_bidirectional_text(reshaped)
+        
+        return processed
+    
+    @classmethod
     def format_arabic_chunk(cls, content: str, language: str = "ar") -> dict:
         """
         Format Arabic chunk content with proper RTL handling.
@@ -94,19 +186,24 @@ class ArabicTextProcessor:
         # Check if content is Arabic
         is_arabic = cls.is_arabic_text(content)
         
-        # Normalize text
-        normalized_content = cls.normalize_arabic_text(content) if is_arabic else content
+        # Process text based on language
+        if is_arabic:
+            # Apply complete Arabic preprocessing pipeline
+            processed_content = cls.preprocess_arabic_text(content)
+        else:
+            # For non-Arabic text, just normalize
+            processed_content = cls.normalize_arabic_text(content) if content else content
         
         # Create formatted content with RTL indicators
         if is_arabic:
-            # Add RTL direction indicator
-            formatted_content = f'<div dir="rtl" lang="ar" style="text-align: right; direction: rtl;">{normalized_content}</div>'
+            # Add RTL direction indicator with processed Arabic text
+            formatted_content = f'<div dir="rtl" lang="ar" style="text-align: right; direction: rtl;">{processed_content}</div>'
         else:
             # Add LTR direction indicator
-            formatted_content = f'<div dir="ltr" lang="{language}" style="text-align: left; direction: ltr;">{normalized_content}</div>'
+            formatted_content = f'<div dir="ltr" lang="{language}" style="text-align: left; direction: ltr;">{processed_content}</div>'
         
         return {
-            "content": normalized_content,
+            "content": processed_content,
             "is_rtl": is_arabic,
             "language": language,
             "formatted_content": formatted_content,

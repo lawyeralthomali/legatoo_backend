@@ -6,7 +6,7 @@ ensuring consistent validation and serialization across the API.
 """
 
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import datetime
 from enum import Enum
 from ..utils.arabic_text_processor import ArabicTextProcessor
@@ -74,43 +74,72 @@ class DocumentChunkResponse(BaseModel):
     formatted_content: Optional[str] = Field(None, description="HTML formatted content with proper direction")
     normalized_content: Optional[str] = Field(None, description="Normalized text content")
     
-    @validator('content', pre=True)
-    def process_content(cls, v, values):
+    @field_validator('content', mode='before')
+    @classmethod
+    def process_content(cls, v):
         """Process content for RTL handling and normalization."""
-        if not v:
+        try:
+            if not v:
+                return v
+            
+            # Get language from document if available
+            language = "ar"  # Default to Arabic for legal documents
+            
+            # Process Arabic text
+            processed = ArabicTextProcessor.format_arabic_chunk(v, language)
+            
+            # Store processed data in a way that can be accessed by other validators
+            # In Pydantic v2, we need to use model_validator for cross-field validation
+            return processed['content']
+        except Exception as e:
+            # Log error and return original content
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in content validator: {e}")
             return v
-        
-        # Get language from document if available
-        language = "ar"  # Default to Arabic for legal documents
-        
-        # Process Arabic text
-        processed = ArabicTextProcessor.format_arabic_chunk(v, language)
-        
-        # Set RTL fields
-        values['is_rtl'] = processed['is_rtl']
-        values['text_direction'] = processed['language'] if processed['is_rtl'] else 'ltr'
-        values['formatted_content'] = processed['formatted_content']
-        values['normalized_content'] = processed['content']
-        
-        return processed['content']
     
-    @validator('keywords', pre=True)
-    def process_keywords(cls, v, values):
+    @field_validator('keywords', mode='before')
+    @classmethod
+    def process_keywords(cls, v):
         """Process keywords for Arabic text."""
         if not v:
             return v
         
-        # If content is Arabic, enhance keywords
-        if values.get('is_rtl', False):
-            content = values.get('content', '')
-            if content:
-                arabic_keywords = ArabicTextProcessor.extract_arabic_keywords(content)
-                # Merge with existing keywords, removing duplicates
-                existing_keywords = v if isinstance(v, list) else []
-                all_keywords = list(dict.fromkeys(existing_keywords + arabic_keywords))
-                return all_keywords[:15]  # Limit to 15 keywords
-        
+        # For now, just return the keywords as-is
+        # We'll handle Arabic keyword enhancement in a model_validator
         return v
+    
+    @model_validator(mode='after')
+    def process_rtl_fields(self):
+        """Process RTL fields after all field validation is complete."""
+        try:
+            if not self.content:
+                return self
+            
+            # Process Arabic text
+            processed = ArabicTextProcessor.format_arabic_chunk(self.content, "ar")
+            
+            # Set RTL fields
+            self.is_rtl = processed['is_rtl']
+            self.text_direction = processed['language'] if processed['is_rtl'] else 'ltr'
+            self.formatted_content = processed['formatted_content']
+            self.normalized_content = processed['content']
+            
+            # Enhance keywords if Arabic
+            if processed['is_rtl'] and self.content:
+                arabic_keywords = ArabicTextProcessor.extract_arabic_keywords(self.content)
+                # Merge with existing keywords, removing duplicates
+                existing_keywords = self.keywords or []
+                all_keywords = list(dict.fromkeys(existing_keywords + arabic_keywords))
+                self.keywords = all_keywords[:15]  # Limit to 15 keywords
+            
+            return self
+        except Exception as e:
+            # Log error and return self unchanged
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in RTL processing: {e}")
+            return self
 
     class Config:
         from_attributes = True

@@ -52,13 +52,17 @@ class LegalDocumentRepository:
         Returns:
             Created LegalDocument instance
         """
-        from ..models.legal_document2 import ProcessingStatusEnum
+        from ..models.legal_document2 import ProcessingStatusEnum, DocumentTypeEnum, LanguageEnum
+        
+        # Convert string values to enum values
+        doc_type_enum = DocumentTypeEnum(document_type) if document_type else DocumentTypeEnum.OTHER
+        lang_enum = LanguageEnum(language) if language else LanguageEnum.ARABIC
         
         document = LegalDocument(
             title=title,
             file_path=file_path,
-            document_type=document_type,
-            language=language,
+            document_type=doc_type_enum,
+            language=lang_enum,
             uploaded_by_id=uploaded_by_id,
             notes=notes,
             is_processed=False,
