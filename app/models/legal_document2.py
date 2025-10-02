@@ -44,16 +44,17 @@ class LegalDocument(Base):
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     title = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)
-    uploaded_by_id = Column(Integer, ForeignKey("profiles.id"), nullable=True)
-    document_type = Column(String(50), default="other", nullable=False)
-    language = Column(String(10), default="ar", nullable=False)
+    uploaded_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    document_type = Column(Enum(DocumentTypeEnum), default=DocumentTypeEnum.OTHER, nullable=False)
+    language = Column(Enum(LanguageEnum), default=LanguageEnum.ARABIC, nullable=False)
+    processing_status = Column(Enum(ProcessingStatusEnum), default=ProcessingStatusEnum.PENDING, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     is_processed = Column(Boolean, default=False, nullable=False)
-    processing_status = Column(String(20), default="pending", nullable=False)
+
     notes = Column(Text, nullable=True)
     
     # Relationships
-    uploaded_by = relationship("Profile", back_populates="uploaded_documents")
+    uploaded_by = relationship("User", back_populates="uploaded_documents")
     chunks = relationship("LegalDocumentChunk", back_populates="document", cascade="all, delete-orphan")
     
     @property
