@@ -22,6 +22,13 @@ import httpx
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
+# Optional tiktoken for accurate token counting
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+except ImportError:
+    TIKTOKEN_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -136,8 +143,8 @@ class EnhancedEmbeddingService:
             logger.warning("Empty text provided for embedding")
             return self._get_zero_embedding()
         
-        # Truncate text if too long
-        text = self._truncate_text(text, max_tokens=8000)
+        # Truncate text if too long (safe limit for OpenAI text-embedding-3-large)
+        text = self._truncate_text(text, max_tokens=7000)
         
         # Route to appropriate provider
         if self.provider == EmbeddingProvider.OPENAI:
@@ -237,7 +244,25 @@ class EnhancedEmbeddingService:
             )
             
             if response.status_code != 200:
-                raise RuntimeError(f"OpenAI API error: {response.status_code} - {response.text}")
+                response_text = response.text
+                
+                # Handle specific token limit errors
+                if response.status_code == 400 and "maximum context length" in response_text:
+                    # Token limit exceeded - truncate more aggressively and retry once
+                    logger.error(f"Token limit exceeded. Text length: {len(text)} chars, Error: {response_text}")
+                    
+                    # Try even more conservative truncation
+                    retry_text = self._truncate_text(text, 5000)  # Even smaller limit
+                    logger.warning(f"Retrying with more aggressive truncation: {len(retry_text)} chars")
+                    
+                    # Avoid infinite recursion by checking if text is already very small
+                    if len(retry_text) < 1000:  
+                        raise RuntimeError(f"Text too long even after aggressive truncation: {response_text}")
+                    
+                    # Retry one time with smaller truncation
+                    return await self._generate_openai_embedding(retry_text)
+                
+                raise RuntimeError(f"OpenAI API error: {response.status_code} - {response_text}")
             
             data = response.json()
             embedding = data["data"][0]["embedding"]
@@ -380,19 +405,58 @@ class EnhancedEmbeddingService:
         """
         return [0.0] * self.embedding_dimension
 
-    def _truncate_text(self, text: str, max_tokens: int = 8000) -> str:
+    def _truncate_text(self, text: str, max_tokens: int = 7000) -> str:
         """
-        Truncate text to maximum token count.
+        Truncate text to maximum token count with accurate counting.
+        
+        OpenAI text-embedding-3-large has 8192 token limit.
+        We use 7000 tokens as buffer to account for model overhead.
         
         Args:
             text: Text to truncate
-            max_tokens: Maximum number of tokens
+            max_tokens: Maximum number of tokens (default: 7000 for safety)
             
         Returns:
             Truncated text
         """
-        # Rough approximation: 1 token ≈ 4 characters for English, ≈ 2 for Arabic
-        max_chars = max_tokens * 3
+        # Use accurate token counting if tiktoken is available
+        if TIKTOKEN_AVAILABLE and self.provider == EmbeddingProvider.OPENAI:
+            try:
+                return self._truncate_with_tiktoken(text, max_tokens)
+            except Exception as e:
+                logger.warning(f"Tiktoken truncation failed: {e}. Using fallback method.")
+        
+        # Fallback to character-based estimation
+        return self._truncate_with_chars(text, max_tokens)
+    
+    def _truncate_with_tiktoken(self, text: str, max_tokens: int) -> str:
+        """Truncate using accurate tiktoken tokenizer."""
+        encoding = tiktoken.encoding_for_model("text-embedding-3-large")
+        
+        # Get tokens and truncate if needed
+        tokens = encoding.encode(text)
+        
+        if len(tokens) <= max_tokens:
+            return text
+        
+        # Truncate tokens
+        truncated_tokens = tokens[:max_tokens]
+        
+        # Convert back to text
+        truncated_text = encoding.decode(truncated_tokens)
+        
+        logger.info(f"Tiktoken truncation: {len(tokens)} -> {len(truncated_tokens)} tokens")
+        return truncated_text
+    
+    def _truncate_with_chars(self, text: str, max_tokens: int) -> str:
+        """Fallback character-based truncation."""
+        # Conservative token estimation:
+        # Arabic text: ~2-3 chars per token
+        # English text: ~4 chars per token  
+        # Mixed content: ~3 chars per token (conservative estimate)
+        
+        # Use conservative multiplier of 2.5 chars per token for safety
+        max_chars = int(max_tokens * 2.5)
         
         if len(text) <= max_chars:
             return text
@@ -401,10 +465,15 @@ class EnhancedEmbeddingService:
         truncated = text[:max_chars]
         last_space = truncated.rfind(' ')
         
-        if last_space > 0:
+        if last_space > 0 and last_space > max_chars * 0.8:  # If space is close enough
             truncated = truncated[:last_space]
+        else:
+            # Fallback: truncate at sentence boundary
+            last_period = truncated.rfind('.')
+            if last_period > 0 and last_period > max_chars * 0.7:
+                truncated = truncated[:last_period + 1]
         
-        logger.info(f"Truncated text from {len(text)} to {len(truncated)} characters")
+        logger.info(f"Char-based truncation: {len(text)} -> {len(truncated)} chars (est. tokens: {len(truncated) / 2.5:.0f})")
         return truncated
 
     def calculate_similarity(

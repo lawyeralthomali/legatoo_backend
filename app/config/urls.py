@@ -21,22 +21,31 @@ class URLConfig:
         # Environment-based configuration
         self.environment = os.getenv("ENVIRONMENT", "development")
         
-        # Base URLs
-        self.frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-        self.backend_url = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+        # Determine if we're in production mode
+        is_production = (self.environment == "production" or 
+                       os.getenv("FRONTEND_URL", "").startswith("https://") or
+                       os.getenv("BACKEND_URL", "").startswith("https://"))
+        
+        # Set default URLs based on environment
+        if is_production:
+            self.frontend_url = os.getenv("FRONTEND_URL", "https://legatoo.westlinktowing.com")
+            self.backend_url = os.getenv("BACKEND_URL", "https://api.westlinktowing.com")
+        else:
+            self.frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+            self.backend_url = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+        
         self.api_base_url = f"{self.backend_url}/api/v1"
         
         # For email verification and password reset, use backend URL since HTML files are served from backend
         self.email_base_url = self.backend_url
         
-        # Production URLs (override for production)
-        if self.environment == "production":
-            self.frontend_url = os.getenv("FRONTEND_URL", "https://legatoo.westlinktowing.com")
-            self.backend_url = os.getenv("BACKEND_URL", "https://api.westlinktowing.com")
-            self.api_base_url = f"{self.backend_url}/api/v1"
-            
-            # For email verification and password reset, use backend URL since HTML files are served from backend
-            self.email_base_url = self.backend_url
+        # Log configuration for debugging (only in development or when explicitly requested)
+        if os.getenv("DEBUG_URL_CONFIG", "").lower() == "true":
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"URL Config initialized - Environment: {self.environment}, "
+                       f"Frontend: {self.frontend_url}, Backend: {self.backend_url}, "
+                       f"Email Base: {self.email_base_url}")
     
     @property
     def auth_urls(self) -> Dict[str, str]:

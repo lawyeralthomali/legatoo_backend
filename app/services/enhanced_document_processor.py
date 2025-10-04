@@ -21,11 +21,15 @@ import asyncio
 # Document processing libraries
 import PyPDF2
 import pdfplumber
+import fitz  # PyMuPDF
+import pytesseract
+from pdf2image import convert_from_path
 from docx import Document as DocxDocument
 from PIL import Image
-import pytesseract
 
 # Arabic text processing
+import arabic_reshaper
+from bidi.algorithm import get_display
 from ..utils.arabic_text_processor import ArabicTextProcessor
 
 logger = logging.getLogger(__name__)
@@ -62,6 +66,32 @@ class EnhancedDocumentProcessor:
         except:
             logger.warning("Tesseract not configured. OCR will not work.")
 
+    # ==================== ARABIC TEXT PROCESSING ====================
+
+    def needs_fixing(self, text: str) -> bool:
+        """
+        Determine if Arabic text needs fixing (reshape + bidi).
+        
+        Simple rule: if the text has disconnected Arabic characters 
+        (spaces between each character) or clear reversed direction → needs fixing.
+        """
+        if not text.strip():
+            return False
+
+        # Simple heuristic: if average word length is very short → likely broken
+        words = text.split()
+        avg_word_len = sum(len(w) for w in words) / max(len(words), 1)
+        return avg_word_len <= 2  # If words are very short (≤2 chars) → likely broken
+
+    def fix_arabic_text(self, text: str) -> str:
+        """Apply reshape + bidi to Arabic text."""
+        try:
+            reshaped = arabic_reshaper.reshape(text)
+            return get_display(reshaped)
+        except Exception as e:
+            logger.warning(f"Arabic text fixing failed: {e}")
+            return text
+
     # ==================== PHASE 3: FILE CONVERSION ====================
 
     async def extract_text_from_file(
@@ -91,7 +121,9 @@ class EnhancedDocumentProcessor:
             
             # Extract text based on file type
             if file_ext in self.PDF_EXTENSIONS:
-                extracted_text = await self._extract_from_pdf(file_path)
+                return await self._extract_from_pdf(file_path, language)
+            
+            # Word documents
             elif file_ext in self.WORD_EXTENSIONS:
                 extracted_text = await self._extract_from_docx(file_path)
             elif file_ext in self.IMAGE_EXTENSIONS:
@@ -112,21 +144,128 @@ class EnhancedDocumentProcessor:
             logger.error(f"Error extracting text from {file_path}: {str(e)}")
             raise
 
-    async def _extract_from_pdf(self, file_path: str) -> str:
+    async def _extract_from_pdf(self, file_path: str, language: str = 'ar') -> str:
         """
-        Extract text from PDF using pdfplumber (better than PyPDF2).
+        Enhanced PDF extraction optimized for Arabic text.
         
-        Falls back to PyPDF2 if pdfplumber fails.
+        Uses your approach from extract_arabic_pdf.py:
+        1. Direct extraction with PyMuPDF (fitz)
+        2. Falls back to OCR if direct extraction fails or produces poor results
         """
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._extract_pdf_sync, file_path)
+        return await loop.run_in_executor(None, self._extract_pdf_sync, file_path, language)
 
-    def _extract_pdf_sync(self, file_path: str) -> str:
-        """Synchronous PDF extraction with pdfplumber."""
+    def _extract_pdf_sync(self, file_path: str, language: str = 'ar') -> str:
+        """
+        Synchronous PDF extraction optimized for Arabic.
+        
+        Enhanced extraction strategy:
+        1. Direct extraction using PyMuPDF (fitz) for better Arabic support
+        2. Optional OCR fallback for scanned documents
+        3. Arabic text fixing when needed
+        """
+        logger.info("Starting PDF extraction with enhanced Arabic support...")
+        
+        # Try direct extraction first
+        direct_text = self._extract_text_direct(file_path)
+        
+        # If direct extraction produced good results, use it
+        if direct_text and len(direct_text.strip()) > 100:
+            logger.info(f"[Direct] Extracted {len(direct_text)} characters successfully")
+            return direct_text
+        
+        # Fallback to OCR if direct extraction failed or produced poor results
+        logger.info("Direct extraction insufficient, trying OCR...")
+        ocr_text = self._extract_text_ocr(file_path, language)
+        
+        if ocr_text and len(ocr_text.strip()) > 50:
+            logger.info(f"[OCR] Extracted {len(ocr_text)} characters")
+            return ocr_text
+        
+        # If both fail, try traditional methods as last resort
+        logger.warning("Both direct and OCR extraction failed, trying fallback methods...")
+        return self._extract_pdf_fallback(file_path)
+
+    def _extract_text_direct(self, pdf_path: str) -> str:
+        """
+        Direct text extraction using PyMuPDF (fitz) - optimized for Arabic.
+        
+        From your extract_arabic_pdf.py implementation.
+        """
+        try:
+            doc = fitz.open(pdf_path)
+            text = ""
+            
+            for page in doc:
+                # Use "blocks" extraction for better Arabic results
+                page_text = page.get_text("blocks")
+                if page_text:
+                    blocks_text = "\n".join([block[4] for block in page_text if block[4].strip()])
+                    if blocks_text.strip():
+                        text += blocks_text + "\n"
+            
+            doc.close()
+            
+            # If text needs fixing (disconnected Arabic chars), fix it
+            if self.needs_fixing(text):
+                text = self.fix_arabic_text(text)
+            
+            return text
+            
+        except Exception as e:
+            logger.error(f"Direct extraction failed: {e}")
+            return ""
+
+    def _extract_text_ocr(self, pdf_path: str, language: str = 'ar') -> str:
+        """
+        OCR-based extraction using pdf2image + Tesseract - for scanned PDFs.
+        
+        From your extract_arabic_pdf.py implementation.
+        """
+        try:
+            # Map language codes for OCR
+            lang_map = {
+                'ar': 'ara',
+                'en': 'eng',
+                'fr': 'fra'
+            }
+            tesseract_lang = lang_map.get(language, 'ara')
+            
+            # Convert PDF to images
+            pages = convert_from_path(pdf_path, dpi=300)
+            text = ""
+            
+            for i, page in enumerate(pages):
+                logger.info(f"OCR processing page {i+1}/{len(pages)}...")
+                
+                page_text = pytesseract.image_to_string(
+                    page, 
+                    lang=tesseract_lang, 
+                    config="--oem 3 --psm 6"  # Optimized for Arabic documents
+                )
+                
+                # Fix Arabic text if needed
+                if page_text and self.needs_fixing(page_text):
+                    page_text = self.fix_arabic_text(page_text)
+                
+                text += page_text + "\n"
+            
+            return text
+            
+        except Exception as e:
+            logger.error(f"OCR extraction failed: {e}")
+            return ""
+
+    def _extract_pdf_fallback(self, file_path: str) -> str:
+        """
+        Fallback PDF extraction using pdfplumber and PyPDF2.
+        
+        Traditional extraction methods as last resort.
+        """
         text_content = []
         
         try:
-            # Try pdfplumber first (better quality)
+            # Try pdfplumber first
             with pdfplumber.open(file_path) as pdf:
                 for page_num, page in enumerate(pdf.pages):
                     try:
@@ -136,8 +275,9 @@ class EnhancedDocumentProcessor:
                     except Exception as e:
                         logger.warning(f"pdfplumber failed on page {page_num}: {str(e)}")
                         continue
+                        
         except Exception as e:
-            logger.warning(f"pdfplumber failed, falling back to PyPDF2: {str(e)}")
+            logger.warning(f"pdfplumber failed, trying PyPDF2: {str(e)}")
             
             # Fallback to PyPDF2
             try:
@@ -151,9 +291,10 @@ class EnhancedDocumentProcessor:
                         except Exception as e:
                             logger.warning(f"PyPDF2 failed on page {page_num}: {str(e)}")
                             continue
+                            
             except Exception as e2:
-                logger.error(f"Both PDF extractors failed: {str(e2)}")
-                raise
+                logger.error(f"All PDF extraction methods failed: {str(e2)}")
+                raise ValueError(f"Could not extract text from {file_path}")
         
         return '\n\n'.join(text_content)
 

@@ -151,8 +151,8 @@ class LegalDocumentRepository:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar_one()
         
-        # Get documents with pagination
-        query = query.order_by(desc(LegalDocument.created_at)).offset(skip).limit(limit)
+        # Get documents with pagination and chunks
+        query = query.options(selectinload(LegalDocument.chunks)).order_by(desc(LegalDocument.created_at)).offset(skip).limit(limit)
         result = await self.db.execute(query)
         documents = result.scalars().all()
         
