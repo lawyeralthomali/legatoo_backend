@@ -1,11 +1,14 @@
-"""Legal Assistant API Router - Endpoints for legal document processing and search."""
+"""Legal Assistant API Router - Admin Endpoints for legal document processing and management."""
 
 import os
 import shutil
 import logging
-from typing import Optional
+import uuid
+import asyncio
+from typing import Optional, List
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, Form, Depends, Query
+from fastapi import APIRouter, UploadFile, File, Form, Depends, Query, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
@@ -19,160 +22,47 @@ from ..schemas.legal_assistant import (
 from ..schemas.response import ApiResponse
 from ..utils.auth import get_current_user
 from ..models.user import User
+from ..schemas.response import ErrorDetail
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/legal-assistant", tags=["Legal Assistant"])
 
 
-@router.post("/documents/upload", response_model=ApiResponse)
-async def upload_document(
-    file: UploadFile = File(...),
-    title: str = Form(...),
-    document_type: str = Form(default="other"),
-    language: str = Form(default="ar"),
-    notes: Optional[str] = Form(default=None),
-    process_immediately: bool = Form(default=True),
+# ==================== ADMIN ENDPOINTS ====================
+
+@router.get("/documents", response_model=ApiResponse, tags=["Admin"])
+async def admin_list_documents(
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Number of documents per page"),
+    document_type: Optional[str] = Query(default=None, description="Filter by document type"),
+    processing_status: Optional[str] = Query(default=None, description="Filter by processing status"),
+    uploaded_by: Optional[int] = Query(default=None, description="Filter by uploader user ID"),
+    language: Optional[str] = Query(default=None, description="Filter by document language"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Upload a legal document for processing.
+    Admin endpoint to list legal documents with pagination and filtering.
     
-    ✅ Phase 3 & 4: Now supports PDF, DOCX, Images (OCR), TXT
+    Returns paginated list of documents with metadata for admin management.
+    Supports filtering by document type, processing status, uploader, and language.
+    
+    Args:
+        page: Page number (starts from 1)
+        page_size: Number of documents per page (1-100)
+        document_type: Filter by document type (employment_contract, labor_law, etc.)
+        processing_status: Filter by status (pending, processing, done, error)
+        uploaded_by: Filter by uploader user ID
+        language: Filter by document language (ar, en, fr)
+        
+    Returns:
+        ApiResponse containing paginated document list with metadata
     """
     try:
-        # ✅ UPDATED: Support more formats including images for OCR
-        allowed_ext = {'.pdf', '.docx', '.doc', '.txt', '.jpg', '.jpeg', '.png'}
-        file_ext = Path(file.filename).suffix.lower()
-        
-        if file_ext not in allowed_ext:
-            return ApiResponse(
-                success=False,
-                message=f"Unsupported format. Allowed: {', '.join(allowed_ext)}",
-                data=None,
-                errors=[{"field": "file", "message": "Invalid file format"}]
-            )
-        
-        # Save file
-        import uuid
-        upload_dir = Path("uploads/legal_documents")
-        upload_dir.mkdir(parents=True, exist_ok=True)
-        file_path = upload_dir / f"{uuid.uuid4()}{file_ext}"
-        
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # Create document
         service = LegalAssistantService(db)
-        doc = await service.upload_document(
-            file_path=str(file_path),
-            original_filename=file.filename,
-            title=title,
-            document_type=document_type,
-            language=language,
-            uploaded_by_id=current_user.sub,
-            notes=notes,
-            process_immediately=process_immediately
-        )
         
-        doc_response = DocumentResponse.from_orm(doc)
-        return ApiResponse(
-            success=True,
-            message="Document uploaded successfully",
-            data=doc_response.model_dump(),
-            errors=[]
-        )
-        
-    except Exception as e:
-        logger.error(f"Upload error: {e}")
-        return ApiResponse(
-            success=False,
-            message=str(e),
-            data=None,
-            errors=[{"field": None, "message": str(e)}]
-        )
-
-
-@router.post("/documents/search", response_model=ApiResponse)
-async def search_documents(
-    request: SearchRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Perform semantic search on legal documents."""
-    try:
-        service = LegalAssistantService(db)
-        results, query_time = await service.search_documents(
-            query=request.query,
-            document_type=request.document_type,
-            language=request.language,
-            article_number=request.article_number,
-            limit=request.limit,
-            similarity_threshold=request.similarity_threshold
-        )
-        
-        search_results = []
-        for r in results:
-            # Use proper validation instead of from_orm to trigger RTL processing
-            chunk_data = {
-                "id": r["chunk"].id,
-                "chunk_index": r["chunk"].chunk_index,
-                "content": r["chunk"].content,
-                "article_number": r["chunk"].article_number,
-                "section_title": r["chunk"].section_title,
-                "keywords": r["chunk"].keywords or [],
-                "similarity_score": r["similarity_score"]
-            }
-            chunk_resp = DocumentChunkResponse(**chunk_data)
-            doc_resp = DocumentResponse.from_orm(r["document"])
-            
-            search_results.append(
-                SearchResult(
-                    chunk=chunk_resp,
-                    document=doc_resp,
-                    similarity_score=r["similarity_score"],
-                    highlights=r["highlights"]
-                )
-            )
-        
-        response = SearchResponse(
-            results=search_results,
-            total_found=len(search_results),
-            query_time_ms=query_time,
-            query=request.query
-        )
-        
-        return ApiResponse(
-            success=True,
-            message=f"Found {len(search_results)} results",
-            data=response.model_dump(),
-            errors=[]
-        )
-        
-    except Exception as e:
-        logger.error(f"Search error: {e}")
-        return ApiResponse(
-            success=False,
-            message=str(e),
-            data=None,
-            errors=[]
-        )
-
-
-@router.get("/documents", response_model=ApiResponse)
-async def get_documents(
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
-    document_type: Optional[str] = None,
-    language: Optional[str] = None,
-    processing_status: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get list of documents with pagination and filtering."""
-    try:
-        service = LegalAssistantService(db)
+        # Fetch documents with filters
         docs, total = await service.get_documents(
             page=page,
             page_size=page_size,
@@ -181,40 +71,79 @@ async def get_documents(
             processing_status=processing_status
         )
         
-        doc_responses = [DocumentResponse.from_orm(d) for d in docs]
-        response = DocumentListResponse(
-            documents=doc_responses,
-            total=total,
-            page=page,
-            page_size=page_size
-        )
+        # Convert to response format
+        document_list = []
+        for doc in docs:
+            doc_data = DocumentResponse.from_orm(doc)
+            # Add admin-specific fields
+            admin_doc = {
+                "id": doc_data.id,
+                "title": doc_data.title,
+                "document_type": doc_data.document_type,
+                "language": doc_data.language,
+                "uploaded_by_id": doc_data.uploaded_by_id,
+                "created_at": doc_data.created_at,
+                "processing_status": doc_data.processing_status,
+                "is_processed": doc_data.is_processed,
+                "notes": doc_data.notes,
+                "file_path": doc_data.file_path,
+                "chunks_count": len(doc.chunks) if doc.chunks else 0
+            }
+            document_list.append(admin_doc)
         
         return ApiResponse(
             success=True,
             message=f"Retrieved {len(docs)} documents",
-            data=response.model_dump(),
+            data={
+                "documents": document_list,
+                "pagination": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total,
+                    "total_pages": (total + page_size - 1) // page_size
+                },
+                "filters": {
+                    "document_type": document_type,
+                    "processing_status": processing_status,
+                    "uploaded_by": uploaded_by,
+                    "language": language
+                }
+            },
             errors=[]
         )
         
     except Exception as e:
-        logger.error(f"Get documents error: {e}")
+        logger.error(f"Admin list documents error: {e}")
         return ApiResponse(
             success=False,
-            message=str(e),
+            message=f"Failed to retrieve documents: {str(e)}",
             data=None,
-            errors=[]
+            errors=[{"field": None, "message": str(e)}]
         )
 
 
-@router.get("/documents/{document_id}", response_model=ApiResponse)
-async def get_document(
+@router.get("/documents/{document_id}", response_model=ApiResponse, tags=["Admin"])
+async def admin_get_document_details(
     document_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get detailed information about a specific document."""
+    """
+    Admin endpoint to get detailed document information including all chunks.
+    
+    Returns comprehensive document metadata, processing status, and all associated chunks
+    for administrative purposes.
+    
+    Args:
+        document_id: Unique identifier of the document
+        
+    Returns:
+        ApiResponse containing document details and chunks list
+    """
     try:
         service = LegalAssistantService(db)
+        
+        # Get document details
         doc = await service.get_document(document_id)
         
         if not doc:
@@ -222,430 +151,536 @@ async def get_document(
                 success=False,
                 message="Document not found",
                 data=None,
-                errors=[{"field": "document_id", "message": "Not found"}]
+                errors=[{"field": "document_id", "message": "Document not found"}]
             )
         
-        response_data = DocumentResponse.from_orm(doc)
-        response_data.chunks_count = len(doc.chunks) if doc.chunks else 0
+        # Convert document to response format
+        doc_response = DocumentResponse.from_orm(doc)
+        
+        # Get all chunks for this document
+        chunks = await service.get_document_chunks(
+            document_id=document_id,
+            page=1,
+            page_size=1000  # Get all chunks for admin view
+        )
+        
+        # Convert chunks to response format
+        chunk_list = []
+        for chunk in chunks:
+            chunk_data = {
+                "id": chunk.id,
+                "chunk_index": chunk.chunk_index,
+                "content": chunk.content,
+                "article_number": chunk.article_number,
+                "section_title": chunk.section_title,
+                "keywords": chunk.keywords or [],
+                "page_number": getattr(chunk, 'page_number', None),
+                "source_reference": getattr(chunk, 'source_reference', None),
+                "has_embedding": bool(chunk.embedding),
+                "created_at": chunk.created_at.isoformat() if chunk.created_at else None
+            }
+            chunk_list.append(chunk_data)
+        
+        # Comprehensive document details
+        document_details = {
+            "document": doc_response.model_dump(),
+            "chunks": chunk_list,
+            "statistics": {
+                "total_chunks": len(chunks),
+                "chunks_with_embeddings": sum(1 for c in chunks if c.embedding),
+                "chunks_with_article_numbers": sum(1 for c in chunks if c.article_number),
+                "chunks_with_section_titles": sum(1 for c in chunks if c.section_title),
+                "keywords_extracted": sum(len(c.keywords or []) for c in chunks)
+            }
+        }
         
         return ApiResponse(
             success=True,
-            message="Document retrieved",
-            data=response_data.model_dump(),
+            message="Document details retrieved successfully",
+            data=document_details,
             errors=[]
         )
         
     except Exception as e:
-        logger.error(f"Get document error: {e}")
+        logger.error(f"Admin get document details error: {e}")
         return ApiResponse(
             success=False,
-            message=str(e),
+            message=f"Failed to retrieve document details: {str(e)}",
             data=None,
-            errors=[]
+            errors=[{"field": "document_id", "message": str(e)}]
         )
 
 
-@router.put("/documents/{document_id}", response_model=ApiResponse)
-async def update_document(
+@router.get("/documents/{document_id}/download", tags=["Admin"])
+async def admin_download_document(
     document_id: int,
-    update_request: DocumentUpdateRequest,
-    reprocess: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update document metadata."""
+    """
+    Admin endpoint to download the original uploaded document file.
+    
+    Serves the original document file from the filesystem for admin download.
+    Handles file not found errors and supports PDF, DOCX, and other document formats.
+    
+    Args:
+        document_id: Unique identifier of the document to download
+        
+    Returns:
+        FastAPI Response object with file download or error message
+    """
     try:
         service = LegalAssistantService(db)
-        doc = await service.update_document(
-            document_id=document_id,
-            title=update_request.title,
-            document_type=update_request.document_type,
-            language=update_request.language,
-            notes=update_request.notes,
-            reprocess=reprocess
+        
+        # Get document details
+        doc = await service.get_document(document_id)
+        
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        file_path = Path(doc.file_path)
+        
+        if not file_path.exists():
+            logger.error(f"Document file not found: {file_path}")
+            raise HTTPException(status_code=404, detail="Document file not found on disk")
+        
+        # Determine content type based on file extension
+        file_ext = file_path.suffix.lower()
+        content_type_map = {
+            '.pdf': 'application/pdf',
+            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            '.doc': 'application/msword',
+            '.txt': 'text/plain'
+        }
+        content_type = content_type_map.get(file_ext, 'application/octet-stream')
+        
+        # Generate filename
+        filename = doc.title.replace(' ', '_') + file_ext
+        
+        return FileResponse(
+            path=str(file_path),
+            media_type=content_type,
+            filename=filename,
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
         )
+        
+    except Exception as e:
+        logger.error(f"Admin download document error: {e}")
+        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+
+
+@router.post("/documents/{document_id}/reprocess", response_model=ApiResponse, tags=["Admin"])
+async def admin_reprocess_document(
+    document_id: int,
+    force_reprocess: bool = Query(default=False, description="Force reprocessing even if already processed"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Admin endpoint to trigger document reprocessing pipeline.
+    
+    Starts asynchronous reprocessing of a document, regenerating chunks and embeddings.
+    Useful for admin maintenance, model updates, or fixing processing errors.
+    
+    Args:
+        document_id: Unique identifier of the document to reprocess
+        force_reprocess: If True, reprocess even if document was already processed
+        
+    Returns:
+        ApiResponse with processing status and document information
+    """
+    try:
+        service = LegalAssistantService(db)
+        
+        # Get document to verify it exists
+        doc = await service.get_document(document_id)
         
         if not doc:
             return ApiResponse(
                 success=False,
                 message="Document not found",
                 data=None,
+                errors=[{"field": "document_id", "message": "Document not found"}]
+            )
+        
+        # Check if already processed and not forcing
+        if doc.processing_status == "done" and not force_reprocess:
+            return ApiResponse(
+                success=True,
+                message="Document already processed successfully. Use force_reprocess=true to override.",
+                data={
+                    "document_id": document_id,
+                    "status": "already_processed",
+                    "processing_status": doc.processing_status,
+                    "is_processed": doc.is_processed
+                },
                 errors=[]
             )
         
+        # Start asynchronous reprocessing
+        asyncio.create_task(service.process_document(document_id))
+        
+        logger.info(f"Admin initiated reprocessing for document {document_id}")
+        
         return ApiResponse(
             success=True,
-            message="Document updated",
-            data=DocumentResponse.from_orm(doc).model_dump(),
+            message="Document reprocessing started successfully",
+            data={
+                "document_id": document_id,
+                "status": "processing_started",
+                "title": doc.title,
+                "force_reprocess": force_reprocess,
+                "timestamp": doc.created_at.isoformat() if doc.created_at else None
+            },
             errors=[]
         )
         
     except Exception as e:
-        logger.error(f"Update error: {e}")
+        logger.error(f"Admin reprocess document error: {e}")
         return ApiResponse(
             success=False,
-            message=str(e),
+            message=f"Failed to start reprocessing: {str(e)}",
             data=None,
-            errors=[]
+            errors=[{"field": "document_id", "message": str(e)}]
         )
 
 
-@router.delete("/documents/{document_id}", response_model=ApiResponse)
-async def delete_document(
+@router.delete("/documents/{document_id}", response_model=ApiResponse, tags=["Admin"])
+async def admin_delete_document(
     document_id: int,
+    delete_file: bool = Query(default=True, description="Delete file from filesystem"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete a document and all its chunks."""
+    """
+    Admin endpoint to permanently delete a document and all associated data.
+    
+    Removes the document, all its chunks, embeddings, and optionally the file from disk.
+    This action is irreversible and should be used with caution.
+    
+    Args:
+        document_id: Unique identifier of the document to delete
+        delete_file: If True, also delete the physical file from filesystem
+        
+    Returns:
+        ApiResponse with deletion confirmation and details
+    """
     try:
         service = LegalAssistantService(db)
+        
+        # Get document details before deletion
+        doc = await service.get_document(document_id)
+        
+        if not doc:
+            return ApiResponse(
+                success=False,
+                message="Document not found",
+                data=None,
+                errors=[{"field": "document_id", "message": "Document not found"}]
+            )
+        
+        # Extract file path before deletion
+        file_path = Path(doc.file_path) if doc else None
+        chunks_count = len(doc.chunks) if doc and doc.chunks else 0
+        
+        # Delete from database
         success = await service.delete_document(document_id)
         
         if not success:
             return ApiResponse(
                 success=False,
-                message="Document not found",
+                message="Failed to delete document from database",
                 data=None,
-                errors=[]
+                errors=[{"field": "document_id", "message": "Database deletion failed"}]
             )
+        
+        # Delete file if requested and it exists
+        file_deleted = False
+        if delete_file and file_path and file_path.exists():
+            try:
+                file_path.unlink()
+                file_deleted = True
+                logger.info(f"Deleted file: {file_path}")
+            except Exception as file_error:
+                logger.error(f"Failed to delete file {file_path}: {file_error}")
+        
+        logger.info(f"Admin deleted document {document_id} with {chunks_count} chunks")
         
         return ApiResponse(
             success=True,
-            message="Document deleted",
-            data={"document_id": document_id, "deleted": True},
+            message="Document deleted successfully",
+            data={
+                "document_id": document_id,
+                "deleted": True,
+                "document_title": doc.title,
+                "chunks_deleted": chunks_count,
+                "file_deleted": file_deleted,
+                "file_path": str(file_path) if file_path else None,
+                "timestamp": doc.created_at.isoformat() if doc.created_at else None
+            },
             errors=[]
         )
         
     except Exception as e:
-        logger.error(f"Delete error: {e}")
+        logger.error(f"Admin delete document error: {e}")
         return ApiResponse(
             success=False,
-            message=str(e),
+            message=f"Failed to delete document: {str(e)}",
             data=None,
-            errors=[]
+            errors=[{"field": "document_id", "message": str(e)}]
         )
 
 
-@router.get("/documents/{document_id}/chunks", response_model=ApiResponse)
-async def get_document_chunks(
+@router.get("/documents/{document_id}/chunks", response_model=ApiResponse, tags=["Admin"])
+async def admin_get_document_chunks(
     document_id: int,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=50, ge=1, le=200),
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=50, ge=1, le=200, description="Number of chunks per page"),
+    include_embeddings: bool = Query(default=False, description="Include embedding data"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get chunks for a specific document."""
+    """
+    Admin endpoint to get detailed chunks information for a specific document.
+    
+    Returns paginated list of document chunks with detailed metadata for admin analysis.
+    Can optionally include embedding vectors for debugging purposes.
+    
+    Args:
+        document_id: Unique identifier of the document
+        page: Page number (starts from 1)
+        page_size: Number of chunks per page (1-200)
+        include_embeddings: If True, include embedding vectors in response
+        
+    Returns:
+        ApiResponse containing paginated chunks with metadata
+    """
     try:
         service = LegalAssistantService(db)
+        
+        # Verify document exists
+        doc = await service.get_document(document_id)
+        
+        if not doc:
+            return ApiResponse(
+                success=False,
+                message="Document not found",
+                data=None,
+                errors=[{"field": "document_id", "message": "Document not found"}]
+            )
+        
+        # Get chunks with pagination
         chunks = await service.get_document_chunks(
             document_id=document_id,
             page=page,
             page_size=page_size
         )
         
-        # Use proper validation instead of from_orm to trigger RTL processing
-        chunk_responses = []
-        for c in chunks:
+        # Convert chunks to detailed response format
+        chunk_list = []
+        for chunk in chunks:
             chunk_data = {
-                "id": c.id,
-                "chunk_index": c.chunk_index,
-                "content": c.content,
-                "article_number": c.article_number,
-                "section_title": c.section_title,
-                "keywords": c.keywords or []
+                "id": chunk.id,
+                "chunk_index": chunk.chunk_index,
+                "content": chunk.content,
+                "content_length": len(chunk.content),
+                "article_number": chunk.article_number,
+                "section_title": chunk.section_title,
+                "keywords": chunk.keywords or [],
+                "keywords_count": len(chunk.keywords or []),
+                "page_number": getattr(chunk, 'page_number', None),
+                "source_reference": getattr(chunk, 'source_reference', None),
+                "has_embedding": bool(chunk.embedding),
+                "embedding_dimension": len(chunk.embedding) if chunk.embedding else 0,
+                "created_at": chunk.created_at.isoformat() if chunk.created_at else None
             }
-            chunk_resp = DocumentChunkResponse(**chunk_data)
-            chunk_responses.append(chunk_resp)
+
+            if include_embeddings and chunk.embedding:
+                chunk_data["embedding"] = chunk.embedding[:10] if len(chunk.embedding) > 10 else chunk.embedding  # Limit for display
+            
+            chunk_list.append(chunk_data)
+        
+        # Get total chunks count for pagination
+        total_chunks = len(doc.chunks) if doc.chunks else 0
         
         return ApiResponse(
             success=True,
             message=f"Retrieved {len(chunks)} chunks",
             data={
-                "chunks": [c.model_dump() for c in chunk_responses],
-                "page": page,
-                "page_size": page_size
+                "chunks": chunk_list,
+                "document_id": document_id,
+                "document_title": doc.title,
+                "pagination": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total_chunks,
+                    "total_pages": (total_chunks + page_size - 1) // page_size
+                },
+                "statistics": {
+                    "chunks_with_embeddings": sum(1 for c in chunks if c.embedding),
+                    "average_content_length": sum(len(c.content) for c in chunks) / len(chunks) if chunks else 0,
+                    "chunks_with_article_numbers": sum(1 for c in chunks if c.article_number),
+                    "chunks_with_section_titles": sum(1 for c in chunks if c.section_title)
+                }
             },
             errors=[]
         )
         
     except Exception as e:
-        logger.error(f"Get chunks error: {e}")
+        logger.error(f"Admin get document chunks error: {e}")
         return ApiResponse(
             success=False,
-            message=str(e),
+            message=f"Failed to retrieve chunks: {str(e)}",
             data=None,
-            errors=[]
+            errors=[{"field": "document_id", "message": str(e)}]
         )
 
 
-@router.get("/chunks/{chunk_id}", response_model=ApiResponse)
-async def get_chunk(
-    chunk_id: int,
+@router.post("/documents/upload-multiple", response_model=ApiResponse, tags=["Admin"])
+async def admin_upload_multiple_documents(
+    files: List[UploadFile] = File(...),
+    titles: Optional[List[str]] = Form(default=None),
+    document_type: str = Form(default="other"),
+    language: str = Form(default="ar"),
+    notes: Optional[str] = Form(default="Admin upload"),
+    process_immediately: bool = Form(default=True),
+    assign_to_user: Optional[int] = Form(default=None, description="Assign documents to specific user"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get detailed information about a specific chunk."""
-    try:
-        service = LegalAssistantService(db)
-        result = await service.get_chunk(chunk_id)
+    """
+    Admin endpoint for bulk upload of multiple legal documents.
+    
+    Enables administrators to upload multiple documents at once with batch processing.
+    Supports automatic title generation and can assign documents to specific users.
+    
+    Args:
+        files: List of files to upload (required)
+        titles: Optional list of custom titles for each file
+        document_type: Document type for all uploaded files
+        language: Language for all uploaded files
+        notes: Notes to apply to all uploaded files
+        process_immediately: Whether to start processing immediately
+        assign_to_user: Optional user ID to assign uploaded documents to
         
-        if not result:
+    Returns:
+        ApiResponse containing list of uploaded documents with status
+    """
+    try:
+        # Validate files list
+        if not files or len(files) == 0:
             return ApiResponse(
                 success=False,
-                message="Chunk not found",
+                message="At least one file is required",
                 data=None,
+                errors=[{"field": "files", "message": "No files provided"}]
+            )
+        
+        # Validate admin file extensions
+        allowed_ext = {'.pdf', '.docx', '.doc', '.txt'}
+        
+        uploaded_documents = []
+        errors = []
+        
+        # Process each file individually
+        for i, file in enumerate(files):
+            try:
+                # Validate file extension
+                file_ext = Path(file.filename).suffix.lower()
+                
+                if file_ext not in allowed_ext:
+                    errors.append({
+                        "field": f"files[{i}]",
+                        "message": f"Unsupported format '{file_ext}' for file '{file.filename}'. Allowed: {', '.join(allowed_ext)}"
+                    })
+                    continue
+                
+                # Generate title from filename or use provided
+                title = None
+                if titles and i < len(titles) and titles[i].strip():
+                    title = titles[i].strip()
+                
+                if not title:
+                    filename_stem = Path(file.filename).stem
+                    title = filename_stem if filename_stem else f"Admin Upload - Document {i + 1}"
+                
+                # Save file
+                upload_dir = Path("uploads/legal_documents")
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                file_path = upload_dir / f"{uuid.uuid4()}{file_ext}"
+                
+                with open(file_path, "wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
+                
+                # Create document with admin context
+                service = LegalAssistantService(db)
+                uploader_id = assign_to_user if assign_to_user else current_user.sub
+                admin_notes = f"{notes} [Uploaded by: {current_user.email}]"
+                
+                doc = await service.upload_document(
+                    file_path=str(file_path),
+                    original_filename=file.filename,
+                    title=title,
+                    document_type=document_type,
+                    language=language,
+                    uploaded_by_id=uploader_id,
+                    notes=admin_notes,
+                    process_immediately=process_immediately
+                )
+                
+                doc_response = DocumentResponse.from_orm(doc)
+                uploaded_documents.append(doc_response.model_dump())
+                
+                logger.info(f"Admin uploaded document: {file.filename} -> {title}")
+                
+            except Exception as file_error:
+                logger.error(f"Error processing file {file.filename}: {file_error}")
+                errors.append({
+                    "field": f"files[{i}]",
+                    "message": f"Failed to process file '{file.filename}': {str(file_error)}"
+                })
+        
+        # Return comprehensive results
+        if errors:
+            # Partial success with errors
+            success_count = len(uploaded_documents)
+            error_count = len(errors)
+            return ApiResponse(
+                success=success_count > 0,
+                message=f"Uploaded {success_count} document(s), {error_count} error(s)",
+                data={
+                    "uploaded_documents": uploaded_documents,
+                    "uploaded_count": success_count,
+                    "error_count": error_count,
+                    "errors": errors
+                },
+                errors=errors
+            )
+        else:
+            # All files uploaded successfully
+            return ApiResponse(
+                success=True,
+                message=f"Successfully uploaded {len(uploaded_documents)} document(s)",
+                data={
+                    "uploaded_documents": uploaded_documents,
+                    "uploaded_count": len(uploaded_documents),
+                    "admin_info": {
+                        "uploaded_by_admin": current_user.email,
+                        "assigned_to_user": assign_to_user,
+                        "process_immediately": process_immediately,
+                        "timestamp": doc.created_at.isoformat() if "doc" in locals() else None
+                    }
+                },
                 errors=[]
             )
         
-        # Use proper validation instead of from_orm to trigger RTL processing
-        chunk_data = {
-            "id": result["chunk"].id,
-            "chunk_index": result["chunk"].chunk_index,
-            "content": result["chunk"].content,
-            "article_number": result["chunk"].article_number,
-            "section_title": result["chunk"].section_title,
-            "keywords": result["chunk"].keywords or []
-        }
-        chunk_resp = DocumentChunkResponse(**chunk_data)
-        
-        response = ChunkDetailResponse(
-            chunk=chunk_resp,
-            document=DocumentResponse.from_orm(result["document"]),
-            previous_chunk_id=result["previous_chunk_id"],
-            next_chunk_id=result["next_chunk_id"]
-        )
-        
-        return ApiResponse(
-            success=True,
-            message="Chunk retrieved",
-            data=response.model_dump(),
-            errors=[]
-        )
-        
     except Exception as e:
-        logger.error(f"Get chunk error: {e}")
+        logger.error(f"Admin upload multiple documents error: {e}")
         return ApiResponse(
             success=False,
-            message=str(e),
+            message=f"Bulk upload failed: {str(e)}",
             data=None,
-            errors=[]
+            errors=[{"field": None, "message": str(e)}]
         )
-
-
-@router.post("/test-arabic-hardcoded", response_model=ApiResponse)
-async def test_arabic_hardcoded(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Test Arabic text processing with hardcoded Arabic text.
-    """
-    try:
-        from ..utils.arabic_text_processor import ArabicTextProcessor
-        
-        # Hardcoded Arabic text to avoid encoding issues
-        arabic_text = "مرحبا بالعالم"  # Hello World in Arabic
-        
-        # Test the processing pipeline
-        result = ArabicTextProcessor.format_arabic_chunk(arabic_text, "ar")
-        
-        # Test chunk response
-        chunk_data = {
-            "id": 1,
-            "chunk_index": 0,
-            "content": arabic_text,
-            "article_number": None,
-            "section_title": None,
-            "keywords": []
-        }
-        
-        chunk_response = DocumentChunkResponse(**chunk_data)
-        
-        return ApiResponse(
-            success=True,
-            message="Arabic text processing test completed",
-            data={
-                "original_text": arabic_text,
-                "processor_result": result,
-                "chunk_response": chunk_response.model_dump()
-            },
-            errors=[]
-        )
-        
-    except Exception as e:
-        logger.error(f"Arabic hardcoded test error: {e}")
-        return ApiResponse(
-            success=False,
-            message=str(e),
-            data=None,
-            errors=[]
-        )
-async def test_chunk_response(
-    text: str = Form(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Test DocumentChunkResponse with Arabic text processing.
-    """
-    try:
-        # Create chunk data similar to what comes from database
-        chunk_data = {
-            "id": 1,
-            "chunk_index": 0,
-            "content": text,
-            "article_number": None,
-            "section_title": None,
-            "keywords": []
-        }
-        
-        # Create DocumentChunkResponse (this should trigger the validator)
-        chunk_response = DocumentChunkResponse(**chunk_data)
-        
-        return ApiResponse(
-            success=True,
-            message="DocumentChunkResponse test completed",
-            data={
-                "original_text": text,
-                "chunk_response": chunk_response.model_dump()
-            },
-            errors=[]
-        )
-        
-    except Exception as e:
-        logger.error(f"Chunk response test error: {e}")
-        return ApiResponse(
-            success=False,
-            message=str(e),
-            data=None,
-            errors=[]
-        )
-async def test_arabic_processing(
-    text: str = Form(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Test endpoint for Arabic text processing.
-    """
-    try:
-        from ..utils.arabic_text_processor import ArabicTextProcessor
-        
-        # Test Arabic text processing
-        result = ArabicTextProcessor.format_arabic_chunk(text, "ar")
-        
-        return ApiResponse(
-            success=True,
-            message="Arabic text processing test completed",
-            data={
-                "original_text": text,
-                "is_arabic": result['is_rtl'],
-                "text_direction": result['language'],
-                "formatted_content": result['formatted_content'],
-                "normalized_content": result['content']
-            },
-            errors=[]
-        )
-        
-    except Exception as e:
-        logger.error(f"Arabic test error: {e}")
-        return ApiResponse(
-            success=False,
-            message=str(e),
-            data=None,
-            errors=[]
-        )
-async def get_processing_progress(
-    document_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get processing progress for a document."""
-    try:
-        service = LegalAssistantService(db)
-        progress = await service.get_processing_progress(document_id)
-        response = ProcessingProgressResponse(**progress)
-        
-        return ApiResponse(
-            success=True,
-            message="Progress retrieved",
-            data=response.model_dump(),
-            errors=[]
-        )
-        
-    except Exception as e:
-        logger.error(f"Get progress error: {e}")
-        return ApiResponse(
-            success=False,
-            message=str(e),
-            data=None,
-            errors=[]
-        )
-
-
-@router.get("/statistics", response_model=ApiResponse)
-async def get_statistics(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get system-wide statistics."""
-    try:
-        service = LegalAssistantService(db)
-        stats = await service.get_statistics()
-        response = DocumentStatsResponse(**stats)
-        
-        return ApiResponse(
-            success=True,
-            message="Statistics retrieved",
-            data=response.model_dump(),
-            errors=[]
-        )
-        
-    except Exception as e:
-        logger.error(f"Get stats error: {e}")
-        return ApiResponse(
-            success=False,
-            message=str(e),
-            data=None,
-            errors=[]
-        )
-
-
-@router.post("/documents/{document_id}/reprocess", response_model=ApiResponse)
-async def reprocess_document(
-    document_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Reprocess an existing document."""
-    try:
-        service = LegalAssistantService(db)
-        doc = await service.get_document(document_id)
-        
-        if not doc:
-            return ApiResponse(
-                success=False,
-                message="Document not found",
-                data=None,
-                errors=[]
-            )
-        
-        import asyncio
-        asyncio.create_task(service.process_document(document_id))
-        
-        return ApiResponse(
-            success=True,
-            message="Reprocessing started",
-            data={"document_id": document_id, "status": "processing"},
-            errors=[]
-        )
-        
-    except Exception as e:
-        logger.error(f"Reprocess error: {e}")
-        return ApiResponse(
-            success=False,
-            message=str(e),
-            data=None,
-            errors=[]
-        )
-
