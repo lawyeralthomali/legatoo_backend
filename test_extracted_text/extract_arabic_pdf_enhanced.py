@@ -394,13 +394,13 @@ class PDFExtractor:
                         fragmented_count += 1
                         continue
             
-            # Skip line if more than 50% of words are fragmented
+            # Skip line only if more than 80% of words are fragmented (very conservative)
             fragmentation_ratio = fragmented_count / len(words) if words else 0
-            if fragmentation_ratio <= 0.5:
+            if fragmentation_ratio < 0.8:  # Keep lines with less than 80% fragmentation
                 cleaned_lines.append(line)
             else:
-                # Skip this fragmented line
-                logger.debug(f"Skipping fragmented line: {line[:50]}...")
+                # Skip this heavily fragmented line
+                logger.warning(f"Skipping heavily fragmented line: {line[:50]}...")
         
         return '\n'.join(cleaned_lines)
     
