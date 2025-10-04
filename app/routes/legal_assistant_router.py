@@ -31,7 +31,7 @@ router = APIRouter(prefix="/api/v1/legal-assistant", tags=["Legal Assistant"])
 
 # ==================== ADMIN ENDPOINTS ====================
 
-@router.get("/documents", response_model=ApiResponse, tags=["Admin"])
+@router.get("/documents", response_model=ApiResponse)
 async def admin_list_documents(
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=100, description="Number of documents per page"),
@@ -122,7 +122,7 @@ async def admin_list_documents(
         )
 
 
-@router.get("/documents/{document_id}", response_model=ApiResponse, tags=["Admin"])
+@router.get("/documents/{document_id}", response_model=ApiResponse)
 async def admin_get_document_details(
     document_id: int,
     db: AsyncSession = Depends(get_db),
@@ -211,7 +211,7 @@ async def admin_get_document_details(
         )
 
 
-@router.get("/documents/{document_id}/download", tags=["Admin"])
+@router.get("/documents/{document_id}/download")
 async def admin_download_document(
     document_id: int,
     db: AsyncSession = Depends(get_db),
@@ -271,7 +271,7 @@ async def admin_download_document(
         raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
 
-@router.post("/documents/{document_id}/reprocess", response_model=ApiResponse, tags=["Admin"])
+@router.post("/documents/{document_id}/reprocess", response_model=ApiResponse)
 async def admin_reprocess_document(
     document_id: int,
     force_reprocess: bool = Query(default=False, description="Force reprocessing even if already processed"),
@@ -347,7 +347,7 @@ async def admin_reprocess_document(
         )
 
 
-@router.delete("/documents/{document_id}", response_model=ApiResponse, tags=["Admin"])
+@router.delete("/documents/{document_id}", response_model=ApiResponse)
 async def admin_delete_document(
     document_id: int,
     delete_file: bool = Query(default=True, description="Delete file from filesystem"),
@@ -433,7 +433,7 @@ async def admin_delete_document(
         )
 
 
-@router.get("/documents/{document_id}/chunks", response_model=ApiResponse, tags=["Admin"])
+@router.get("/documents/{document_id}/chunks", response_model=ApiResponse)
 async def admin_get_document_chunks(
     document_id: int,
     page: int = Query(default=1, ge=1, description="Page number"),
@@ -538,7 +538,7 @@ async def admin_get_document_chunks(
         )
 
 
-@router.post("/documents/upload", response_model=ApiResponse, tags=["Admin"])
+@router.post("/documents/upload", response_model=ApiResponse)
 async def admin_upload_multiple_documents(
     files: List[UploadFile] = File(...),
     titles: Optional[List[str]] = Form(default=None),
