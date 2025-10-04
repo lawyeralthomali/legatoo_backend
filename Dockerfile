@@ -1,41 +1,40 @@
-# Use Python 3.11 slim image
-FROM python:3.11-slim
-
-# Set working directory
-WORKDIR /app
+# Use official Python image with minimal system dependencies
+FROM python:3.10-slim
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies
+# Install essential system packages in stages to avoid network issues
 RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    libpq-dev \
+    wget \
+    curl \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+# Install Tesseract and Poppler in a separate step
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    tesseract-ocr-ara \
+    poppler-utils \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set the working directory
+WORKDIR /app
+
+# Copy the requirements file and install Python dependencies
 COPY requirements.txt .
+RUN pip install --no-cache-dir --timeout=1000 --retries=3 -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install playwright browsers (skip if network issues persist)
+RUN playwright install chromium || echo "Playwright installation skipped due to network issues"
 
-# Copy application code
+# Copy the rest of the application code
 COPY . .
 
-# Create non-root user for security
-RUN adduser --disabled-password --gecos '' appuser && \
-    chown -R appuser:appuser /app
-USER appuser
-
-# Expose port
+# Expose the port FastAPI runs on
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Command to run the FastAPI app
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -20,6 +20,7 @@ Ready for AI integration!
 import logging
 import os
 import asyncio
+from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -187,11 +188,43 @@ class CompleteLegalAIService:
             
             logger.info(f"✅ Extracted {len(text_content)} characters")
             
+            # ========== SAVE EXTRACTED TEXT TO FILE ==========
+            
+            # Create extracted text directory
+            extracted_text_dir = Path("uploads/extracted_text")
+            extracted_text_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save raw extracted text
+            raw_text_file = extracted_text_dir / f"document_{document_id}_raw.txt"
+            with open(raw_text_file, 'w', encoding='utf-8') as f:
+                f.write(f"=== RAW EXTRACTED TEXT FOR DOCUMENT {document_id} ===\n")
+                f.write(f"Title: {document.title}\n")
+                f.write(f"Language: {document.language}\n")
+                f.write(f"File: {document.file_path}\n")
+                f.write(f"Extracted on: {datetime.now().isoformat()}\n")
+                f.write("=" * 80 + "\n\n")
+                f.write(text_content)
+            
+            logger.info(f"💾 Saved raw extracted text to: {raw_text_file}")
+            
             # ========== PHASE 3: TEXT CLEANING ==========
             
             logger.info("Step 2/5: Cleaning text...")
             cleaned_text = await self.doc_processor.clean_text(text_content, document.language)
             logger.info(f"✅ Cleaned text: {len(cleaned_text)} characters")
+            
+            # Save cleaned text
+            cleaned_text_file = extracted_text_dir / f"document_{document_id}_cleaned.txt"
+            with open(cleaned_text_file, 'w', encoding='utf-8') as f:
+                f.write(f"=== CLEANED TEXT FOR DOCUMENT {document_id} ===\n")
+                f.write(f"Title: {document.title}\n")
+                f.write(f"Language: {document.language}\n")
+                f.write(f"File: {document.file_path}\n")
+                f.write(f"Cleaned on: {datetime.now().isoformat()}\n")
+                f.write("=" * 80 + "\n\n")
+                f.write(cleaned_text)
+            
+            logger.info(f"💾 Saved cleaned text to: {cleaned_text_file}")
             
             # ========== PHASE 3: TEXT CHUNKING ==========
             
@@ -205,6 +238,29 @@ class CompleteLegalAIService:
             )
             
             logger.info(f"✅ Created {len(chunks_data)} chunks")
+            
+            # Save chunked text to file
+            chunks_text_file = extracted_text_dir / f"document_{document_id}_chunks.txt"
+            with open(chunks_text_file, 'w', encoding='utf-8') as f:
+                f.write(f"=== CHUNKED TEXT FOR DOCUMENT {document_id} ===\n")
+                f.write(f"Title: {document.title}\n")
+                f.write(f"Language: {document.language}\n")
+                f.write(f"Total Chunks: {len(chunks_data)}\n")
+                f.write(f"Chunked on: {datetime.now().isoformat()}\n")
+                f.write("=" * 80 + "\n\n")
+                
+                for i, chunk_data in enumerate(chunks_data):
+                    f.write(f"--- CHUNK {i+1} ---\n")
+                    f.write(f"Chunk Index: {chunk_data['chunk_index']}\n")
+                    f.write(f"Article Number: {chunk_data.get('article_number', 'N/A')}\n")
+                    f.write(f"Section Title: {chunk_data.get('section_title', 'N/A')}\n")
+                    f.write(f"Keywords: {', '.join(chunk_data.get('keywords', []))}\n")
+                    f.write(f"Word Count: {len(chunk_data['content'].split())}\n")
+                    f.write("-" * 40 + "\n")
+                    f.write(chunk_data['content'])
+                    f.write("\n\n" + "=" * 80 + "\n\n")
+            
+            logger.info(f"💾 Saved chunked text to: {chunks_text_file}")
             
             # Create chunk records
             created_chunks = []

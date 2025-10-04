@@ -200,15 +200,27 @@ def ensure_rtl_text_direction(text: str) -> str:
     if arabic_chars == 0:
         return text
     
-    # For Arabic text, apply multiple RTL strategies
-    # Strategy 1: Use Right-to-Left Override for the entire text
-    rtl_wrapped = '\u202E' + text + '\u202C'
+    # Calculate Arabic ratio
+    arabic_ratio = arabic_chars / len(text.strip()) if text.strip() else 0
     
-    # Strategy 2: Add RTL mark at the beginning
-    rtl_wrapped = '\u200F' + rtl_wrapped
-    
-    # Strategy 3: Add RTL mark at the end for additional support
-    rtl_wrapped = rtl_wrapped + '\u200F'
+    # Apply BiDi algorithm first
+    try:
+        if arabic_ratio > 0.3:  # More than 30% Arabic
+            # Apply BiDi algorithm with Arabic base direction
+            bidi_text = get_display(text)
+            
+            # Then add RTL marks for extra support
+            rtl_wrapped = '\u200F' + bidi_text + '\u200F'
+        else:
+            # Mixed content - use default BiDi
+            bidi_text = get_display(text)
+            rtl_wrapped = bidi_text
+            
+    except Exception as e:
+        logging.warning(f"BiDi processing error: {e}")
+        # Fallback: use RTL override marks
+        rtl_wrapped = '\u202E' + text + '\u202C'
+        rtl_wrapped = '\u200F' + rtl_wrapped + '\u200F'
     
     return rtl_wrapped
 

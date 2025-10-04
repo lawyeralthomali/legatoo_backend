@@ -89,24 +89,24 @@ class EnhancedDocumentProcessor:
         try:
             file_ext = file_extension.lower()
             
-            # PDF files
+            # Extract text based on file type
             if file_ext in self.PDF_EXTENSIONS:
-                return await self._extract_from_pdf(file_path)
-            
-            # Word documents
+                extracted_text = await self._extract_from_pdf(file_path)
             elif file_ext in self.WORD_EXTENSIONS:
-                return await self._extract_from_docx(file_path)
-            
-            # Images (OCR)
+                extracted_text = await self._extract_from_docx(file_path)
             elif file_ext in self.IMAGE_EXTENSIONS:
-                return await self._extract_from_image(file_path, language)
-            
-            # Text files
+                extracted_text = await self._extract_from_image(file_path, language)
             elif file_ext in self.TEXT_EXTENSIONS:
-                return await self._extract_from_txt(file_path)
-            
+                extracted_text = await self._extract_from_txt(file_path)
             else:
                 raise ValueError(f"Unsupported file format: {file_ext}")
+            
+            # Apply bidirectional processing for Arabic text immediately after extraction
+            if language == 'ar' and ArabicTextProcessor.is_arabic_text(extracted_text):
+                logger.info("Applying bidirectional text processing for Arabic content")
+                extracted_text = ArabicTextProcessor.process_bidirectional_text(extracted_text)
+            
+            return extracted_text
                 
         except Exception as e:
             logger.error(f"Error extracting text from {file_path}: {str(e)}")
@@ -267,10 +267,10 @@ class EnhancedDocumentProcessor:
         # 3. Remove repeated horizontal lines
         text = re.sub(r'[-_=]{3,}', '', text)
         
-        # 4. Use Arabic text processor for normalization
+        # 4. Use Arabic text processor for normalization and bidirectional processing
         if language == 'ar' and ArabicTextProcessor.is_arabic_text(text):
-            # Normalize Arabic text
-            text = ArabicTextProcessor.normalize_arabic_text(text)
+            # Apply complete Arabic preprocessing pipeline (includes bidirectional processing)
+            text = ArabicTextProcessor.preprocess_arabic_text(text)
         else:
             # Basic normalization for non-Arabic text
             text = re.sub(r' +', ' ', text)

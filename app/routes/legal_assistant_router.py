@@ -649,3 +649,123 @@ async def reprocess_document(
             errors=[]
         )
 
+
+@router.get("/debug/extracted-text/{document_id}", response_model=ApiResponse)
+async def get_extracted_text_files(
+    document_id: int,
+    file_type: str = Query(default="all", description="Type of file to retrieve: raw, cleaned, chunks, or all"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Debug endpoint to view extracted text files.
+    
+    This endpoint allows you to see how Arabic text looks after extraction,
+    cleaning, and chunking processes.
+    
+    Args:
+        document_id: ID of the document
+        file_type: Type of file to retrieve (raw, cleaned, chunks, all)
+    """
+    try:
+        from pathlib import Path
+        import os
+        
+        # Check if document exists
+        service = LegalAssistantService(db)
+        doc = await service.get_document(document_id)
+        
+        if not doc:
+            return ApiResponse(
+                success=False,
+                message="Document not found",
+                data=None,
+                errors=[{"field": "document_id", "message": "Document does not exist"}]
+            )
+        
+        extracted_text_dir = Path("uploads/extracted_text")
+        
+        if not extracted_text_dir.exists():
+            return ApiResponse(
+                success=False,
+                message="No extracted text files found",
+                data=None,
+                errors=[{"field": "extracted_text_dir", "message": "Extracted text directory does not exist"}]
+            )
+        
+        files_info = []
+        
+        # Define file patterns
+        file_patterns = {
+            "raw": f"document_{document_id}_raw.txt",
+            "cleaned": f"document_{document_id}_cleaned.txt", 
+            "chunks": f"document_{document_id}_chunks.txt"
+        }
+        
+        if file_type == "all":
+            files_to_check = list(file_patterns.values())
+        elif file_type in file_patterns:
+            files_to_check = [file_patterns[file_type]]
+        else:
+            return ApiResponse(
+                success=False,
+                message="Invalid file_type. Use: raw, cleaned, chunks, or all",
+                data=None,
+                errors=[{"field": "file_type", "message": "Invalid file type specified"}]
+            )
+        
+        for filename in files_to_check:
+            file_path = extracted_text_dir / filename
+            if file_path.exists():
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    file_type_name = filename.split('_')[-1].replace('.txt', '')
+                    files_info.append({
+                        "file_type": file_type_name,
+                        "filename": filename,
+                        "file_path": str(file_path),
+                        "size_bytes": file_path.stat().st_size,
+                        "content_preview": content[:1000] + "..." if len(content) > 1000 else content,
+                        "full_content": content,
+                        "character_count": len(content),
+                        "word_count": len(content.split())
+                    })
+                except Exception as e:
+                    logger.error(f"Error reading file {filename}: {e}")
+                    files_info.append({
+                        "file_type": filename.split('_')[-1].replace('.txt', ''),
+                        "filename": filename,
+                        "error": str(e)
+                    })
+            else:
+                file_type_name = filename.split('_')[-1].replace('.txt', '')
+                files_info.append({
+                    "file_type": file_type_name,
+                    "filename": filename,
+                    "exists": False,
+                    "message": f"File {filename} not found"
+                })
+        
+        return ApiResponse(
+            success=True,
+            message=f"Retrieved {len([f for f in files_info if 'error' not in f and f.get('exists', True)])} extracted text files",
+            data={
+                "document_id": document_id,
+                "document_title": doc.title,
+                "document_language": doc.language,
+                "files": files_info,
+                "extracted_text_directory": str(extracted_text_dir)
+            },
+            errors=[]
+        )
+        
+    except Exception as e:
+        logger.error(f"Debug extracted text error: {e}")
+        return ApiResponse(
+            success=False,
+            message=str(e),
+            data=None,
+            errors=[{"field": None, "message": str(e)}]
+        )
