@@ -538,7 +538,7 @@ async def admin_get_document_chunks(
         )
 
 
-@router.post("/documents/upload-multiple", response_model=ApiResponse, tags=["Admin"])
+@router.post("/documents/upload", response_model=ApiResponse, tags=["Admin"])
 async def admin_upload_multiple_documents(
     files: List[UploadFile] = File(...),
     titles: Optional[List[str]] = Form(default=None),

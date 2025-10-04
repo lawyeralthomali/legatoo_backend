@@ -282,6 +282,7 @@ async def debug_auth():
     import os
     from .services.auth_service import AuthService
     from .db.database import get_db_session
+    from .config.urls import get_url_config
     
     try:
         # Test environment variables
@@ -289,6 +290,20 @@ async def debug_auth():
             "SECRET_KEY": bool(os.getenv("SECRET_KEY")),
             "JWT_SECRET": bool(os.getenv("JWT_SECRET")),
             "DATABASE_URL": bool(os.getenv("DATABASE_URL")),
+            "ENVIRONMENT": os.getenv("ENVIRONMENT", "development"),
+            "FRONTEND_URL": os.getenv("FRONTEND_URL", "not_set"),
+            "BACKEND_URL": os.getenv("BACKEND_URL", "not_set"),
+        }
+        
+        # Test URL configuration
+        url_config = get_url_config()
+        url_config_info = {
+            "environment": url_config.environment,
+            "frontend_url": url_config.frontend_url,
+            "backend_url": url_config.backend_url,
+            "api_base_url": url_config.api_base_url,
+            "email_base_url": url_config.email_base_url,
+            "verification_url_example": url_config.get_verification_url("test-token"),
         }
         
         # Test database connection
@@ -302,6 +317,7 @@ async def debug_auth():
             return {
                 "status": "Debug Info",
                 "environment_check": env_check,
+                "url_configuration": url_config_info,
                 "database_connection": "✅ Connected",
                 "user_exists": user is not None,
                 "user_email": test_email,
@@ -316,6 +332,35 @@ async def debug_auth():
             "error": str(e),
             "error_type": type(e).__name__,
             "message": "Debug endpoint failed - this shows the login issue"
+        }
+
+
+@app.get("/debug-urls")
+async def debug_urls():
+    """Debug endpoint to check URL configuration."""
+    from .config.urls import get_url_config
+    
+    try:
+        url_config = get_url_config()
+        return {
+            "status": "URL Configuration Debug",
+            "environment": url_config.environment,
+            "frontend_url": url_config.frontend_url,
+            "backend_url": url_config.backend_url,
+            "api_base_url": url_config.api_base_url,
+            "email_base_url": url_config.email_base_url,
+            "auth_urls": url_config.auth_urls,
+            "email_urls": url_config.email_urls,
+            "verification_url_example": url_config.get_verification_url("test-token-123"),
+            "password_reset_url_example": url_config.get_password_reset_url("test-reset-token-456"),
+            "message": "This shows the URL configuration used for email verification"
+        }
+    except Exception as e:
+        return {
+            "status": "❌ Error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "message": "Failed to load URL configuration"
         }
 
 
