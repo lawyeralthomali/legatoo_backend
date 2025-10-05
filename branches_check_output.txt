@@ -1,0 +1,183 @@
+Checking LawBranch data for duplication issues...
+============================================================
+Found 3 law sources:
+
+Source ID: 3
+Name: Saudi Labor Law Test
+Type: law
+Jurisdiction: Saudi Arabia
+Created: 2025-10-05 04:48:54
+Branches found: 14
+Branch details:
+  1. ID: 19, Number: ﺍﻟﺒﺎﺏ ﺍﻷﻭﻝ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻷﻭﻝ
+     Order: 0, Created: 2025-10-05 04:48:54
+     Chapters: 1
+        1. Section ﺍﻟﻔﺼﻞ ﺍﻷﻭﻝ
+  2. ID: 20, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻧﻲ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻧﻲ
+     Order: 1, Created: 2025-10-05 04:48:54
+     Chapters: 1
+        1. Section ﺍﻟﻔﺼﻞ ﺍﻷﻭﻝ
+  3. ID: 21, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻟﺚ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻟﺚ
+     Order: 2, Created: 2025-10-05 04:48:54
+     Chapters: 0
+  4. ID: 22, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺮﺍﺑﻊ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻟﺮﺍﺑﻊ
+     Order: 3, Created: 2025-10-05 04:48:54
+     Chapters: 1
+        1. Section ﺍﻟﻔﺼﻞ ﺍﻷﻭﻝ
+  5. ID: 23, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺨﺎﻣﺲ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻟﺨﺎﻣﺲ
+     Order: 4, Created: 2025-10-05 04:48:54
+     Chapters: 1
+        1. Section ﺍﻟﻔﺼﻞ ﺍﻷﻭﻝ
+  6. ID: 24, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺩﺱ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺩﺱ
+     Order: 5, Created: 2025-10-05 04:48:54
+     Chapters: 1
+        1. Section ﺍﻟﻔﺼﻞ ﺍﻷﻭﻝ
+  7. ID: 25, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺑﻊ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺑﻊ
+     Order: 6, Created: 2025-10-05 04:48:54
+     Chapters: 0
+  8. ID: 26, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻣﻦ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻣﻦ
+     Order: 7, Created: 2025-10-05 04:48:54
+     Chapters: 1
+        1. Section ﺍﻟﻔﺼﻞ ﺍﻷﻭﻝ
+  9. ID: 27, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺘﺎﺳﻊ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻟﺘﺎﺳﻊ
+     Order: 8, Created: 2025-10-05 04:48:54
+     Chapters: 0
+  10. ID: 28, Number: ﺍﻟﺒﺎﺏ ﺍﻟﻌﺎﺷﺮ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻟﻌﺎﺷﺮ
+     Order: 9, Created: 2025-10-05 04:48:54
+     Chapters: 0
+  11. ID: 29, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺤﺎﺩﻱ ﻋﺸﺮ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻟﺤﺎﺩﻱ ﻋﺸﺮ
+     Order: 10, Created: 2025-10-05 04:48:54
+     Chapters: 0
+  12. ID: 30, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺮﺍﺑﻊ
+     Name: ﻋﺸﺮ
+     Order: 11, Created: 2025-10-05 04:48:54
+     Chapters: 0
+  13. ID: 31, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺨﺎﻣﺲ
+     Name: ﻋﺸﺮ
+     Order: 12, Created: 2025-10-05 04:48:54
+     Chapters: 0
+  14. ID: 32, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺩﺱ
+     Name: ﻋﺸﺮ
+     Order: 13, Created: 2025-10-05 04:48:54
+     Chapters: 0
+----------------------------------------
+
+Source ID: 2
+Name: Extracted Legal Document
+Type: law
+Jurisdiction: None
+Created: 2025-10-05 04:43:42
+Branches found: 18
+Branch details:
+  1. ID: 1, Number: ﺍﻟﺒﺎﺏ ﺍﻷﻭﻝ
+     Name: : ﺍﻟﺘﻌﺮﻳﻔﺎﺕ / ﺍﻷﺣﻜﺎﻡ ﺍﻟﻌﺎﻣﺔ 1
+     Order: 0, Created: 2025-10-05 04:43:42
+     Chapters: 5
+        1. / ﺍﻟﺘﻌﺮﻳﻔﺎﺕ 2
+        2. / ﺍﻷﺣﻜﺎﻡ ﺍﻟﻌﺎﻣﺔ 4
+        3. / ﻗﻨﻮﺍﺕ ﺍﻟﺘﻮﻇﻴﻒ 8
+        ... and 2 more chapters
+  2. ID: 2, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻟﺚ
+     Name: : ﺗﻮﻇﻴﻒ ﻏﻴﺮ ﺍﻟﺴﻌﻮﺩﻳﻴﻦ 1
+     Order: 1, Created: 2025-10-05 04:43:42
+     Chapters: 0
+  3. ID: 3, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺮﺍﺑﻊ
+     Name: : ﺍﻟﺘﺪﺭﻳﺐ ﻭﺍﻟﺘﺄﻫﻴﻞ 14
+     Order: 2, Created: 2025-10-05 04:43:42
+     Chapters: 2
+        1. / ﺍﻟﺘﺪﺭﻳﺐ ﻭﺍﻟﺘﺄﻫﻴﻞ ﻟﺪﻯ ﺻﺎﺣﺐ ﺍﻟﻌﻤﻞ 15
+        2. / ﻋﻘﺪ ﺍﻟﺘﺄﻫﻴﻞ ﻭﺍﻟﺘﺪﺭﻳﺐ ﻣﻊ ﻏﻴﺮ ﺍﻟﻌﺎﻣﻠﻴﻦ ﻟﺪﻯ ﺻﺎﺣﺐ ﺍﻟﻌﻤﻞ 16
+  4. ID: 4, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺨﺎﻣﺲ
+     Name: : ﻋﻼﻗﺎﺕ ﺍﻟﻌﻤﻞ 7
+     Order: 3, Created: 2025-10-05 04:43:42
+     Chapters: 4
+        1. / ﻋﻘﺪ ﺍﻟﻌﻤﻞ 18
+        2. / ﺍﻟﻮﺍﺟﺒﺎﺕ ﻭﻗﻮﺍﻋﺪ ﺍﻟﺘﺄﺩﻳﺐ 20
+        3. / ﺍﻧﺘﻬﺎﺀ ﻋﻘﺪ ﺍﻟﻌﻤﻞ 23
+        ... and 1 more chapters
+  5. ID: 5, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺩﺱ
+     Name: : ﺷﺮﻭﻁ ﺍﻟﻌﻤﻞ ﻭﻇﺮﻭﻓﻪ 27
+     Order: 4, Created: 2025-10-05 04:43:42
+     Chapters: 4
+        1. / ﺍﻷﺟﻮﺭ 28
+        2. / ﺳﺎﻋﺎﺕ ﺍﻟﻌﻤﻞ 320
+        3. / ﻓﺘﺮﺍﺕ ﺍﻟﺮﺍﺣﺔ ﻭﺍﻟﺮﺍﺣﺔ ﺍﻷﺳﺒﻮﻋﻴﺔ 3
+        ... and 1 more chapters
+  6. ID: 6, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺑﻊ
+     Name: : ﺍﻟﻌﻤﻞ ﻟﺒﻌﺾ ﺍﻟﻮﻗﺖ 35
+     Order: 5, Created: 2025-10-05 04:43:42
+     Chapters: 0
+  7. ID: 7, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻣﻦ
+     Name: : ﺍﻟﻮﻗﺎﻳﺔ ﻣﻦ ﻣﺨﺎﻃﺮ ﺍﻟﻌﻤﻞ ﻭﺍﻟﻮﻗﺎﻳﺔ ﻣﻦ ﺍﻟﺤﻮﺍﺩﺙ ﺍﻟﺼﻨﺎﻋﻴﺔ ﺍﻟﻜﺒﺮﻯ
+     Order: 6, Created: 2025-10-05 04:43:42
+     Chapters: 4
+        1. / ﺍﻟﻮﻗﺎﻳﺔ ﻣﻦ ﻣﺨﺎﻃﺮ ﺍﻟﻌﻤﻞ 38
+        2. / ﺍﻟﻮﻗﺎﻳﺔ ﻣﻦ ﺍﻟﺤﻮﺍﺩﺙ ﺍﻟﺼﻨﺎﻋﻴﺔ 39
+        3. / ﺇﺻﺎﺑﺎﺕ ﺍﻟﻌﻤﻞ 40
+        ... and 1 more chapters
+  8. ID: 8, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺘﺎﺳﻊ
+     Name: : ﺗﺸﻐﻴﻞ ﺍﻟﻨﺴﺎﺀ 03
+     Order: 7, Created: 2025-10-05 04:43:42
+     Chapters: 0
+  9. ID: 9, Number: ﺍﻟﺒﺎﺏ ﺍﻟﻌﺎﺷﺮ
+     Name: : ﺗﺸﻔﻴﻞ ﺍﻷﺣﺪﺍﺙ 46
+     Order: 8, Created: 2025-10-05 04:43:42
+     Chapters: 0
+  10. ID: 10, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺤﺎﺩﻱ ﻋﺸﺮ
+     Name: : ﻋﻘﺪ ﺍﻟﻌﻤﻞ ﺍﻟﺒﺤﺮﻱ 48
+     Order: 9, Created: 2025-10-05 04:43:42
+     Chapters: 0
+  11. ID: 11, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻧﻲ
+     Name: ﻋﺸﺮ: ﺍﻟﻌﻤﻞ ﻓﻲ ﺍﻟﻤﻨﺎﺟﻢ ﻭﺍﻟﻤﺤﺎﺟﺮ 51
+     Order: 10, Created: 2025-10-05 04:43:42
+     Chapters: 0
+  12. ID: 12, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺮﺍﺑﻊ
+     Name: ﻋﺸﺮ: ﻫﻴﺌﺎﺕ ﺗﺴﻮﻳﺔ ﺍﻟﺨﻼﻓﺎﺕ ﺍﻟﻌﻤﺎﻟﻴﺔ 56
+     Order: 11, Created: 2025-10-05 04:43:42
+     Chapters: 0
+  13. ID: 13, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺨﺎﻣﺲ
+     Name: ﻋﺸﺮ: ﺍﻟﻌﻘﻮﺑﺎﺕ 59
+     Order: 12, Created: 2025-10-05 04:43:42
+     Chapters: 0
+  14. ID: 14, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺩﺱ
+     Name: ﻋﺸﺮ: ﺃﺣﻜﺎﻡ ﺧﺘﺎﻣﻴﺔ 62
+     Order: 13, Created: 2025-10-05 04:43:42
+     Chapters: 0
+  15. ID: 15, Number: ﺍﻟﺒﺎﺏ ﺍﻷﻭﻝ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻷﻭﻝ
+     Order: 14, Created: 2025-10-05 04:43:42
+     Chapters: 1
+        1. Section ﺍﻟﻔﺼﻞ ﺍﻷﻭﻝ
+  16. ID: 16, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻧﻲ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻧﻲ
+     Order: 15, Created: 2025-10-05 04:43:42
+     Chapters: 1
+        1. Section ﺍﻟﻔﺼﻞ ﺍﻷﻭﻝ
+  17. ID: 17, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻟﺚ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻟﺚ
+     Order: 16, Created: 2025-10-05 04:43:42
+     Chapters: 0
+  18. ID: 18, Number: ﺍﻟﺒﺎﺏ ﺍﻟﺮﺍﺑﻊ
+     Name: Chapter ﺍﻟﺒﺎﺏ ﺍﻟﺮﺍﺑﻊ
+     Order: 17, Created: 2025-10-05 04:43:42
+     Chapters: 0
+----------------------------------------
+
+Source ID: 1
+Name: Saudi Labor Law Test
+Type: law
+Jurisdiction: Saudi Arabia
+Created: 2025-10-05 04:42:06
+Branches found: 0
+----------------------------------------

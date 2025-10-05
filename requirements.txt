@@ -56,6 +56,9 @@ python-bidi==0.6.6
 numpy>=1.24.0
 faiss-cpu>=1.7.0
 sentence-transformers>=2.2.0
+# Legal Knowledge Management (Phase 5)
+# Note: pgvector is PostgreSQL-specific, using JSON storage for SQLite compatibility
+# For future PostgreSQL migration, add: pgvector>=0.2.0
 requests==2.32.5
 rsa==4.9.1
 setuptools==80.9.0

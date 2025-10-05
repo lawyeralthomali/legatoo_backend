@@ -98,7 +98,8 @@ class LegalDocumentRepository:
         document_type: Optional[str] = None,
         language: Optional[str] = None,
         processing_status: Optional[str] = None,
-        uploaded_by_id: Optional[int] = None
+        uploaded_by_id: Optional[int] = None,
+        search: Optional[str] = None
     ) -> Tuple[List[LegalDocument], int]:
         """
         Get documents with filtering and pagination.
@@ -110,6 +111,7 @@ class LegalDocumentRepository:
             language: Filter by language
             processing_status: Filter by processing status
             uploaded_by_id: Filter by uploader
+            search: Search term for document titles
             
         Returns:
             Tuple of (documents list, total count)
@@ -142,6 +144,9 @@ class LegalDocumentRepository:
                 pass
         if uploaded_by_id:
             filters.append(LegalDocument.uploaded_by_id == uploaded_by_id)
+        if search:
+            # Search in document title (case-insensitive)
+            filters.append(LegalDocument.title.ilike(f"%{search}%"))
         
         if filters:
             query = query.where(and_(*filters))

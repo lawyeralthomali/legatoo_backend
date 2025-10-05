@@ -200,7 +200,8 @@ class LegalAssistantService:
         document_type: Optional[str] = None,
         language: Optional[str] = None,
         processing_status: Optional[str] = None,
-        uploaded_by_id: Optional[int] = None
+        uploaded_by_id: Optional[int] = None,
+        search: Optional[str] = None
     ) -> Tuple[List[LegalDocument], int]:
         """
         Get documents with pagination and filtering.
@@ -212,6 +213,7 @@ class LegalAssistantService:
             language: Filter by language
             processing_status: Filter by processing status
             uploaded_by_id: Filter by uploader
+            search: Search term for document titles
             
         Returns:
             Tuple of (documents list, total count)
@@ -224,7 +226,8 @@ class LegalAssistantService:
             document_type=document_type,
             language=language,
             processing_status=processing_status,
-            uploaded_by_id=uploaded_by_id
+            uploaded_by_id=uploaded_by_id,
+            search=search
         )
 
     async def update_document(
@@ -366,4 +369,63 @@ class LegalAssistantService:
         """
         # ✅ Use CompleteLegalAIService
         return await self.ai_service.get_processing_progress(document_id)
+
+    async def get_document_statistics(self) -> Dict:
+        """
+        Get comprehensive document statistics.
+        
+        Returns:
+            Dictionary with document statistics including counts by type, language, etc.
+        """
+        try:
+            # Get basic statistics from repository
+            stats = await self.repository.get_statistics()
+            
+            # Add additional statistics
+            documents, _ = await self.repository.get_documents(skip=0, limit=1000)
+            
+            # Count by document type
+            documents_by_type = {}
+            documents_by_language = {}
+            processing_counts = {"pending": 0, "processing": 0, "done": 0, "error": 0}
+            
+            for doc in documents:
+                # Count by type
+                doc_type = doc.document_type.value if hasattr(doc.document_type, 'value') else str(doc.document_type)
+                documents_by_type[doc_type] = documents_by_type.get(doc_type, 0) + 1
+                
+                # Count by language
+                lang = doc.language.value if hasattr(doc.language, 'value') else str(doc.language)
+                documents_by_language[lang] = documents_by_language.get(lang, 0) + 1
+                
+                # Count by processing status
+                status = doc.processing_status.value if hasattr(doc.processing_status, 'value') else str(doc.processing_status)
+                processing_counts[status] = processing_counts.get(status, 0) + 1
+            
+            # Get total chunks count
+            total_chunks = sum(len(doc.chunks) if doc.chunks else 0 for doc in documents)
+            
+            return {
+                "total_documents": len(documents),
+                "total_chunks": total_chunks,
+                "documents_by_type": documents_by_type,
+                "documents_by_language": documents_by_language,
+                "processing_pending": processing_counts["pending"],
+                "processing_done": processing_counts["done"],
+                "processing_error": processing_counts["error"],
+                "processing_in_progress": processing_counts["processing"]
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting document statistics: {e}")
+            return {
+                "total_documents": 0,
+                "total_chunks": 0,
+                "documents_by_type": {},
+                "documents_by_language": {},
+                "processing_pending": 0,
+                "processing_done": 0,
+                "processing_error": 0,
+                "processing_in_progress": 0
+            }
 

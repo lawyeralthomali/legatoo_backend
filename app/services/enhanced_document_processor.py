@@ -31,6 +31,7 @@ from PIL import Image
 import arabic_reshaper
 from bidi.algorithm import get_display
 from ..utils.arabic_text_processor import ArabicTextProcessor
+from .enhanced_arabic_pdf_processor import EnhancedArabicPDFProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -65,32 +66,27 @@ class EnhancedDocumentProcessor:
             pytesseract.pytesseract.tesseract_cmd = self.tesseract_cmd
         except:
             logger.warning("Tesseract not configured. OCR will not work.")
+        
+        # Initialize enhanced Arabic PDF processor
+        self.arabic_pdf_processor = EnhancedArabicPDFProcessor()
 
     # ==================== ARABIC TEXT PROCESSING ====================
 
     def needs_fixing(self, text: str) -> bool:
         """
-        Determine if Arabic text needs fixing (reshape + bidi).
+        Determine if Arabic text needs fixing using enhanced detection.
         
-        Simple rule: if the text has disconnected Arabic characters 
-        (spaces between each character) or clear reversed direction → needs fixing.
+        Delegates to the enhanced Arabic PDF processor for comprehensive detection.
         """
-        if not text.strip():
-            return False
-
-        # Simple heuristic: if average word length is very short → likely broken
-        words = text.split()
-        avg_word_len = sum(len(w) for w in words) / max(len(words), 1)
-        return avg_word_len <= 2  # If words are very short (≤2 chars) → likely broken
+        return self.arabic_pdf_processor.needs_fixing(text)
 
     def fix_arabic_text(self, text: str) -> str:
-        """Apply reshape + bidi to Arabic text."""
-        try:
-            reshaped = arabic_reshaper.reshape(text)
-            return get_display(reshaped)
-        except Exception as e:
-            logger.warning(f"Arabic text fixing failed: {e}")
-            return text
+        """
+        Apply comprehensive Arabic text fixing with RTL handling.
+        
+        Delegates to the enhanced Arabic PDF processor for advanced processing.
+        """
+        return self.arabic_pdf_processor.fix_arabic_text(text)
 
     # ==================== PHASE 3: FILE CONVERSION ====================
 
@@ -159,102 +155,26 @@ class EnhancedDocumentProcessor:
         """
         Synchronous PDF extraction optimized for Arabic.
         
-        Enhanced extraction strategy:
-        1. Direct extraction using PyMuPDF (fitz) for better Arabic support
-        2. Optional OCR fallback for scanned documents
-        3. Arabic text fixing when needed
+        Enhanced extraction strategy using the advanced Arabic PDF processor:
+        1. Direct extraction using PyMuPDF (fitz) with dict extraction
+        2. OCR fallback for scanned documents with improved PSM
+        3. Advanced Arabic text fixing and RTL handling
+        4. Intelligent method selection based on Arabic content quality
         """
         logger.info("Starting PDF extraction with enhanced Arabic support...")
         
-        # Try direct extraction first
-        direct_text = self._extract_text_direct(file_path)
+        # Use the enhanced Arabic PDF processor
+        extracted_text, method_used = self.arabic_pdf_processor.extract_pdf_text(file_path, language)
         
-        # If direct extraction produced good results, use it
-        if direct_text and len(direct_text.strip()) > 100:
-            logger.info(f"[Direct] Extracted {len(direct_text)} characters successfully")
-            return direct_text
+        if extracted_text and len(extracted_text.strip()) > 100:
+            logger.info(f"[{method_used}] Extracted {len(extracted_text)} characters successfully")
+            return extracted_text
         
-        # Fallback to OCR if direct extraction failed or produced poor results
-        logger.info("Direct extraction insufficient, trying OCR...")
-        ocr_text = self._extract_text_ocr(file_path, language)
-        
-        if ocr_text and len(ocr_text.strip()) > 50:
-            logger.info(f"[OCR] Extracted {len(ocr_text)} characters")
-            return ocr_text
-        
-        # If both fail, try traditional methods as last resort
-        logger.warning("Both direct and OCR extraction failed, trying fallback methods...")
+        # If enhanced extraction failed, try fallback methods
+        logger.warning("Enhanced extraction failed, trying fallback methods...")
         return self._extract_pdf_fallback(file_path)
 
-    def _extract_text_direct(self, pdf_path: str) -> str:
-        """
-        Direct text extraction using PyMuPDF (fitz) - optimized for Arabic.
-        
-        From your extract_arabic_pdf.py implementation.
-        """
-        try:
-            doc = fitz.open(pdf_path)
-            text = ""
-            
-            for page in doc:
-                # Use "blocks" extraction for better Arabic results
-                page_text = page.get_text("blocks")
-                if page_text:
-                    blocks_text = "\n".join([block[4] for block in page_text if block[4].strip()])
-                    if blocks_text.strip():
-                        text += blocks_text + "\n"
-            
-            doc.close()
-            
-            # If text needs fixing (disconnected Arabic chars), fix it
-            if self.needs_fixing(text):
-                text = self.fix_arabic_text(text)
-            
-            return text
-            
-        except Exception as e:
-            logger.error(f"Direct extraction failed: {e}")
-            return ""
-
-    def _extract_text_ocr(self, pdf_path: str, language: str = 'ar') -> str:
-        """
-        OCR-based extraction using pdf2image + Tesseract - for scanned PDFs.
-        
-        From your extract_arabic_pdf.py implementation.
-        """
-        try:
-            # Map language codes for OCR
-            lang_map = {
-                'ar': 'ara',
-                'en': 'eng',
-                'fr': 'fra'
-            }
-            tesseract_lang = lang_map.get(language, 'ara')
-            
-            # Convert PDF to images
-            pages = convert_from_path(pdf_path, dpi=300)
-            text = ""
-            
-            for i, page in enumerate(pages):
-                logger.info(f"OCR processing page {i+1}/{len(pages)}...")
-                
-                page_text = pytesseract.image_to_string(
-                    page, 
-                    lang=tesseract_lang, 
-                    config="--oem 3 --psm 6"  # Optimized for Arabic documents
-                )
-                
-                # Fix Arabic text if needed
-                if page_text and self.needs_fixing(page_text):
-                    page_text = self.fix_arabic_text(page_text)
-                
-                text += page_text + "\n"
-            
-            return text
-            
-        except Exception as e:
-            logger.error(f"OCR extraction failed: {e}")
-            return ""
+    # Note: Direct and OCR extraction methods are now handled by EnhancedArabicPDFProcessor
 
     def _extract_pdf_fallback(self, file_path: str) -> str:
         """

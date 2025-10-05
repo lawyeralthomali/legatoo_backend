@@ -15,6 +15,10 @@ from .contract_category import ContractCategory
 from .template import ContractTemplate
 from .user_contract import UserContract
 from .favorite import UserFavorite
+from .legal_knowledge import (
+    LawSource, LawArticle, LegalCase, CaseSection, LegalTerm,
+    KnowledgeDocument, KnowledgeChunk, AnalysisResult, KnowledgeLink, KnowledgeMetadata
+)
 
 # Import all models to ensure they are registered with SQLAlchemy
 __all__ = [
@@ -47,7 +51,18 @@ __all__ = [
     "ContractCategory",
     "ContractTemplate", 
     "UserContract",
-    "UserFavorite"
+    "UserFavorite",
+    # Legal Knowledge Models
+    "LawSource",
+    "LawArticle", 
+    "LegalCase",
+    "CaseSection",
+    "LegalTerm",
+    "KnowledgeDocument",
+    "KnowledgeChunk",
+    "AnalysisResult",
+    "KnowledgeLink",
+    "KnowledgeMetadata"
 ]
 
 

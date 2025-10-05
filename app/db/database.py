@@ -55,7 +55,9 @@ async def create_tables():
         User, Profile, RefreshToken, LegalDocument, LegalDocumentChunk,
         Subscription, Plan, Billing, UsageTracking, UserRole, Role,
         EnjazAccount, CaseImported, ContractCategory, ContractTemplate,
-        UserContract, UserFavorite
+        UserContract, UserFavorite, LawSource, LawArticle, LegalCase,
+        CaseSection, LegalTerm, KnowledgeDocument, KnowledgeChunk,
+        AnalysisResult, KnowledgeLink, KnowledgeMetadata
     )
     
     async with engine.begin() as conn:
