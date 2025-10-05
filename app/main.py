@@ -16,7 +16,7 @@ from .models import (
     User, Profile, RefreshToken,
     Subscription, Plan, Billing, UsageTracking, UserRole, Role,
     EnjazAccount, CaseImported, ContractCategory, ContractTemplate,
-    UserContract, UserFavorite, LawSource, LawArticle, LegalCase,
+    UserContract, UserFavorite, LawSource, LawBranch, LawChapter, LawArticle, LegalCase,
     CaseSection, LegalTerm, KnowledgeDocument, KnowledgeChunk,
     AnalysisResult, KnowledgeLink, KnowledgeMetadata
 )
@@ -39,6 +39,8 @@ from .routes.templates_route import router as templates_router
 from .routes.user_contracts_router import router as user_contracts_router
 from .routes.favorites_router import router as favorites_router
 from .routes.legal_knowledge_router import router as legal_knowledge_router
+from .routes.legal_laws_router import router as legal_laws_router
+from .routes.legal_hierarchy_router import router as legal_hierarchy_router
 
 from pydantic import BaseModel
 from typing import List
@@ -187,6 +189,8 @@ app.include_router(templates_router)
 app.include_router(user_contracts_router)
 app.include_router(favorites_router)
 app.include_router(legal_knowledge_router)  # Legal Knowledge Management
+app.include_router(legal_laws_router)  # Legal Laws Management (New API)
+app.include_router(legal_hierarchy_router)  # Legal Hierarchy CRUD (Branches, Chapters, Articles)
 @app.on_event("startup")
 async def startup_event():
     """Create database tables on startup."""

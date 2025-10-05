@@ -25,11 +25,13 @@ class LawSource(Base):
     last_update = Column(Date)
     description = Column(Text)
     source_url = Column(Text)
-    upload_file_path = Column(Text)
+    knowledge_document_id = Column(Integer, ForeignKey("knowledge_documents.id", ondelete="SET NULL"), nullable=True, index=True)
+    status = Column(String(50), CheckConstraint("status IN ('raw', 'processed', 'indexed')"), default="raw", index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
+    knowledge_document = relationship("KnowledgeDocument", foreign_keys=[knowledge_document_id])
     branches = relationship("LawBranch", back_populates="law_source", cascade="all, delete-orphan")
     articles = relationship("LawArticle", back_populates="law_source", cascade="all, delete-orphan")
     chunks = relationship("KnowledgeChunk", back_populates="law_source")
@@ -49,11 +51,13 @@ class LawBranch(Base):
     branch_name = Column(Text, nullable=False)  # مثال: "علاقات العمل"
     description = Column(Text)
     order_index = Column(Integer, default=0)  # لترتيب الأبواب
+    source_document_id = Column(Integer, ForeignKey("knowledge_documents.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     law_source = relationship("LawSource", back_populates="branches")
+    source_document = relationship("KnowledgeDocument", foreign_keys=[source_document_id])
     chapters = relationship("LawChapter", back_populates="branch", cascade="all, delete-orphan")
     
     def __repr__(self):
@@ -71,11 +75,13 @@ class LawChapter(Base):
     chapter_name = Column(Text, nullable=False)  # مثال: "انتهاء عقد العمل"
     description = Column(Text)
     order_index = Column(Integer, default=0)  # لترتيب الفصول
+    source_document_id = Column(Integer, ForeignKey("knowledge_documents.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     branch = relationship("LawBranch", back_populates="chapters")
+    source_document = relationship("KnowledgeDocument", foreign_keys=[source_document_id])
     articles = relationship("LawArticle", back_populates="chapter", cascade="all, delete-orphan")
     
     def __repr__(self):
@@ -98,6 +104,8 @@ class LawArticle(Base):
     keywords = Column(JSON)
     embedding = Column(Text)
     order_index = Column(Integer, default=0)  # لترتيب المواد داخل الفصل
+    ai_processed_at = Column(DateTime(timezone=True), nullable=True)
+    source_document_id = Column(Integer, ForeignKey("knowledge_documents.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
@@ -105,6 +113,7 @@ class LawArticle(Base):
     law_source = relationship("LawSource", back_populates="articles")
     branch = relationship("LawBranch")
     chapter = relationship("LawChapter", back_populates="articles")
+    source_document = relationship("KnowledgeDocument", foreign_keys=[source_document_id])
     
     def __repr__(self):
         return f"<LawArticle(id={self.id}, article_number='{self.article_number}', chapter_id={self.chapter_id})>"
@@ -131,6 +140,7 @@ class LegalCase(Base):
     case_outcome = Column(String(100))
     judge_names = Column(JSON)
     claim_amount = Column(Float)
+    status = Column(String(50), CheckConstraint("status IN ('raw', 'processed', 'indexed')"), default="raw", index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
@@ -152,6 +162,7 @@ class CaseSection(Base):
     section_type = Column(String(50), CheckConstraint("section_type IN ('summary', 'facts', 'arguments', 'ruling', 'legal_basis')"))
     content = Column(Text, nullable=False)
     embedding = Column(Text)  # Store as text for SQLite, will be JSON-encoded vector
+    ai_processed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     # Relationships
@@ -190,6 +201,7 @@ class KnowledgeDocument(Base):
     title = Column(Text, nullable=False)
     category = Column(String(50), CheckConstraint("category IN ('law', 'case', 'contract', 'article', 'policy', 'manual')"))
     file_path = Column(Text)
+    file_hash = Column(String(64), unique=True, index=True, nullable=True)  # SHA-256 hash for duplicate detection
     source_type = Column(String(50), CheckConstraint("source_type IN ('uploaded', 'web_scraped', 'api_import')"))
     status = Column(String(50), CheckConstraint("status IN ('raw', 'processed', 'indexed')"), default="raw")
     uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # FK to users table
@@ -214,6 +226,7 @@ class KnowledgeChunk(Base):
     content = Column(Text, nullable=False)
     tokens_count = Column(Integer)
     embedding = Column(Text)
+    verified_by_admin = Column(Boolean, default=False, index=True)
     
     # ✅ تحديث أسماء الحقول لتعكس الهيكل الجديد
     law_source_id = Column(Integer, ForeignKey("law_sources.id"), nullable=True)
@@ -249,10 +262,12 @@ class AnalysisResult(Base):
     model_version = Column(String(100))
     output = Column(JSON, nullable=False)
     confidence = Column(Float)
+    processed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     # Relationships
     document = relationship("KnowledgeDocument", back_populates="analysis_results")
+    processor = relationship("User", foreign_keys=[processed_by])
     
     def __repr__(self):
         return f"<AnalysisResult(id={self.id}, document_id={self.document_id}, analysis_type='{self.analysis_type}')>"

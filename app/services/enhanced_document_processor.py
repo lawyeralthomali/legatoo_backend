@@ -161,18 +161,35 @@ class EnhancedDocumentProcessor:
         3. Advanced Arabic text fixing and RTL handling
         4. Intelligent method selection based on Arabic content quality
         """
-        logger.info("Starting PDF extraction with enhanced Arabic support...")
+        logger.info(f"Starting PDF extraction with enhanced Arabic support for: {file_path}")
         
         # Use the enhanced Arabic PDF processor
-        extracted_text, method_used = self.arabic_pdf_processor.extract_pdf_text(file_path, language)
-        
-        if extracted_text and len(extracted_text.strip()) > 100:
-            logger.info(f"[{method_used}] Extracted {len(extracted_text)} characters successfully")
-            return extracted_text
+        try:
+            extracted_text, method_used = self.arabic_pdf_processor.extract_pdf_text(file_path, language)
+            
+            if extracted_text:
+                text_length = len(extracted_text.strip())
+                logger.info(f"[{method_used}] Extracted {len(extracted_text)} characters ({text_length} stripped)")
+                
+                if text_length > 100:
+                    return extracted_text
+                elif text_length > 0:
+                    logger.warning(f"[{method_used}] Extracted text is short ({text_length} chars), trying fallback...")
+                else:
+                    logger.warning(f"[{method_used}] Extracted text is empty, trying fallback...")
+            else:
+                logger.warning(f"[{method_used}] No text extracted, trying fallback...")
+        except Exception as e:
+            logger.error(f"Enhanced Arabic PDF processor failed: {str(e)}")
         
         # If enhanced extraction failed, try fallback methods
-        logger.warning("Enhanced extraction failed, trying fallback methods...")
-        return self._extract_pdf_fallback(file_path)
+        logger.info("Attempting fallback extraction methods (pdfplumber/PyPDF2)...")
+        fallback_text = self._extract_pdf_fallback(file_path)
+        
+        if not fallback_text or len(fallback_text.strip()) == 0:
+            raise ValueError("All PDF extraction methods failed. The PDF may be image-based, corrupted, or empty. Please ensure Tesseract OCR is installed for scanned documents.")
+        
+        return fallback_text
 
     # Note: Direct and OCR extraction methods are now handled by EnhancedArabicPDFProcessor
 
@@ -183,10 +200,16 @@ class EnhancedDocumentProcessor:
         Traditional extraction methods as last resort.
         """
         text_content = []
+        pdfplumber_error = None
+        pypdf2_error = None
         
+        # Try pdfplumber first
         try:
-            # Try pdfplumber first
+            logger.info("Attempting pdfplumber extraction...")
             with pdfplumber.open(file_path) as pdf:
+                total_pages = len(pdf.pages)
+                logger.info(f"pdfplumber: Processing {total_pages} pages")
+                
                 for page_num, page in enumerate(pdf.pages):
                     try:
                         text = page.extract_text()
@@ -195,28 +218,55 @@ class EnhancedDocumentProcessor:
                     except Exception as e:
                         logger.warning(f"pdfplumber failed on page {page_num}: {str(e)}")
                         continue
+                
+                if text_content:
+                    logger.info(f"✅ pdfplumber extracted text from {len(text_content)}/{total_pages} pages")
+                    return '\n\n'.join(text_content)
+                else:
+                    pdfplumber_error = f"No text found in {total_pages} pages"
+                    logger.warning(f"pdfplumber: {pdfplumber_error}")
                         
         except Exception as e:
-            logger.warning(f"pdfplumber failed, trying PyPDF2: {str(e)}")
-            
-            # Fallback to PyPDF2
-            try:
-                with open(file_path, 'rb') as file:
-                    pdf_reader = PyPDF2.PdfReader(file)
-                    for page_num, page in enumerate(pdf_reader.pages):
-                        try:
-                            text = page.extract_text()
-                            if text and text.strip():
-                                text_content.append(text)
-                        except Exception as e:
-                            logger.warning(f"PyPDF2 failed on page {page_num}: {str(e)}")
-                            continue
-                            
-            except Exception as e2:
-                logger.error(f"All PDF extraction methods failed: {str(e2)}")
-                raise ValueError(f"Could not extract text from {file_path}")
+            pdfplumber_error = str(e)
+            logger.warning(f"pdfplumber failed: {pdfplumber_error}")
         
-        return '\n\n'.join(text_content)
+        # Fallback to PyPDF2
+        try:
+            logger.info("Attempting PyPDF2 extraction...")
+            with open(file_path, 'rb') as file:
+                pdf_reader = PyPDF2.PdfReader(file)
+                total_pages = len(pdf_reader.pages)
+                logger.info(f"PyPDF2: Processing {total_pages} pages")
+                
+                for page_num, page in enumerate(pdf_reader.pages):
+                    try:
+                        text = page.extract_text()
+                        if text and text.strip():
+                            text_content.append(text)
+                    except Exception as e:
+                        logger.warning(f"PyPDF2 failed on page {page_num}: {str(e)}")
+                        continue
+                
+                if text_content:
+                    logger.info(f"✅ PyPDF2 extracted text from {len(text_content)}/{total_pages} pages")
+                    return '\n\n'.join(text_content)
+                else:
+                    pypdf2_error = f"No text found in {total_pages} pages"
+                    logger.warning(f"PyPDF2: {pypdf2_error}")
+                        
+        except Exception as e2:
+            pypdf2_error = str(e2)
+            logger.error(f"PyPDF2 failed: {pypdf2_error}")
+        
+        # All methods failed
+        error_details = []
+        if pdfplumber_error:
+            error_details.append(f"pdfplumber: {pdfplumber_error}")
+        if pypdf2_error:
+            error_details.append(f"PyPDF2: {pypdf2_error}")
+        
+        logger.error(f"All fallback methods failed: {'; '.join(error_details)}")
+        return ""  # Return empty string instead of raising, let caller handle it
 
     async def _extract_from_docx(self, file_path: str) -> str:
         """Extract text from DOCX file."""

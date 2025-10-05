@@ -409,11 +409,16 @@ class EnhancedArabicPDFProcessor:
                     continue
             
             doc.close()
-            logger.info(f"[Direct] Extracted {len(text)} characters from {len(doc)} pages using dict extraction")
+            text_length = len(text.strip())
+            logger.info(f"[Direct] Extracted {len(text)} characters ({text_length} stripped) from PDF using dict extraction")
+            
+            if text_length == 0:
+                logger.warning("[Direct] No text content found in PDF - may be image-based or empty")
+            
             return text
             
         except Exception as e:
-            logger.error(f"Direct extraction failed: {e}")
+            logger.error(f"Direct extraction failed with error: {type(e).__name__}: {str(e)}")
             return ""
 
     def extract_text_ocr(self, pdf_path: str, language: str = 'ar') -> str:
@@ -493,11 +498,25 @@ class EnhancedArabicPDFProcessor:
                     text += "\n---PAGE_SEPARATOR---\n"
                     continue
             
-            logger.info(f"[OCR] Extracted {len(text)} characters from {len(pages)} pages using improved PSM")
+            text_length = len(text.strip())
+            logger.info(f"[OCR] Extracted {len(text)} characters ({text_length} stripped) from {len(pages)} pages using improved PSM")
+            
+            if text_length == 0:
+                logger.warning("[OCR] No text extracted via OCR - check if Tesseract is installed and configured properly")
+            
             return text
             
         except Exception as e:
-            logger.error(f"OCR extraction failed: {e}")
+            error_type = type(e).__name__
+            error_msg = str(e)
+            logger.error(f"OCR extraction failed with {error_type}: {error_msg}")
+            
+            # Provide helpful hints for common errors
+            if "tesseract" in error_msg.lower() or "tesseract" in error_type.lower():
+                logger.error("Tesseract OCR is not installed or not in PATH. Install it: sudo apt-get install tesseract-ocr tesseract-ocr-ara")
+            elif "pdf2image" in error_msg.lower():
+                logger.error("pdf2image or poppler not installed. Install: sudo apt-get install poppler-utils")
+            
             return ""
 
     def extract_pdf_text(self, pdf_path: str, language: str = 'ar') -> Tuple[str, str]:
@@ -532,19 +551,31 @@ class EnhancedArabicPDFProcessor:
         ocr_arabic_chars = sum(1 for c in ocr_text if '\u0600' <= c <= '\u06FF')
         
         # Choose the best result (more Arabic content is better for legal documents)
+        # If both methods failed, return empty with diagnostic info
+        if direct_chars == 0 and ocr_chars == 0:
+            logger.error("❌ BOTH extraction methods returned empty text!")
+            logger.error("Possible causes:")
+            logger.error("  1. PDF is image-based and Tesseract OCR is not installed/configured")
+            logger.error("  2. PDF is corrupted or empty")
+            logger.error("  3. PDF has non-standard encoding")
+            logger.error("  4. PDF requires specific fonts or rendering")
+            return "", "FAILED"
+        
+        # Choose best method based on Arabic content
         if ocr_arabic_chars > direct_arabic_chars:
-            logger.info(f"OCR extraction yielded more Arabic content ({ocr_arabic_chars} vs {direct_arabic_chars} chars)")
+            logger.info(f"✅ OCR extraction yielded more Arabic content ({ocr_arabic_chars} vs {direct_arabic_chars} chars)")
             best_text = ocr_text
             best_method = "OCR"
         else:
-            logger.info(f"Direct extraction yielded more Arabic content ({direct_arabic_chars} vs {ocr_arabic_chars} chars)")
+            logger.info(f"✅ Direct extraction yielded more Arabic content ({direct_arabic_chars} vs {ocr_arabic_chars} chars)")
             best_text = direct_text
             best_method = "Direct"
         
-        logger.info(f"Extraction finished!")
-        logger.info(f"Direct: {direct_chars} chars ({direct_arabic_chars} Arabic)")
-        logger.info(f"OCR: {ocr_chars} chars ({ocr_arabic_chars} Arabic)")
-        logger.info(f"Best method: {best_method}")
+        # Summary
+        logger.info(f"📊 Extraction Summary:")
+        logger.info(f"   Direct: {direct_chars} chars ({direct_arabic_chars} Arabic)")
+        logger.info(f"   OCR: {ocr_chars} chars ({ocr_arabic_chars} Arabic)")
+        logger.info(f"   Best method: {best_method} with {len(best_text)} chars")
         
         return best_text, best_method
 

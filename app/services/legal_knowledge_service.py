@@ -69,7 +69,8 @@ class LegalKnowledgeService:
                 last_update=law_source_data.last_update,
                 description=law_source_data.description,
                 source_url=law_source_data.source_url,
-                upload_file_path=law_source_data.upload_file_path
+                knowledge_document_id=law_source_data.knowledge_document_id,
+                status=law_source_data.status or 'raw'
             )
             
             logger.info(f"Created law source {law_source.id}: {law_source.name}")
@@ -116,7 +117,8 @@ class LegalKnowledgeService:
                     "last_update": law_source.last_update,
                     "description": law_source.description,
                     "source_url": law_source.source_url,
-                    "upload_file_path": law_source.upload_file_path,
+                    "knowledge_document_id": law_source.knowledge_document_id,
+                    "status": law_source.status,
                     "created_at": law_source.created_at,
                     "updated_at": law_source.updated_at,
                     "articles": [

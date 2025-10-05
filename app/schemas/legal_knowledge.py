@@ -90,7 +90,8 @@ class LawSourceBase(BaseModel):
     last_update: Optional[date] = None
     description: Optional[str] = None
     source_url: Optional[str] = None
-    upload_file_path: Optional[str] = None
+    knowledge_document_id: Optional[int] = None
+    status: Optional[str] = Field(default='raw', pattern='^(raw|processed|indexed)$')
 
 
 class LawSourceCreate(LawSourceBase):
@@ -108,7 +109,8 @@ class LawSourceUpdate(BaseModel):
     last_update: Optional[date] = None
     description: Optional[str] = None
     source_url: Optional[str] = None
-    upload_file_path: Optional[str] = None
+    knowledge_document_id: Optional[int] = None
+    status: Optional[str] = Field(None, pattern='^(raw|processed|indexed)$')
 
 
 class LawSourceResponse(LawSourceBase):

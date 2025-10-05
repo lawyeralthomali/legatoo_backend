@@ -106,7 +106,8 @@ class ArabicLegalDocumentProcessor:
                     last_update=processed_data["law_source"].get("last_update"),
                     description=processed_data["law_source"].get("description"),
                     source_url=processed_data["law_source"].get("source_url"),
-                    upload_file_path=file_path
+                    knowledge_document_id=None,  # TODO: Link to KnowledgeDocument if needed
+                    status='raw'
                 )
                 law_source_id = law_source.id
 

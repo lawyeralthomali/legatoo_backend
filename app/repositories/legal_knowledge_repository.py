@@ -39,7 +39,8 @@ class LawSourceRepository:
         last_update: Optional[str] = None,
         description: Optional[str] = None,
         source_url: Optional[str] = None,
-        upload_file_path: Optional[str] = None
+        knowledge_document_id: Optional[int] = None,
+        status: str = 'raw'
     ) -> LawSource:
         """Create a new law source."""
         law_source = LawSource(
@@ -51,7 +52,8 @@ class LawSourceRepository:
             last_update=last_update,
             description=description,
             source_url=source_url,
-            upload_file_path=upload_file_path
+            knowledge_document_id=knowledge_document_id,
+            status=status
         )
         self.db.add(law_source)
         await self.db.commit()

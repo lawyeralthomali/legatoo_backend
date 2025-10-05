@@ -54,27 +54,34 @@ class ArabicLegalPatternRecognizer:
     """Recognizes Arabic legal document patterns"""
     
     def __init__(self):
-        # Arabic legal patterns - updated to match actual text format
+        # Arabic legal patterns - ORDERED BY LENGTH (longest first) to prevent partial matches
+        # This ensures "الباب الثاني عشر" is matched before "الباب الثاني"
         self.chapter_patterns = [
-            r'ﺍﻟﺒﺎﺏ ﺍﻷﻭﻝ',  # First chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻧﻲ', # Second chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻟﺚ', # Third chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺮﺍﺑﻊ', # Fourth chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺨﺎﻣﺲ', # Fifth chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺩﺱ', # Sixth chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺑﻊ', # Seventh chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻣﻦ', # Eighth chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺘﺎﺳﻊ', # Ninth chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﻌﺎﺷﺮ', # Tenth chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺤﺎﺩﻱ ﻋﺸﺮ', # Eleventh chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻧﻲ ﻋﺸﺮ', # Twelfth chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻟﺚ ﻋﺸﺮ', # Thirteenth chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺮﺍﺑﻊ ﻋﺸﺮ', # Fourteenth chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺨﺎﻣﺲ ﻋﺸﺮ', # Fifteenth chapter
-            r'ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺩﺱ ﻋﺸﺮ', # Sixteenth chapter
-            # Original patterns as fallback
-            r'الباب\s+(?:ال)?(?:أول|ثاني|ثالث|رابع|خامس|سادس|سابع|ثامن|تاسع|عاشر)',
-            r'الباب\s+(\d+)'
+            # Compound numbers (11-19) - MUST come first
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺤﺎﺩﻱ ﻋﺸﺮ',   # 11th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻧﻲ ﻋﺸﺮ',    # 12th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻟﺚ ﻋﺸﺮ',    # 13th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺮﺍﺑﻊ ﻋﺸﺮ',     # 14th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺨﺎﻣﺲ ﻋﺸﺮ',    # 15th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺩﺱ ﻋﺸﺮ',    # 16th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺑﻊ ﻋﺸﺮ',    # 17th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻣﻦ ﻋﺸﺮ',    # 18th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺘﺎﺳﻊ ﻋﺸﺮ',    # 19th chapter
+            # Simple numbers (1-10)
+            r'ﺍﻟﺒﺎﺏ ﺍﻷﻭﻝ',           # 1st chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻧﻲ',          # 2nd chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻟﺚ',          # 3rd chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺮﺍﺑﻊ',          # 4th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺨﺎﻣﺲ',          # 5th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺩﺱ',          # 6th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺴﺎﺑﻊ',          # 7th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺜﺎﻣﻦ',          # 8th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﺘﺎﺳﻊ',          # 9th chapter
+            r'ﺍﻟﺒﺎﺏ ﺍﻟﻌﺎﺷﺮ',          # 10th chapter
+            # Fallback patterns for non-encoded text
+            r'الباب\s+(?:ال)?(?:حادي|ثاني|ثالث|رابع|خامس|سادس|سابع|ثامن|تاسع)\s+عشر',  # 11-19
+            r'الباب\s+(?:ال)?(?:أول|ثاني|ثالث|رابع|خامس|سادس|سابع|ثامن|تاسع|عاشر)',   # 1-10
+            r'الباب\s+(\d+)'  # Numeric fallback
         ]
         
         self.section_patterns = [
@@ -94,6 +101,28 @@ class ArabicLegalPatternRecognizer:
         ]
         
         self.article_patterns = [
+            # ★ تحسين: إضافة أنماط متعددة للتعامل مع اختلافات الترميز والحركات ★
+            # Compound numbers with "والعشرون" (21-29) - MUST come first
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺤﺎﺩﻳﺔ ﻭﺍﻟﻌﺸﺮﻭﻥ', # 21st
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻧﻴﺔ ﻭﺍﻟﻌﺸﺮﻭﻥ', # 22nd
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻟﺜﺔ ﻭﺍﻟﻌﺸﺮﻭﻥ', # 23rd
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺮﺍﺑﻌﺔ ﻭﺍﻟﻌﺸﺮﻭﻥ', # 24th
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺨﺎﻣﺴﺔ ﻭﺍﻟﻌﺸﺮﻭﻥ', # 25th
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺴﺎﺩﺳﺔ ﻭﺍﻟﻌﺸﺮﻭﻥ', # 26th
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺴﺎﺑﻌﺔ ﻭﺍﻟﻌﺸﺮﻭﻥ', # 27th
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻣﻨﺔ ﻭﺍﻟﻌﺸﺮﻭﻥ', # 28th
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺘﺎﺳﻌﺔ ﻭﺍﻟﻌﺸﺮﻭﻥ', # 29th
+            # Compound numbers with "عشرة" (11-19)
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺤﺎﺩﻳﺔ ﻋﺸﺮﺓ', # 11th
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻧﻴﺔ ﻋﺸﺮﺓ', # 12th
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻟﺜﺔ ﻋﺸﺮﺓ', # 13th
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺮﺍﺑﻌﺔ ﻋﺸﺮﺓ', # 14th
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺨﺎﻣﺴﺔ ﻋﺸﺮﺓ', # 15th
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺴﺎﺩﺳﺔ ﻋﺸﺮﺓ', # 16th
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺴﺎﺑﻌﺔ ﻋﺸﺮﺓ', # 17th
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻣﻨﺔ ﻋﺸﺮﺓ', # 18th
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺘﺎﺳﻌﺔ ﻋﺸﺮﺓ', # 19th
+            # Simple numbers (1-10) - Encoded version
             r'ﺍﻟﻤﺎﺩﺓ ﺍﻷﻭﻟﻰ', # First article
             r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻧﻴﺔ', # Second article
             r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻟﺜﺔ', # Third article
@@ -104,24 +133,29 @@ class ArabicLegalPatternRecognizer:
             r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻣﻨﺔ', # Eighth article
             r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺘﺎﺳﻌﺔ', # Ninth article
             r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﻌﺎﺷﺮﺓ', # Tenth article
-            # Pattern for numbered articles (like "المادة الخامسة والعشرون")
-            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺨﺎﻣﺴﺔ ﻭﺍﻟﻌﺸﺮﻭﻥ', # Twenty-fifth article
-            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻧﻴﺔ ﻭﺍﻟﻌﺸﺮﻭﻥ', # Twenty-second article
-            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻟﺜﺔ ﻭﺍﻟﻌﺸﺮﻭﻥ', # Twenty-third article
-            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺮﺍﺑﻌﺔ ﻭﺍﻟﻌﺸﺮﻭﻥ', # Twenty-fourth article
-            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻧﻴﺔ ﻋﺸﺮﺓ', # Twelfth article
-            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻟﺜﺔ ﻋﺸﺮﺓ', # Thirteenth article
-            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺮﺍﺑﻌﺔ ﻋﺸﺮﺓ', # Fourteenth article
-            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺨﺎﻣﺴﺔ ﻋﺸﺮﺓ', # Fifteenth article
-            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺴﺎﺩﺳﺔ ﻋﺸﺮﺓ', # Sixteenth article
-            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺴﺎﺑﻌﺔ ﻋﺸﺮﺓ', # Seventeenth article
-            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺜﺎﻣﻨﺔ ﻋﺸﺮﺓ', # Eighteenth article
-            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﺘﺎﺳﻌﺔ ﻋﺸﺮﺓ', # Nineteenth article
-            r'ﺍﻟﻤﺎﺩﺓ ﺍﻟﻌﺎﺷﺮﺓ', # Twentieth article
-            # Original patterns as fallback
-            r'المادة\s+(\d+(?:/\d+)?)',
-            r'مادة\s+(\d+(?:/\d+)?)',
-            r'م\.\s*(\d+(?:/\d+)?)'
+            # ★ أنماط بديلة للتعامل مع الفروقات في ترميز PDF ★
+            # Simple numbers (1-10) - Normal encoding with variations
+            r'المادة\s+الأولى',
+            r'المادة\s+الاولى',  # بدون همزة
+            r'المادة\s+الثانية',
+            r'المادة\s+الثالثة',
+            r'المادة\s+الرابعة',
+            r'المادة\s+الخامسة',
+            r'المادة\s+السادسة',
+            r'المادة\s+السابعة',
+            r'المادة\s+الثامنة',
+            r'المادة\s+التاسعة',
+            r'المادة\s+العاشرة',
+            # Compound patterns with flexible spacing
+            r'المادة\s+(?:ال)?(?:حادية|ثانية|ثالثة|رابعة|خامسة|سادسة|سابعة|ثامنة|تاسعة)\s+عشرة',  # 11-19
+            r'المادة\s+(?:ال)?(?:حادية|ثانية|ثالثة|رابعة|خامسة|سادسة|سابعة|ثامنة|تاسعة)\s+والعشرون',  # 21-29
+            # Numeric patterns (most flexible)
+            r'المادة\s*[:：]\s*(\d+(?:/\d+)?)',  # المادة: 15
+            r'المادة\s+(\d+(?:/\d+)?)',          # المادة 15
+            r'مادة\s+(\d+(?:/\d+)?)',            # مادة 15
+            r'م\s*[.．]\s*(\d+(?:/\d+)?)',       # م. 15
+            r'المادة\s+([٠-٩]+)',                 # أرقام عربية
+            r'مادة\s+رقم\s+(\d+)'                # مادة رقم 15
         ]
         
         self.sub_article_patterns = [
@@ -139,21 +173,68 @@ class ArabicLegalPatternRecognizer:
         self.article_regexes = [re.compile(pattern, re.IGNORECASE | re.UNICODE) for pattern in self.article_patterns]
         self.sub_article_regexes = [re.compile(pattern, re.IGNORECASE | re.UNICODE) for pattern in self.sub_article_patterns]
         
-        # Arabic number mappings
+        # ★ خريطة موسعة للأرقام العربية مع تنويعات مختلفة ★
         self.arabic_to_english = {
-            'أول': '1', 'ثاني': '2', 'ثالث': '3', 'رابع': '4', 'خامس': '5',
-            'سادس': '6', 'سابع': '7', 'ثامن': '8', 'تاسع': '9', 'عاشر': '10',
-            'حادي عشر': '11', 'ثاني عشر': '12', 'ثالث عشر': '13', 'رابع عشر': '14',
-            'خامس عشر': '15', 'سادس عشر': '16', 'سابع عشر': '17', 'ثامن عشر': '18',
-            'تاسع عشر': '19', 'عشرون': '20', 'واحد وعشرون': '21', 'اثنان وعشرون': '22',
-            'ثلاثة وعشرون': '23', 'أربعة وعشرون': '24', 'خمسة وعشرون': '25',
-            'ستة وعشرون': '26', 'سبعة وعشرون': '27', 'ثمانية وعشرون': '28',
-            'تسعة وعشرون': '29', 'ثلاثون': '30',
-            'أولى': '1', 'ثانية': '2', 'ثالثة': '3', 'رابعة': '4', 'خامسة': '5',
-            'سادسة': '6', 'سابعة': '7', 'ثامنة': '8', 'تاسعة': '9', 'عاشرة': '10',
-            'الحادية': '11', 'الثانية': '12', 'الثالثة': '13', 'الرابعة': '14',
-            'الخامسة': '15', 'السادسة': '16', 'السابعة': '17', 'الثامنة': '18',
-            'التاسعة': '19', 'العاشرة': '20'
+            # أرقام مذكرة (للأبواب والفصول)
+            'أول': '1', 'الأول': '1', 'اول': '1', 'الاول': '1',
+            'ثاني': '2', 'الثاني': '2',
+            'ثالث': '3', 'الثالث': '3',
+            'رابع': '4', 'الرابع': '4',
+            'خامس': '5', 'الخامس': '5',
+            'سادس': '6', 'السادس': '6',
+            'سابع': '7', 'السابع': '7',
+            'ثامن': '8', 'الثامن': '8',
+            'تاسع': '9', 'التاسع': '9',
+            'عاشر': '10', 'العاشر': '10',
+            # أرقام مؤنثة (للمواد)
+            'أولى': '1', 'الأولى': '1', 'اولى': '1', 'الاولى': '1',
+            'ثانية': '2', 'الثانية': '2',
+            'ثالثة': '3', 'الثالثة': '3',
+            'رابعة': '4', 'الرابعة': '4',
+            'خامسة': '5', 'الخامسة': '5',
+            'سادسة': '6', 'السادسة': '6',
+            'سابعة': '7', 'السابعة': '7',
+            'ثامنة': '8', 'الثامنة': '8',
+            'تاسعة': '9', 'التاسعة': '9',
+            'عاشرة': '10', 'العاشرة': '10',
+            # أرقام مركبة (11-19) - مذكرة
+            'حادي عشر': '11', 'الحادي عشر': '11',
+            'ثاني عشر': '12', 'الثاني عشر': '12',
+            'ثالث عشر': '13', 'الثالث عشر': '13',
+            'رابع عشر': '14', 'الرابع عشر': '14',
+            'خامس عشر': '15', 'الخامس عشر': '15',
+            'سادس عشر': '16', 'السادس عشر': '16',
+            'سابع عشر': '17', 'السابع عشر': '17',
+            'ثامن عشر': '18', 'الثامن عشر': '18',
+            'تاسع عشر': '19', 'التاسع عشر': '19',
+            # أرقام مركبة (11-19) - مؤنثة
+            'حادية عشرة': '11', 'الحادية عشرة': '11',
+            'ثانية عشرة': '12', 'الثانية عشرة': '12',
+            'ثالثة عشرة': '13', 'الثالثة عشرة': '13',
+            'رابعة عشرة': '14', 'الرابعة عشرة': '14',
+            'خامسة عشرة': '15', 'الخامسة عشرة': '15',
+            'سادسة عشرة': '16', 'السادسة عشرة': '16',
+            'سابعة عشرة': '17', 'السابعة عشرة': '17',
+            'ثامنة عشرة': '18', 'الثامنة عشرة': '18',
+            'تاسعة عشرة': '19', 'التاسعة عشرة': '19',
+            # العشرينات (20-29)
+            'عشرون': '20', 'العشرون': '20',
+            'حادية والعشرون': '21', 'الحادية والعشرون': '21', 'واحد وعشرون': '21',
+            'ثانية والعشرون': '22', 'الثانية والعشرون': '22', 'اثنان وعشرون': '22',
+            'ثالثة والعشرون': '23', 'الثالثة والعشرون': '23', 'ثلاثة وعشرون': '23',
+            'رابعة والعشرون': '24', 'الرابعة والعشرون': '24', 'أربعة وعشرون': '24',
+            'خامسة والعشرون': '25', 'الخامسة والعشرون': '25', 'خمسة وعشرون': '25',
+            'سادسة والعشرون': '26', 'السادسة والعشرون': '26', 'ستة وعشرون': '26',
+            'سابعة والعشرون': '27', 'السابعة والعشرون': '27', 'سبعة وعشرون': '27',
+            'ثامنة والعشرون': '28', 'الثامنة والعشرون': '28', 'ثمانية وعشرون': '28',
+            'تاسعة والعشرون': '29', 'التاسعة والعشرون': '29', 'تسعة وعشرون': '29',
+            # الثلاثينات وما بعدها
+            'ثلاثون': '30', 'الثلاثون': '30',
+            'أربعون': '40', 'الأربعون': '40',
+            'خمسون': '50', 'الخمسون': '50',
+            # الأرقام الهندية
+            '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+            '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
         }
     
     def normalize_arabic_number(self, text: str) -> str:
@@ -298,9 +379,17 @@ class HierarchicalDocumentProcessor:
         self,
         file_path: str,
         law_source_details: Optional[Dict[str, Any]] = None,
-        uploaded_by: Optional[int] = None
+        uploaded_by: Optional[int] = None,
+        law_source_id: Optional[int] = None
     ) -> Dict[str, Any]:
-        """Process a legal document and extract hierarchical structure"""
+        """Process a legal document and extract hierarchical structure
+        
+        Args:
+            file_path: Path to the document file
+            law_source_details: Details for creating/updating law source
+            uploaded_by: User ID who uploaded the document
+            law_source_id: Optional existing LawSource ID (if already created)
+        """
         self.processing_start_time = time.time()
         
         try:
@@ -319,7 +408,7 @@ class HierarchicalDocumentProcessor:
             
             # Phase 5: Data Persistence
             law_source = await self._persist_to_database(
-                document_structure, law_source_details, uploaded_by
+                document_structure, law_source_details, uploaded_by, law_source_id
             )
             
             # Calculate processing time
@@ -439,21 +528,78 @@ class HierarchicalDocumentProcessor:
     def _detect_table_of_contents_sections(self, lines: List[str]) -> List[Tuple[int, int]]:
         """Detect table of contents sections in the document.
         
+        Enhanced detection for Arabic legal documents with multiple TOC detection strategies:
+        1. Explicit TOC headers (الفهرس, جدول المحتويات, etc.)
+        2. Pattern-based: lines with branch names + page numbers
+        3. Sequential: multiple consecutive branch markers without content
+        4. "Chapter" prefix pattern (common in TOC entries)
+        5. CRITICAL: TOC ends at first "المادة الأولى" without page numbers
+        
         Returns list of (start_line, end_line) tuples for TOC sections.
         """
         toc_sections = []
         current_toc_start = None
         
+        # ★★★ NEW: Track all lines with "Chapter" prefix to mark entire TOC block ★★★
+        chapter_prefix_lines = []
+        for i, line in enumerate(lines):
+            if re.search(r'^(Chapter|chapter)\s+(ﺍﻟﺒﺎﺏ|الباب|ﺍﻟﻔﺼﻞ|الفصل)', line.strip()):
+                chapter_prefix_lines.append(i + 1)  # 1-based line numbering
+        
+        # If we found "Chapter" prefix lines, mark entire block as TOC
+        if len(chapter_prefix_lines) >= 3:  # At least 3 lines with this pattern = TOC
+            # Find first and last occurrence
+            toc_start = min(chapter_prefix_lines)
+            toc_end = max(chapter_prefix_lines)
+            
+            # Extend to the actual TOC end by checking for first article without page number
+            first_article_patterns = [
+                r'المادة الأولى',
+                r'ﺍﻟﻤﺎﺩﺓ ﺍﻷﻭﻟﻰ',
+                r'المادة\s+1\s*:',
+                r'المادة\s+الاولى'
+            ]
+            
+            page_number_at_end = r'\.+\s*\d+\s*$|\s+\d+\s*$'
+            
+            for i in range(toc_end, min(toc_end + 20, len(lines))):
+                line_original = lines[i].strip()
+                
+                # Check if this line is first article
+                for article_pattern in first_article_patterns:
+                    if re.search(article_pattern, line_original, re.IGNORECASE):
+                        # Check if it has page number
+                        if not re.search(page_number_at_end, line_original):
+                            # Found actual first article - TOC ends here
+                            toc_end = i
+                            break
+            
+            # Mark this entire block as TOC
+            toc_sections.append((toc_start, toc_end))
+            logger.info(f"★ Detected TOC block via 'Chapter' prefix pattern: lines {toc_start} to {toc_end} ({len(chapter_prefix_lines)} lines with 'Chapter' prefix)")
+            
+            # Return early - we found the TOC block
+            return toc_sections
+        
+        # Track branch occurrences to detect duplicates (TOC vs actual content)
+        branch_occurrences = {}  # {branch_number: [line_numbers]}
+        
         # Patterns that indicate table of contents
         toc_indicators = [
             r'الفهرس',
+            r'ﺍﻟﻔﻬﺮﺱ',  # Encoded version
             r'جدول المحتويات',
+            r'ﺟﺪﻭﻝ ﺍﻟﻤﺤﺘﻮﻳﺎﺕ',  # Encoded version
             r'المحتويات',
+            r'ﺍﻟﻤﺤﺘﻮﻳﺎﺕ',  # Encoded version
             r'محتوى الكتاب',
             r'فهرس المحتويات',
+            r'ﻓﻬﺮﺱ ﺍﻟﻤﺤﺘﻮﻳﺎﺕ',  # Encoded version
             r'index',
             r'table of contents',
-            r'contents'
+            r'contents',
+            r'فهرس',
+            r'ﻓﻬﺮﺱ'
         ]
         
         # Also detect TOC by pattern: chapter/section names followed by page numbers
@@ -461,10 +607,15 @@ class HierarchicalDocumentProcessor:
         toc_pattern_detected = False
         
         # Patterns that indicate end of table of contents
+        # المتطلب الحاسم: يجب أن ينتهي جدول المحتويات عند أول ظهور لـ "المادة الأولى" بدون أرقام صفحات
         toc_end_indicators = [
+            r'المادة الأولى',      # المادة الأولى (عادي)
+            r'ﺍﻟﻤﺎﺩﺓ ﺍﻷﻭﻟﻰ',     # المادة الأولى (encoded)
+            r'المادة\s+1\s*:',     # المادة 1:
+            r'المادة\s+الاولى',    # تهجئة بديلة
+            r'مادة\s+1\s*:',       # مادة 1:
             r'الفصل الأول',
             r'الباب الأول',
-            r'المادة الأولى',
             r'بداية النص',
             r'start of text',
             r'beginning of document'
@@ -472,6 +623,7 @@ class HierarchicalDocumentProcessor:
         
         for i, line in enumerate(lines):
             line_clean = line.strip().lower()
+            line_original = line.strip()
             
             # Check for TOC start indicators
             if current_toc_start is None:
@@ -482,29 +634,114 @@ class HierarchicalDocumentProcessor:
                         logger.info(f"Found TOC start at line {current_toc_start}: {line[:50]}...")
                         break
                 
+                # Detect "Chapter" prefix pattern (common in TOC)
+                # Pattern: "Chapter الباب الأول", "Chapter الباب الثاني", etc.
+                if not current_toc_start and re.search(r'^(Chapter|chapter)\s+', line_original):
+                    # Check if this pattern repeats in next 15 lines (allowing gaps)
+                    chapter_prefix_count = 0
+                    for lookahead_idx in range(i, min(i + 15, len(lines))):
+                        if lookahead_idx < len(lines):
+                            if re.search(r'^(Chapter|chapter)\s+', lines[lookahead_idx].strip()):
+                                chapter_prefix_count += 1
+                    
+                    # If we find 3+ lines with "Chapter" prefix within 15 lines, it's TOC
+                    # This is lenient enough to allow gaps between TOC entries
+                    if chapter_prefix_count >= 3:
+                        current_toc_start = i + 1
+                        logger.info(f"Found TOC by 'Chapter' prefix pattern (count: {chapter_prefix_count} in 15-line window) at line {current_toc_start}: {line[:50]}...")
+                
                 # Also detect TOC by pattern: lines ending with page numbers
                 # Pattern: "Chapter/Section Name ... 31" or "الباب الأول ... 31"
                 if not current_toc_start:
                     # Look for lines that contain chapter/section patterns followed by page numbers
-                    page_number_at_end = r'\s+\d+\s*$'
+                    page_number_at_end = r'\.+\s*\d+\s*$|\s+\d+\s*$'  # Matches "...31" or "  31"
                     if re.search(page_number_at_end, line.strip()):
                         # Check if this line contains chapter/section keywords
                         chapter_section_keywords = [r'الباب', r'الفصل', r'المادة', r'أولاً', r'ثانياً', r'ﺍﻟﺒﺎﺏ', r'ﺍﻟﻔﺼﻞ', r'ﺍﻟﻤﺎﺩﺓ']
                         for keyword in chapter_section_keywords:
                             if re.search(keyword, line, re.IGNORECASE):
-                                current_toc_start = i + 1
-                                logger.info(f"Found TOC by pattern at line {current_toc_start}: {line[:50]}...")
-                                break
+                                # Additional check: look ahead to see if multiple consecutive lines have same pattern
+                                # This confirms it's TOC and not just a page reference
+                                toc_pattern_count = 0
+                                for lookahead_idx in range(i, min(i + 5, len(lines))):
+                                    if lookahead_idx < len(lines):
+                                        lookahead_line = lines[lookahead_idx].strip()
+                                        if re.search(page_number_at_end, lookahead_line):
+                                            for kw in chapter_section_keywords:
+                                                if re.search(kw, lookahead_line, re.IGNORECASE):
+                                                    toc_pattern_count += 1
+                                                    break
+                                
+                                # If we find 3+ consecutive lines with this pattern, it's definitely TOC
+                                if toc_pattern_count >= 3:
+                                    current_toc_start = i + 1
+                                    logger.info(f"Found TOC by pattern (consecutive matches: {toc_pattern_count}) at line {current_toc_start}: {line[:50]}...")
+                                    break
+                
+                # Detect rapid sequential branch markers (TOC listing)
+                # If we see multiple branch markers in quick succession without content, it's likely TOC
+                if not current_toc_start:
+                    chapter_pattern = r'ﺍﻟﺒﺎﺏ|الباب'
+                    if re.search(chapter_pattern, line_original):
+                        # Count how many branch markers appear in next 10 lines
+                        branch_count = 0
+                        content_count = 0
+                        for lookahead_idx in range(i, min(i + 10, len(lines))):
+                            if lookahead_idx < len(lines):
+                                lookahead_line = lines[lookahead_idx].strip()
+                                if re.search(chapter_pattern, lookahead_line):
+                                    branch_count += 1
+                                elif len(lookahead_line) > 100:  # Substantial content
+                                    content_count += 1
+                        
+                        # If we have 5+ branches but little content, it's likely TOC
+                        if branch_count >= 5 and content_count < 2:
+                            current_toc_start = i + 1
+                            logger.info(f"Found TOC by rapid branch listing (branches: {branch_count}, content: {content_count}) at line {current_toc_start}: {line[:50]}...")
             
             # Check for TOC end indicators or patterns that suggest end of TOC
             elif current_toc_start is not None:
                 should_end_toc = False
                 
-                # Check explicit end indicators
-                for indicator in toc_end_indicators:
-                    if re.search(indicator, line_clean, re.IGNORECASE):
-                        should_end_toc = True
+                # ★★★ المتطلب الحاسم: اكتشاف "المادة الأولى" بدون أرقام صفحات ★★★
+                # هذا هو المؤشر الأقوى على نهاية جدول المحتويات وبداية المحتوى الفعلي
+                first_article_patterns = [
+                    r'المادة الأولى',
+                    r'ﺍﻟﻤﺎﺩﺓ ﺍﻷﻭﻟﻰ',
+                    r'المادة\s+1\s*:',
+                    r'المادة\s+الاولى',
+                    r'المادة\s+١'  # رقم عربي
+                ]
+                
+                # Check if line contains first article pattern
+                article_found = False
+                for article_pattern in first_article_patterns:
+                    if re.search(article_pattern, line_original, re.IGNORECASE):
+                        article_found = True
                         break
+                
+                if article_found:
+                    # التحقق الحاسم: هل هذا السطر يحتوي على رقم صفحة في النهاية؟
+                    page_number_at_end = r'\.+\s*\d+\s*$|\s+\d+\s*$'
+                    has_page_number = re.search(page_number_at_end, line_original.strip())
+                    
+                    if not has_page_number:
+                        # ✓ وجدنا "المادة الأولى" بدون رقم صفحة = نهاية جدول المحتويات حتماً
+                        should_end_toc = True
+                        logger.info(f"✓ TOC ENDED at line {i+1}: Found first article WITHOUT page number: {line[:60]}...")
+                    else:
+                        # لا يزال في جدول المحتويات (المادة الأولى مع رقم الصفحة)
+                        logger.debug(f"Still in TOC at line {i+1}: First article WITH page number: {line[:60]}...")
+                
+                # Check explicit end indicators (secondary check)
+                if not should_end_toc:
+                    for indicator in toc_end_indicators:
+                        if re.search(indicator, line_clean, re.IGNORECASE):
+                            # التأكد من عدم وجود رقم صفحة
+                            page_number_at_end = r'\.+\s*\d+\s*$|\s+\d+\s*$'
+                            if not re.search(page_number_at_end, line_original.strip()):
+                                should_end_toc = True
+                                break
                 
                 # Check for patterns that suggest we're now in the main document
                 # Look for page numbers followed by chapter/section headers
@@ -537,6 +774,41 @@ class HierarchicalDocumentProcessor:
                         if not re.search(page_number_at_end, line.strip()):
                             should_end_toc = True
                             break
+                
+                # Check if we stopped seeing "Chapter" prefix (was in TOC, now in actual content)
+                if current_toc_start and i > current_toc_start + 3:
+                    # If this line has a branch pattern but NO "Chapter" prefix, might be actual content
+                    chapter_pattern = r'ﺍﻟﺒﺎﺏ|الباب'
+                    if re.search(chapter_pattern, line_original):
+                        if not re.search(r'^(Chapter|chapter)\s+', line_original):
+                            # Check if next few lines also lack "Chapter" prefix
+                            no_chapter_prefix_count = 0
+                            for check_idx in range(i, min(i + 3, len(lines))):
+                                if check_idx < len(lines):
+                                    check_line = lines[check_idx].strip()
+                                    if re.search(chapter_pattern, check_line) and not re.search(r'^(Chapter|chapter)\s+', check_line):
+                                        no_chapter_prefix_count += 1
+                            
+                            # If we consistently don't see "Chapter" prefix anymore, TOC likely ended
+                            if no_chapter_prefix_count >= 2:
+                                should_end_toc = True
+                                logger.info(f"TOC likely ended at line {i} - no more 'Chapter' prefix pattern")
+                
+                # Check for substantial content following a branch marker (indicates actual content, not TOC)
+                if re.search(r'ﺍﻟﺒﺎﺏ|الباب|ﺍﻟﻔﺼﻞ|الفصل', line_original):
+                    # Look at next few lines for substantial content
+                    content_found = False
+                    for check_idx in range(i + 1, min(i + 5, len(lines))):
+                        if check_idx < len(lines):
+                            check_line = lines[check_idx].strip()
+                            # If we find a line with 50+ chars that's not another branch/chapter marker
+                            if len(check_line) > 50 and not re.search(r'ﺍﻟﺒﺎﺏ|الباب|ﺍﻟﻔﺼﻞ|الفصل|Chapter', check_line):
+                                content_found = True
+                                break
+                    
+                    if content_found:
+                        should_end_toc = True
+                        logger.info(f"TOC likely ended at line {i} - found substantial content after branch marker")
                 
                 if should_end_toc:
                     toc_sections.append((current_toc_start, i))
@@ -577,6 +849,18 @@ class HierarchicalDocumentProcessor:
                     warnings=[],
                     errors=[]
                 )
+            # Additional safety filter: Any line starting with "Chapter" followed by branch markers is TOC
+            elif re.search(r'^(Chapter|chapter)\s+(ﺍﻟﺒﺎﺏ|الباب|ﺍﻟﻔﺼﻞ|الفصل)', line.strip()):
+                analysis = LineAnalysis(
+                    line_number=i,
+                    content=line,
+                    element_type=ElementType.IGNORE,
+                    confidence=1.0,
+                    metadata={'reason': 'chapter_prefix_toc'},
+                    warnings=[],
+                    errors=[]
+                )
+                logger.debug(f"Line {i} marked as TOC due to 'Chapter' prefix: {line[:50]}...")
             else:
                 analysis = self.pattern_recognizer.analyze_line(line, i)
             
@@ -593,6 +877,11 @@ class HierarchicalDocumentProcessor:
         current_article = None
         
         for analysis in line_analyses:
+            # Skip lines marked as IGNORE (e.g., TOC sections, headers, footers)
+            if analysis.element_type == ElementType.IGNORE:
+                logger.debug(f"Skipping IGNORE line {analysis.line_number}: {analysis.content[:50]}...")
+                continue
+            
             if analysis.element_type == ElementType.CHAPTER:
                 # Save previous chapter if exists
                 if current_chapter:
@@ -781,25 +1070,48 @@ class HierarchicalDocumentProcessor:
         self,
         structure: DocumentStructure,
         law_source_details: Optional[Dict[str, Any]] = None,
-        uploaded_by: Optional[int] = None
+        uploaded_by: Optional[int] = None,
+        law_source_id: Optional[int] = None
     ) -> Dict[str, Any]:
-        """Persist the extracted structure to database"""
+        """Persist the extracted structure to database
+        
+        Args:
+            structure: Parsed document structure
+            law_source_details: Law source metadata
+            uploaded_by: User ID
+            law_source_id: Optional existing LawSource ID to use (prevents duplicate creation)
+        """
         try:
-            # Create law source
-            law_source = LawSource(
-                name=law_source_details.get('name', 'Extracted Legal Document') if law_source_details else 'Extracted Legal Document',
-                type=law_source_details.get('type', 'law') if law_source_details else 'law',
-                jurisdiction=law_source_details.get('jurisdiction') if law_source_details else None,
-                issuing_authority=law_source_details.get('issuing_authority') if law_source_details else None,
-                issue_date=law_source_details.get('issue_date') if law_source_details else None,
-                last_update=law_source_details.get('last_update') if law_source_details else None,
-                description=law_source_details.get('description') if law_source_details else None,
-                source_url=law_source_details.get('source_url') if law_source_details else None,
-                upload_file_path=law_source_details.get('upload_file_path') if law_source_details else None
-            )
-            
-            self.db.add(law_source)
-            await self.db.flush()  # Get the ID
+            # Use existing law_source if ID is provided, otherwise create new one
+            if law_source_id:
+                # Fetch existing law source
+                result = await self.db.execute(
+                    select(LawSource).where(LawSource.id == law_source_id)
+                )
+                law_source = result.scalars().first()
+                
+                if not law_source:
+                    raise Exception(f"LawSource with ID {law_source_id} not found")
+                
+                logger.info(f"Using existing LawSource {law_source.id}")
+            else:
+                # Create new law source (legacy behavior)
+                law_source = LawSource(
+                    name=law_source_details.get('name', 'Extracted Legal Document') if law_source_details else 'Extracted Legal Document',
+                    type=law_source_details.get('type', 'law') if law_source_details else 'law',
+                    jurisdiction=law_source_details.get('jurisdiction') if law_source_details else None,
+                    issuing_authority=law_source_details.get('issuing_authority') if law_source_details else None,
+                    issue_date=law_source_details.get('issue_date') if law_source_details else None,
+                    last_update=law_source_details.get('last_update') if law_source_details else None,
+                    description=law_source_details.get('description') if law_source_details else None,
+                    source_url=law_source_details.get('source_url') if law_source_details else None,
+                    knowledge_document_id=law_source_details.get('knowledge_document_id') if law_source_details else None,
+                    status='raw'
+                )
+                
+                self.db.add(law_source)
+                await self.db.flush()  # Get the ID
+                logger.info(f"Created new LawSource {law_source.id}")
             
             # Process chapters and their content
             for chapter_structure in structure.chapters:

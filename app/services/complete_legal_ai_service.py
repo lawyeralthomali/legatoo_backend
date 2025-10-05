@@ -177,16 +177,51 @@ class CompleteLegalAIService:
             
             logger.info("Step 1/5: Extracting text...")
             file_extension = Path(document.file_path).suffix
-            text_content = await self.doc_processor.extract_text_from_file(
-                document.file_path,
-                file_extension,
-                document.language
-            )
             
-            if not text_content or len(text_content.strip()) < 100:
-                raise ValueError("Extracted text is too short or empty")
+            # Extract text with detailed error handling
+            try:
+                text_content = await self.doc_processor.extract_text_from_file(
+                    document.file_path,
+                    file_extension,
+                    document.language
+                )
+            except Exception as extract_error:
+                error_msg = f"Failed to extract text from file: {str(extract_error)}"
+                logger.error(error_msg)
+                await self.repository.update_document(
+                    document_id,
+                    processing_status=ProcessingStatusEnum.ERROR,
+                    notes=f"Extraction failed: {str(extract_error)}"
+                )
+                raise ValueError(error_msg)
             
-            logger.info(f"✅ Extracted {len(text_content)} characters")
+            # Validate extracted text
+            if not text_content:
+                error_msg = "No text could be extracted from the PDF"
+                logger.error(f"Extraction returned empty text for document {document_id}")
+                await self.repository.update_document(
+                    document_id,
+                    processing_status=ProcessingStatusEnum.ERROR,
+                    notes="No text extracted - PDF may be image-based or empty"
+                )
+                raise ValueError(error_msg)
+            
+            text_length = len(text_content.strip())
+            if text_length < 100:
+                error_msg = f"Extracted text is too short ({text_length} characters). PDF may be corrupted, empty, or require OCR."
+                logger.warning(error_msg)
+                # Still allow processing if there's some text (changed from hard error)
+                if text_length < 20:
+                    await self.repository.update_document(
+                        document_id,
+                        processing_status=ProcessingStatusEnum.ERROR,
+                        notes=f"Text too short: {text_length} chars"
+                    )
+                    raise ValueError(error_msg)
+                else:
+                    logger.warning(f"Proceeding with short text ({text_length} chars) for document {document_id}")
+            
+            logger.info(f"✅ Extracted {len(text_content)} characters (stripped: {text_length} chars)")
             
             # ========== SAVE EXTRACTED TEXT TO FILE ==========
             
