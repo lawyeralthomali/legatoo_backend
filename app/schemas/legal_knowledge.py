@@ -252,21 +252,20 @@ class LawArticleResponse(LawArticleBase):
 # ===========================================
 
 class LegalCaseBase(BaseModel):
-    """Base legal case schema"""
+    """
+    Base legal case schema - matches database model fields only.
+    
+    Additional fields like involved_parties, case_outcome, judge_names, and claim_amount
+    are stored in the related KnowledgeDocument.document_metadata JSON field.
+    """
     case_number: Optional[str] = Field(None, max_length=100)
     title: str = Field(..., min_length=1)
     description: Optional[str] = None
     jurisdiction: Optional[str] = Field(None, max_length=100)
     court_name: Optional[str] = Field(None, max_length=200)
     decision_date: Optional[date] = None
-    involved_parties: Optional[str] = None
-    pdf_path: Optional[str] = None
-    source_reference: Optional[str] = None
     case_type: Optional[str] = Field(None, max_length=50, description="نوع القضية: مدني، جنائي، تجاري، عمل، إداري")
     court_level: Optional[str] = Field(None, max_length=50, description="درجة المحكمة: ابتدائي، استئناف، تمييز، عالي")
-    case_outcome: Optional[str] = Field(None, max_length=100, description="نتيجة القضية")
-    judge_names: Optional[List[str]] = Field(None, description="أسماء القضاة")
-    claim_amount: Optional[float] = Field(None, ge=0, description="مبلغ المطالبة")
 
 
 class LegalCaseCreate(LegalCaseBase):
@@ -275,26 +274,22 @@ class LegalCaseCreate(LegalCaseBase):
 
 
 class LegalCaseUpdate(BaseModel):
-    """Schema for updating a legal case"""
+    """Schema for updating a legal case - only actual model fields"""
     case_number: Optional[str] = Field(None, max_length=100)
     title: Optional[str] = Field(None, min_length=1)
     description: Optional[str] = None
     jurisdiction: Optional[str] = Field(None, max_length=100)
     court_name: Optional[str] = Field(None, max_length=200)
     decision_date: Optional[date] = None
-    involved_parties: Optional[str] = None
-    pdf_path: Optional[str] = None
-    source_reference: Optional[str] = None
     case_type: Optional[str] = Field(None, max_length=50, description="نوع القضية: مدني، جنائي، تجاري، عمل، إداري")
     court_level: Optional[str] = Field(None, max_length=50, description="درجة المحكمة: ابتدائي، استئناف، تمييز، عالي")
-    case_outcome: Optional[str] = Field(None, max_length=100, description="نتيجة القضية")
-    judge_names: Optional[List[str]] = Field(None, description="أسماء القضاة")
-    claim_amount: Optional[float] = Field(None, ge=0, description="مبلغ المطالبة")
 
 
 class LegalCaseResponse(LegalCaseBase):
-    """Schema for legal case response"""
+    """Schema for legal case response - only model fields"""
     id: int
+    document_id: Optional[int] = None
+    status: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     sections_count: Optional[int] = 0

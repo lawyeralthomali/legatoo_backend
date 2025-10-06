@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 class LegalCaseIngestionService:
-    """Service for ingesting legal cases from PDF/DOCX files."""
+    """Service for ingesting legal cases from PDF/DOCX/TXT files."""
     
     def __init__(self, db: AsyncSession, upload_dir: str = "uploads/legal_cases"):
         """
@@ -162,7 +162,8 @@ class LegalCaseIngestionService:
             document_metadata={
                 'original_filename': filename,
                 'file_size': len(file_content),
-                'uploaded_by': uploaded_by
+                'uploaded_by': uploaded_by,
+                'file_type': Path(filename).suffix.lower()
             }
         )
         
@@ -179,7 +180,7 @@ class LegalCaseIngestionService:
     
     def extract_text(self, file_path: str) -> str:
         """
-        Extract text from PDF or DOCX file.
+        Extract text from PDF, DOCX, or TXT file.
         
         Args:
             file_path: Path to the file
@@ -198,6 +199,8 @@ class LegalCaseIngestionService:
             return self._extract_pdf_text(file_path)
         elif file_extension in ['.docx', '.doc']:
             return self._extract_docx_text(file_path)
+        elif file_extension == '.txt':
+            return self._extract_txt_text(file_path)
         else:
             raise ValueError(f"Unsupported file format: {file_extension}")
     
@@ -275,6 +278,41 @@ class LegalCaseIngestionService:
             return text
         except Exception as e:
             raise RuntimeError(f"Failed to extract text from DOCX: {str(e)}")
+    
+    def _extract_txt_text(self, file_path: Path) -> str:
+        """
+        Extract text from TXT file.
+        
+        Args:
+            file_path: Path to TXT file
+            
+        Returns:
+            Extracted text
+        """
+        try:
+            # Try UTF-8 first (most common for Arabic text)
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    text = f.read()
+                    logger.info(f"Extracted {len(text)} characters from TXT (UTF-8)")
+                    return text
+            except UnicodeDecodeError:
+                # Fallback to other encodings for Arabic text
+                logger.warning("UTF-8 decoding failed, trying Windows-1256 (Arabic)")
+                try:
+                    with open(file_path, 'r', encoding='windows-1256') as f:
+                        text = f.read()
+                        logger.info(f"Extracted {len(text)} characters from TXT (Windows-1256)")
+                        return text
+                except UnicodeDecodeError:
+                    # Final fallback to ISO-8859-1 (latin-1)
+                    logger.warning("Windows-1256 failed, trying ISO-8859-1")
+                    with open(file_path, 'r', encoding='iso-8859-1') as f:
+                        text = f.read()
+                        logger.info(f"Extracted {len(text)} characters from TXT (ISO-8859-1)")
+                        return text
+        except Exception as e:
+            raise RuntimeError(f"Failed to extract text from TXT: {str(e)}")
     
     # =====================================================
     # SECTION SEGMENTATION
@@ -381,13 +419,9 @@ class LegalCaseIngestionService:
             jurisdiction=case_metadata.get('jurisdiction'),
             court_name=case_metadata.get('court_name'),
             decision_date=decision_date,
-            involved_parties=case_metadata.get('involved_parties'),
             document_id=document_id,
             case_type=case_metadata.get('case_type'),
             court_level=case_metadata.get('court_level'),
-            case_outcome=case_metadata.get('case_outcome'),
-            judge_names=case_metadata.get('judge_names'),
-            claim_amount=case_metadata.get('claim_amount'),
             status='raw',
             created_at=datetime.utcnow()
         )

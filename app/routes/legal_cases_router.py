@@ -25,7 +25,7 @@ router = APIRouter(
 @router.post("/upload", response_model=None)
 async def upload_legal_case(
     # File upload
-    file: UploadFile = File(..., description="PDF or DOCX file containing the legal case"),
+    file: UploadFile = File(..., description="PDF, DOCX, or TXT file containing the legal case"),
     
     # Case metadata
     case_number: Optional[str] = Form(None, description="Case reference number (e.g., 123/2024)"),
@@ -34,19 +34,15 @@ async def upload_legal_case(
     jurisdiction: Optional[str] = Form(None, description="Legal jurisdiction (e.g., الرياض)"),
     court_name: Optional[str] = Form(None, description="Name of the court"),
     decision_date: Optional[str] = Form(None, description="Date of decision (YYYY-MM-DD)"),
-    involved_parties: Optional[str] = Form(None, description="Names of involved parties"),
     case_type: Optional[str] = Form(None, description="Type: مدني, جنائي, تجاري, عمل, إداري"),
     court_level: Optional[str] = Form(None, description="Level: ابتدائي, استئناف, تمييز, عالي"),
-    case_outcome: Optional[str] = Form(None, description="Outcome of the case"),
-    judge_names: Optional[str] = Form(None, description="Comma-separated judge names"),
-    claim_amount: Optional[float] = Form(None, description="Claim amount in SAR"),
     
     # Dependencies
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
     """
-    Upload and ingest a historical legal case from PDF or DOCX file.
+    Upload and ingest a historical legal case from PDF, DOCX, or TXT file.
     
     This endpoint:
     1. Saves the uploaded file and creates a KnowledgeDocument record
@@ -54,7 +50,7 @@ async def upload_legal_case(
     3. Segments the text into logical sections (summary, facts, arguments, ruling, legal_basis)
     4. Creates LegalCase and CaseSection records in the database
     
-    **Supported file formats**: PDF, DOCX
+    **Supported file formats**: PDF, DOCX, TXT
     
     **Required fields**: file, title
     
@@ -76,12 +72,12 @@ async def upload_legal_case(
             }
         
         file_extension = file.filename.lower().split('.')[-1]
-        if file_extension not in ['pdf', 'docx', 'doc']:
+        if file_extension not in ['pdf', 'docx', 'doc', 'txt']:
             return {
                 "success": False,
-                "message": "Invalid file format. Only PDF and DOCX are supported.",
+                "message": "Invalid file format. Only PDF, DOCX, and TXT are supported.",
                 "data": None,
-                "errors": [{"field": "file", "message": "Only PDF and DOCX files are supported"}]
+                "errors": [{"field": "file", "message": "Only PDF, DOCX, and TXT files are supported"}]
             }
         
         # Read file content
@@ -103,12 +99,8 @@ async def upload_legal_case(
             'jurisdiction': jurisdiction,
             'court_name': court_name,
             'decision_date': decision_date,
-            'involved_parties': involved_parties,
             'case_type': case_type,
-            'court_level': court_level,
-            'case_outcome': case_outcome,
-            'judge_names': judge_names.split(',') if judge_names else None,
-            'claim_amount': claim_amount
+            'court_level': court_level
         }
         
         # Initialize ingestion service
@@ -227,7 +219,6 @@ async def list_legal_cases(
                 'decision_date': case.decision_date.isoformat() if case.decision_date else None,
                 'case_type': case.case_type,
                 'court_level': case.court_level,
-                'case_outcome': case.case_outcome,
                 'status': case.status,
                 'document_id': case.document_id,
                 'created_at': case.created_at.isoformat() if case.created_at else None
@@ -292,12 +283,8 @@ async def get_legal_case(
             'jurisdiction': case.jurisdiction,
             'court_name': case.court_name,
             'decision_date': case.decision_date.isoformat() if case.decision_date else None,
-            'involved_parties': case.involved_parties,
             'case_type': case.case_type,
             'court_level': case.court_level,
-            'case_outcome': case.case_outcome,
-            'judge_names': case.judge_names,
-            'claim_amount': case.claim_amount,
             'document_id': case.document_id,
             'status': case.status,
             'created_at': case.created_at.isoformat() if case.created_at else None,
@@ -347,12 +334,8 @@ async def update_legal_case(
     jurisdiction: Optional[str] = Form(None),
     court_name: Optional[str] = Form(None),
     decision_date: Optional[str] = Form(None),
-    involved_parties: Optional[str] = Form(None),
     case_type: Optional[str] = Form(None),
     court_level: Optional[str] = Form(None),
-    case_outcome: Optional[str] = Form(None),
-    judge_names: Optional[str] = Form(None),
-    claim_amount: Optional[float] = Form(None),
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
@@ -393,18 +376,10 @@ async def update_legal_case(
                 case.decision_date = datetime.strptime(decision_date, '%Y-%m-%d').date()
             except:
                 pass
-        if involved_parties is not None:
-            case.involved_parties = involved_parties
         if case_type is not None:
             case.case_type = case_type
         if court_level is not None:
             case.court_level = court_level
-        if case_outcome is not None:
-            case.case_outcome = case_outcome
-        if judge_names is not None:
-            case.judge_names = judge_names.split(',')
-        if claim_amount is not None:
-            case.claim_amount = claim_amount
         
         await db.commit()
         await db.refresh(case)
