@@ -140,11 +140,13 @@ class LegalCase(Base):
     case_outcome = Column(String(100))
     judge_names = Column(JSON)
     claim_amount = Column(Float)
+    document_id = Column(Integer, ForeignKey("knowledge_documents.id", ondelete="SET NULL"), nullable=True, index=True)
     status = Column(String(50), CheckConstraint("status IN ('raw', 'processed', 'indexed')"), default="raw", index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
+    document = relationship("KnowledgeDocument", foreign_keys=[document_id])
     sections = relationship("CaseSection", back_populates="case", cascade="all, delete-orphan")
     chunks = relationship("KnowledgeChunk", back_populates="legal_case")
     
@@ -317,7 +319,7 @@ Index('idx_law_articles_keywords', LawArticle.keywords)
 Index('idx_legal_cases_jurisdiction_date', LegalCase.jurisdiction, LegalCase.decision_date)
 Index('idx_case_sections_type', CaseSection.section_type)
 Index('idx_knowledge_documents_category_status', KnowledgeDocument.category, KnowledgeDocument.status)
-Index('idx_knowledge_chunks_hierarchy', KnowledgeChunk.law_source_id, KnowledgeChunk.branch_id, KnowledgeChunk.chapter_id, KnowledgeChunk.article_id)
+Index('idx_knowledge_chunks_hierarchy', KnowledgeChunk.law_source_id, KnowledgeChunk.branch_id, KnowledgeChunk.chapter_id, KnowledgeChunk.article_id, KnowledgeChunk.case_id)
 Index('idx_knowledge_chunks_tokens', KnowledgeChunk.tokens_count)
 Index('idx_analysis_results_type_confidence', AnalysisResult.analysis_type, AnalysisResult.confidence)
 Index('idx_knowledge_links_source_target', KnowledgeLink.source_type, KnowledgeLink.source_id, KnowledgeLink.target_type, KnowledgeLink.target_id)
