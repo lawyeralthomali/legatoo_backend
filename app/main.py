@@ -41,6 +41,7 @@ from .routes.favorites_router import router as favorites_router
 from .routes.legal_knowledge_router import router as legal_knowledge_router
 from .routes.legal_laws_router import router as legal_laws_router
 from .routes.legal_hierarchy_router import router as legal_hierarchy_router
+from .routes.legal_cases_router import router as legal_cases_router
 
 from pydantic import BaseModel
 from typing import List
@@ -191,6 +192,7 @@ app.include_router(favorites_router)
 app.include_router(legal_knowledge_router)  # Legal Knowledge Management
 app.include_router(legal_laws_router)  # Legal Laws Management (New API)
 app.include_router(legal_hierarchy_router)  # Legal Hierarchy CRUD (Branches, Chapters, Articles)
+app.include_router(legal_cases_router)  # Legal Cases Ingestion Pipeline
 @app.on_event("startup")
 async def startup_event():
     """Create database tables on startup."""
