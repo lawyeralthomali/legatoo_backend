@@ -32,6 +32,14 @@ try:
 except ImportError:
     DocxDocument = None
 
+# Enhanced PDF processor for better Arabic text extraction
+try:
+    from .enhanced_arabic_pdf_processor import EnhancedArabicPDFProcessor
+    ENHANCED_PDF_AVAILABLE = True
+except ImportError:
+    ENHANCED_PDF_AVAILABLE = False
+    logger.warning("EnhancedArabicPDFProcessor not available, using basic extraction")
+
 from ..models.legal_knowledge import (
     KnowledgeDocument, LegalCase, CaseSection, KnowledgeChunk
 )
@@ -54,40 +62,71 @@ class LegalCaseIngestionService:
         self.upload_dir = Path(upload_dir)
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         
-        # Arabic section keywords for segmentation
+        # Enhanced Arabic section keywords for segmentation
+        # Patterns are ordered from most specific to least specific for better matching
         self.section_patterns = {
             'summary': [
+                # Introductory Islamic phrases (common in formal documents)
+                r'الحمدلله\s+والصلاة\s+والسلام\s+على\s+رسول\s+الله',
+                r'الحمد\s+لله\s+والصلاة\s+والسلام',
+                r'أما\s+بعد',
+                # Standard summary keywords
                 r'ملخص\s+القضية',
+                r'ملخص\s+الدعوى',
                 r'ملخص',
                 r'نبذة',
                 r'موجز',
                 r'الملخص'
             ],
             'facts': [
-                r'الوقائع',
+                # Specific fact introduction phrases
+                r'تتحصل\s+وقائع',
+                r'ما\s+ورد\s+في\s+صحيفة\s+الدعوى',
+                r'ما\s+جاء\s+في\s+الدعوى',
                 r'وقائع\s+القضية',
                 r'وقائع\s+الدعوى',
+                # General fact keywords
+                r'الوقائع',
                 r'الواقعة',
                 r'الحادثة'
             ],
             'arguments': [
-                r'الحجج',
+                # Legal arguments and pleadings
+                r'تقرير\s+المحامي',
+                r'طلب\s+إلزام',
                 r'حجج\s+الأطراف',
+                r'أقوال\s+الأطراف',
                 r'المرافعات',
                 r'الدفوع',
-                r'أقوال\s+الأطراف',
+                # General argument keywords
+                r'الأسباب',
+                r'الحجج',
                 r'دفاع',
                 r'الحجة'
             ],
             'ruling': [
-                r'الحكم',
+                # Specific ruling phrases
+                r'نص\s+الحكم',
                 r'منطوق\s+الحكم',
-                r'القرار',
                 r'حكمت\s+المحكمة',
                 r'قررت\s+المحكمة',
-                r'المنطوق'
+                r'حكم\s+نهائي',
+                # General ruling keywords
+                r'المنطوق',
+                r'الحكم',
+                r'القرار'
             ],
             'legal_basis': [
+                # Specific legal references and articles
+                r'نظام\s+المحاكم\s+التجارية',
+                r'لائحة\s+الدعوى',
+                r'أوراق\s+ومستندات',
+                r'المادة\s+الثلاثون',
+                r'المادة\s+الثلاثين',
+                r'المادة\s+التاسعة\s+والعشرون',
+                r'المادة\s+التاسعة\s+والعشرين',
+                r'المادة\s+\d+',  # Matches "المادة" followed by any number
+                # Legal basis phrases
                 r'الأساس\s+القانوني',
                 r'السند\s+القانوني',
                 r'التكييف\s+القانوني',
@@ -206,53 +245,96 @@ class LegalCaseIngestionService:
     
     def _extract_pdf_text(self, file_path: Path) -> str:
         """
-        Extract text from PDF file using multiple methods.
+        Extract text from PDF using advanced dict extraction (from extract_arabic_pdf.py).
+        This method properly handles Arabic text with full fixing and RTL processing.
         
         Args:
             file_path: Path to PDF file
             
         Returns:
-            Extracted text
+            Extracted text with proper Arabic text direction
         """
-        text = ""
-        
-        # Try PyMuPDF first (best for Arabic)
-        if fitz:
-            try:
-                doc = fitz.open(str(file_path))
-                for page_num in range(len(doc)):
-                    page = doc[page_num]
-                    text += page.get_text()
-                doc.close()
-                
-                if text.strip():
-                    logger.info(f"Extracted {len(text)} characters using PyMuPDF")
-                    return text
-            except Exception as e:
-                logger.warning(f"PyMuPDF extraction failed: {str(e)}")
-        
-        # Fallback to pdfplumber
-        if pdfplumber and not text.strip():
-            try:
-                with pdfplumber.open(str(file_path)) as pdf:
-                    for page in pdf.pages:
-                        page_text = page.extract_text()
-                        if page_text:
-                            text += page_text + "\n"
-                
-                if text.strip():
-                    logger.info(f"Extracted {len(text)} characters using pdfplumber")
-                    return text
-            except Exception as e:
-                logger.warning(f"pdfplumber extraction failed: {str(e)}")
-        
-        if not text.strip():
-            raise RuntimeError(
-                "Failed to extract text from PDF. "
-                "Please ensure PyMuPDF or pdfplumber is installed."
-            )
-        
-        return text
+        try:
+            if not fitz:
+                raise RuntimeError("PyMuPDF (fitz) not available")
+            
+            doc = fitz.open(str(file_path))
+            text = ""
+            
+            # Save page count before processing
+            total_pages = len(doc)
+            logger.info(f"Starting advanced PDF extraction with dict method for {total_pages} pages")
+            
+            for page_num, page in enumerate(doc, 1):
+                try:
+                    logger.info(f"Processing page {page_num}/{total_pages} with dict extraction...")
+                    
+                    # Use get_text("dict") to get full structured text
+                    page_dict = page.get_text("dict")
+                    
+                    if not page_dict or "blocks" not in page_dict:
+                        logger.warning(f"No dict blocks found at page {page_num}")
+                        text += f"\n---EMPTY_PAGE_{page_num}---\n"
+                        continue
+                    
+                    blocks = page_dict["blocks"]
+                    logger.info(f"Page {page_num}: Found {len(blocks)} blocks in dict")
+                    
+                    # Process each block: blocks -> lines -> spans
+                    for block_num, block in enumerate(blocks):
+                        if "lines" not in block:
+                            text += "\n"
+                            continue
+                        
+                        lines = block["lines"]
+                        
+                        # Process each line
+                        for line_num, line in enumerate(lines):
+                            if "spans" not in line:
+                                text += "\n"
+                                continue
+                            
+                            spans = line["spans"]
+                            line_text = ""
+                            
+                            # Extract each span
+                            for span in spans:
+                                if "text" not in span:
+                                    continue
+                                
+                                span_text = span["text"]
+                                if span_text.strip():
+                                    line_text += span_text
+                            
+                            # Apply advanced Arabic fixing on each line
+                            if line_text.strip():
+                                # Always apply fixing for Arabic text from PDFs
+                                if self._needs_fixing(line_text):
+                                    # This does: clean artifacts + normalize + reshape + BiDi
+                                    fixed_line = self._fix_arabic_text(line_text)
+                                    text += fixed_line + "\n"
+                                else:
+                                    # For non-Arabic or already good text
+                                    text += line_text + "\n"
+                            else:
+                                text += "\n"
+                    
+                    # Add page separator
+                    text += "\n---PAGE_SEPARATOR---\n"
+                    
+                except Exception as page_e:
+                    logger.error(f"Error processing page {page_num}: {page_e}")
+                    text += f"\n---ERROR_PAGE_{page_num}---\n"
+                    continue
+            
+            # Close document before logging (to avoid accessing closed doc)
+            doc.close()
+            logger.info(f"✅ Extracted {len(text)} characters from {total_pages} pages using advanced dict extraction")
+            return text
+            
+        except Exception as e:
+            logger.error(f"Advanced PDF extraction failed: {e}")
+            raise RuntimeError(f"Failed to extract text from PDF: {str(e)}")
     
     def _extract_docx_text(self, file_path: Path) -> str:
         """
@@ -313,6 +395,276 @@ class LegalCaseIngestionService:
                         return text
         except Exception as e:
             raise RuntimeError(f"Failed to extract text from TXT: {str(e)}")
+    
+    # =====================================================
+    # ADVANCED ARABIC TEXT PROCESSING (from extract_arabic_pdf.py)
+    # =====================================================
+    
+    def _needs_fixing(self, text: str) -> bool:
+        """Enhanced detection of Arabic text that needs fixing - ALWAYS fix Arabic text in PDFs"""
+        if not text.strip():
+            return False
+
+        # Check for any Arabic characters
+        arabic_chars = sum(1 for c in text if '\u0600' <= c <= '\u06FF')
+        if arabic_chars == 0:
+            return False
+
+        # Check for fragmented words (average word length <= 2)
+        words = text.split()
+        if words:
+            avg_word_len = sum(len(w) for w in words) / len(words)
+            if avg_word_len <= 2:
+                return True
+
+        # Check for fragmented individual Arabic characters
+        fragmented_patterns = [
+            len(word) == 1 and '\u0600' <= word <= '\u06FF' for word in words
+        ]
+        if any(fragmented_patterns):
+            return True
+
+        # Check for artifacts (isolated Unicode characters)
+        artifacts = ['ﻢ', 'ﻪ', 'ﻆ', 'ﺍ', 'ﺕ', 'ﺏ', 'ﻞ', 'ﺝ', 'ﺡ', 'ﺥ', 'ﺩ', 'ﺫ', 'ﺭ', 'ﺯ', 'ﺱ', 'ﺵ', 'ﺹ', 'ﺽ', 'ﻁ', 'ﻅ', 'ﻉ', 'ﻍ', 'ﻑ', 'ﻕ', 'ﻙ', 'ﻝ', 'ﻡ', 'ﻥ', 'ﻩ', 'ﻭ', 'ﻱ']
+        if any(artifact in text for artifact in artifacts):
+            return True
+
+        # For PDFs, ALWAYS apply fixing if Arabic text is detected
+        arabic_ratio = arabic_chars / len(text.strip()) if text.strip() else 0
+        if arabic_ratio > 0.1:  # If 10% or more Arabic characters, fix it
+            return True
+
+        return False
+
+    def _clean_text_artifacts(self, text: str) -> str:
+        """Remove artifacts and clean up text formatting"""
+        if not text:
+            return text
+        
+        import unicodedata
+        
+        # Remove excessive spaces first
+        text = ' '.join(text.split())
+        
+        # COMPREHENSIVE Arabic Unicode artifact cleaning (expanded mapping)
+        artifacts_map = {
+            # Hamza forms
+            'ﺀ': 'ء', 'ﺁ': 'آ', 'ﺂ': 'آ', 
+            # Alef forms
+            'ﺍ': 'ا', 'ﺎ': 'ا', 'ﺃ': 'أ', 'ﺄ': 'أ', 'ﺇ': 'إ', 'ﺈ': 'إ', 'ﺁ': 'آ', 'ﺂ': 'آ',
+            # Alef with hamza
+            'ﺅ': 'ؤ', 'ﺆ': 'ؤ', 'ﺋ': 'ئ', 'ﺌ': 'ئ', 'ﺉ': 'ئ', 'ﺊ': 'ئ',
+            # Ba forms  
+            'ﺏ': 'ب', 'ﺐ': 'ب', 'ﺑ': 'ب', 'ﺒ': 'ب',
+            # Ta forms
+            'ﺕ': 'ت', 'ﺖ': 'ت', 'ﺗ': 'ت', 'ﺘ': 'ت', 'ﺓ': 'ة', 'ﺔ': 'ة',
+            # Tha forms
+            'ﺙ': 'ث', 'ﺚ': 'ث', 'ﺛ': 'ث', 'ﺜ': 'ث',
+            # Jeem forms
+            'ﺝ': 'ج', 'ﺞ': 'ج', 'ﺟ': 'ج', 'ﺠ': 'ج',
+            # Hha forms
+            'ﺡ': 'ح', 'ﺢ': 'ح', 'ﺣ': 'ح', 'ﺤ': 'ح',
+            # Kha forms
+            'ﺥ': 'خ', 'ﺦ': 'خ', 'ﺧ': 'خ', 'ﺨ': 'خ',
+            # Dal forms
+            'ﺩ': 'د', 'ﺪ': 'د',
+            # Thal forms
+            'ﺫ': 'ذ', 'ﺬ': 'ذ',
+            # Ra forms
+            'ﺭ': 'ر', 'ﺮ': 'ر',
+            # Zain forms
+            'ﺯ': 'ز', 'ﺰ': 'ز',
+            # Seen forms
+            'ﺱ': 'س', 'ﺲ': 'س', 'ﺳ': 'س', 'ﺴ': 'س',
+            # Sheen forms
+            'ﺵ': 'ش', 'ﺶ': 'ش', 'ﺷ': 'ش', 'ﺸ': 'ش',
+            # Sad forms
+            'ﺹ': 'ص', 'ﺺ': 'ص', 'ﺻ': 'ص', 'ﺼ': 'ص',
+            # Dad forms
+            'ﺽ': 'ض', 'ﺾ': 'ض', 'ﺿ': 'ض', 'ﻀ': 'ض',
+            # Taa forms
+            'ﻁ': 'ط', 'ﻂ': 'ط', 'ﻃ': 'ط', 'ﻄ': 'ط',
+            # Dhaa forms
+            'ﻅ': 'ظ', 'ﻆ': 'ظ', 'ﻇ': 'ظ', 'ﻈ': 'ظ',
+            # Ain forms
+            'ﻉ': 'ع', 'ﻊ': 'ع', 'ﻋ': 'ع', 'ﻌ': 'ع',
+            # Ghain forms
+            'ﻍ': 'غ', 'ﻎ': 'غ', 'ﻏ': 'غ', 'ﻐ': 'غ',
+            # Fa forms
+            'ﻑ': 'ف', 'ﻒ': 'ف', 'ﻓ': 'ف', 'ﻔ': 'ف',
+            # Qaf forms
+            'ﻕ': 'ق', 'ﻖ': 'ق', 'ﻗ': 'ق', 'ﻘ': 'ق',
+            # Kaf forms
+            'ﻙ': 'ك', 'ﻚ': 'ك', 'ﻛ': 'ك', 'ﻜ': 'ك',
+            # Lam forms
+            'ﻝ': 'ل', 'ﻞ': 'ل', 'ﻟ': 'ل', 'ﻠ': 'ل',
+            # Meem forms
+            'ﻡ': 'م', 'ﻢ': 'م', 'ﻣ': 'م', 'ﻤ': 'م',
+            # Noon forms
+            'ﻥ': 'ن', 'ﻦ': 'ن', 'ﻧ': 'ن', 'ﻨ': 'ن',
+            # Ha forms
+            'ﻩ': 'ه', 'ﻪ': 'ه', 'ﻫ': 'ه', 'ﻬ': 'ه',
+            # Waw forms
+            'ﻭ': 'و', 'ﻮ': 'و',
+            # Ya forms
+            'ﻱ': 'ي', 'ﻲ': 'ي', 'ﻳ': 'ي', 'ﻴ': 'ي',
+            # Lam-Alef ligatures
+            'ﻼ': 'لا', 'ﻻ': 'لا', 'ﻷ': 'لأ', 'ﻹ': 'لإ', 'ﻵ': 'لآ',
+        }
+        
+        # Apply character mapping
+        for artifact, correct_char in artifacts_map.items():
+            text = text.replace(artifact, correct_char)
+        
+        # Final cleanup: normalize Unicode (NFC form)
+        try:
+            text = unicodedata.normalize('NFC', text)
+        except:
+            pass
+        
+        return text
+
+    def _normalize_fragmented_arabic(self, text: str) -> str:
+        """Merge fragmented Arabic letters back into words"""
+        if not text.strip():
+            return text
+        
+        words = text.split()
+        current_word = ""
+        normalized_words = []
+        
+        for word in words:
+            word_clean = word.strip()
+            
+            if not word_clean:
+                continue
+                
+            # If this is a single Arabic character
+            if len(word_clean) == 1 and '\u0600' <= word_clean <= '\u06FF':
+                # Merge with current_word if it's building an Arabic word
+                if current_word and '\u0600' <= current_word[-1] <= '\u06FF':
+                    current_word += word_clean
+                else:
+                    if current_word:
+                        normalized_words.append(current_word)
+                    current_word = word_clean
+            
+            # If this is a number or English, separate it
+            elif word_clean.isdigit() or word_clean.isalpha() or word_clean in ['.', ',', ':', ';']:
+                if current_word:
+                    normalized_words.append(current_word)
+                    current_word = ""
+                normalized_words.append(word_clean)
+            
+            # If this is a longer word that contains Arabic
+            else:
+                arabic_chars = sum(1 for c in word_clean if '\u0600' <= c <= '\u06FF')
+                if arabic_chars > len(word_clean) * 0.7:  # Mostly Arabic word
+                    if current_word and '\u0600' <= current_word[-1] <= '\u06FF':
+                        current_word += word_clean
+                    else:
+                        if current_word:
+                            normalized_words.append(current_word)
+                            current_word = ""
+                        current_word = word_clean
+                else:  # Non-Arabic word
+                    if current_word:
+                        normalized_words.append(current_word)
+                        current_word = ""
+                    normalized_words.append(word_clean)
+        
+        # Add any remaining word
+        if current_word:
+            normalized_words.append(current_word)
+        
+        # Clean up artifacts and excessive spaces
+        normalized_text = ' '.join(normalized_words)
+        normalized_text = self._clean_text_artifacts(normalized_text)
+        
+        return normalized_text
+
+    def _fix_arabic_text(self, text: str) -> str:
+        """Comprehensive Arabic text fixing with proper RTL handling"""
+        try:
+            import arabic_reshaper
+            from bidi.algorithm import get_display
+        except ImportError:
+            logger.warning("Arabic text processing libraries not available")
+            return text
+        
+        if not text.strip():
+            return text
+        
+        # Step 1: Clean Unicode artifacts first
+        cleaned_text = self._clean_text_artifacts(text)
+        
+        # Step 2: Normalize fragmented text - merge broken letters into words
+        normalized = self._normalize_fragmented_arabic(cleaned_text)
+        
+        # Step 3: Apply reshaping to Arabic words
+        words = normalized.split()
+        fixed_words = []
+        
+        for word in words:
+            # Check if word contains Arabic characters
+            arabic_chars = sum(1 for c in word if '\u0600' <= c <= '\u06FF')
+            if arabic_chars > 0:
+                # Apply reshaping to connect Arabic letters properly
+                reshaped_word = arabic_reshaper.reshape(word)
+                fixed_words.append(reshaped_word)
+            else:
+                # Keep non-Arabic words as-is
+                fixed_words.append(word)
+        
+        # Step 4: Join words and apply BiDi algorithm (simple, no extra marks)
+        text_for_bidi = ' '.join(fixed_words)
+        
+        # Apply BiDi algorithm simply
+        try:
+            fixed_text = get_display(text_for_bidi)
+        except Exception as e:
+            logger.warning(f"BiDi processing error: {e}")
+            fixed_text = text_for_bidi
+        
+        return fixed_text
+
+    def _ensure_rtl_text_direction(self, text: str) -> str:
+        """Ensure Arabic text is displayed in proper RTL direction"""
+        if not text.strip():
+            return text
+        
+        # Check if text contains Arabic characters
+        arabic_chars = sum(1 for c in text if '\u0600' <= c <= '\u06FF')
+        if arabic_chars == 0:
+            return text
+        
+        # Split text into lines and process each line
+        lines = text.split('\n')
+        rtl_lines = []
+        
+        for line in lines:
+            if line.strip() and arabic_chars > 0:
+                # Split line into words and process each word
+                words = line.split()
+                processed_words = []
+                
+                for word in words:
+                    # Check if word contains Arabic
+                    word_arabic_chars = sum(1 for c in word if '\u0600' <= c <= '\u06FF')
+                    if word_arabic_chars > 0:
+                        # For Arabic words, apply RTL mark
+                        processed_word = '\u200F' + word + '\u200F'
+                        processed_words.append(processed_word)
+                    else:
+                        processed_words.append(word)
+                
+                # Rejoin words and add RTL mark to the entire line
+                processed_line = '\u202E' + ' '.join(processed_words) + '\u202C'
+                rtl_lines.append(processed_line)
+            else:
+                rtl_lines.append(line)
+        
+        return '\n'.join(rtl_lines)
     
     # =====================================================
     # SECTION SEGMENTATION
@@ -487,7 +839,11 @@ class LegalCaseIngestionService:
             if not text or len(text) < 50:
                 raise ValueError(
                     f"Extracted text is too short ({len(text)} chars). "
-                    "File might be empty or corrupted."
+                    "Possible causes:\n"
+                    "  1. PDF is image-based (scanned) - Install Tesseract OCR for extraction\n"
+                    "  2. PDF is mostly images with minimal text\n"
+                    "  3. File is corrupted or password-protected\n"
+                    "  4. Text extraction failed - check logs for details"
                 )
             
             logger.info(f"Extracted {len(text)} characters")
@@ -517,7 +873,7 @@ class LegalCaseIngestionService:
             # Return results
             return {
                 'success': True,
-                'message': 'Legal case ingested successfully',
+                'message': 'Legal case uploaded successfully',
                 'data': {
                     'knowledge_document_id': knowledge_doc.id,
                     'legal_case_id': legal_case.id,
