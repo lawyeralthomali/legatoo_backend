@@ -4,6 +4,7 @@ Legal Cases Router
 API endpoints for ingesting and managing historical legal cases.
 """
 
+import logging
 from typing import Optional, List
 from datetime import date
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
@@ -15,6 +16,8 @@ from ..services.legal_case_ingestion_service import LegalCaseIngestionService
 from ..models.legal_knowledge import LegalCase, CaseSection, KnowledgeDocument
 from ..utils.auth import get_current_user
 from ..schemas.response import ApiResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/legal-cases",
@@ -64,32 +67,41 @@ async def upload_legal_case(
     try:
         # Validate file type
         if not file.filename:
-            return {
-                "success": False,
-                "message": "No file provided",
-                "data": None,
-                "errors": [{"field": "file", "message": "File is required"}]
-            }
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "No file provided",
+                    "data": None,
+                    "errors": [{"field": "file", "message": "File is required"}]
+                }
+            )
         
         file_extension = file.filename.lower().split('.')[-1]
         if file_extension not in ['pdf', 'docx', 'doc', 'txt']:
-            return {
-                "success": False,
-                "message": "Invalid file format. Only PDF, DOCX, and TXT are supported.",
-                "data": None,
-                "errors": [{"field": "file", "message": "Only PDF, DOCX, and TXT files are supported"}]
-            }
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "Invalid file format. Only PDF, DOCX, and TXT are supported.",
+                    "data": None,
+                    "errors": [{"field": "file", "message": "Only PDF, DOCX, and TXT files are supported"}]
+                }
+            )
         
         # Read file content
         file_content = await file.read()
         
         if len(file_content) == 0:
-            return {
-                "success": False,
-                "message": "Uploaded file is empty",
-                "data": None,
-                "errors": [{"field": "file", "message": "File is empty"}]
-            }
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "Uploaded file is empty",
+                    "data": None,
+                    "errors": [{"field": "file", "message": "File is empty"}]
+                }
+            )
         
         # Prepare case metadata
         case_metadata = {
@@ -122,28 +134,43 @@ async def upload_legal_case(
                 "errors": []
             }
         else:
-            return {
-                "success": False,
-                "message": result['message'],
-                "data": None,
-                "errors": [{"field": None, "message": result['message']}]
-            }
+            # Ingestion failed - return 400 or 422 depending on the error
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "success": False,
+                    "message": result['message'],
+                    "data": None,
+                    "errors": [{"field": None, "message": result['message']}]
+                }
+            )
+    
+    except HTTPException:
+        # Re-raise HTTPException as-is
+        raise
     
     except ValueError as e:
-        return {
-            "success": False,
-            "message": str(e),
-            "data": None,
-            "errors": [{"field": None, "message": str(e)}]
-        }
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "success": False,
+                "message": str(e),
+                "data": None,
+                "errors": [{"field": None, "message": str(e)}]
+            }
+        )
     
     except Exception as e:
-        return {
-            "success": False,
-            "message": f"Failed to upload legal case: {str(e)}",
-            "data": None,
-            "errors": [{"field": None, "message": str(e)}]
-        }
+        logger.exception("Unexpected error during legal case upload")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": f"Failed to upload legal case: {str(e)}",
+                "data": None,
+                "errors": [{"field": None, "message": str(e)}]
+            }
+        )
 
 
 @router.get("/", response_model=None)
@@ -434,8 +461,9 @@ async def delete_legal_case(
             }
         
         # Delete case (sections will be deleted automatically via cascade)
-        await db.delete(case)
-        await db.commit()
+        # Note: delete() is synchronous in SQLAlchemy, only commit needs await
+        db.delete(case)
+        await db.commit()  # This commits the deletion
         
         return {
             "success": True,
