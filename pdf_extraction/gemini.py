@@ -2,9 +2,9 @@ from google import genai
 from google.genai import types
 import os
 from dotenv import load_dotenv
-load_dotenv("supabase.env")
+load_dotenv("../supabase.env")
 
-GEMINI_KEY = os.getenv("GEMINI_KEY")
+GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 print(GEMINI_KEY)
 # 1. إعداد العميل (كما كان سابقاً)
 client = genai.Client(api_key=GEMINI_KEY) 
@@ -42,7 +42,7 @@ try:
     with open(output_text_file, 'w', encoding='utf-8') as f:
         f.write(extracted_text)
     
-    print(f"\n✅ تم حفظ النص المستخرج بنجاح في الملف: {output_text_file}")
+    print(f"\nتم حفظ النص المستخرج بنجاح في الملف: {output_text_file}")
     
 except Exception as e:
-    print(f"\n❌ حدث خطأ أثناء حفظ الملف: {e}")
+    print(f"\nحدث خطأ أثناء حفظ الملف: {e}")
