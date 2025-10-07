@@ -657,25 +657,21 @@ class AuthService:
             # Find user by email
             user = await self.get_user_by_email(email)
             if not user:
-                # Don't reveal if email exists or not for security
+                # Email doesn't exist - return error
                 self.logger.info(f"Password reset requested for non-existent email: {mask_email(email)}")
-                return create_success_response(
-                    message="If the email exists, a password reset link has been sent",
-                    data={
-                        "reset_requested": True,
-                        "message": "If an account with this email exists, you will receive a password reset link shortly."
-                    }
+                raise_error_response(
+                    status_code=404,
+                    message="Email address not found",
+                    field="email"
                 )
             
             # Check if user is active
             if not user.is_active:
                 self.logger.warning(f"Password reset requested for inactive user: {mask_email(email)}")
-                return create_success_response(
-                    message="If the email exists, a password reset link has been sent",
-                    data={
-                        "reset_requested": True,
-                        "message": "If an account with this email exists, you will receive a password reset link shortly."
-                    }
+                raise_error_response(
+                    status_code=400,
+                    message="Account is not active",
+                    field="email"
                 )
             
             # Generate reset token
@@ -702,15 +698,20 @@ class AuthService:
                     
             except Exception as e:
                 self.logger.error(f"Failed to send password reset email to {mask_email(user.email)}: {str(e)}")
+                raise_error_response(
+                    status_code=500,
+                    message="Failed to send password reset email",
+                    field="email"
+                )
             
             self.logger.info(f"Password reset requested for user: {mask_email(user.email)}")
             
             return create_success_response(
-                message="If the email exists, a password reset link has been sent",
+                message="Password reset link has been sent to your email",
                 data={
                     "reset_requested": True,
                     "email_sent": email_sent,
-                    "message": "If an account with this email exists, you will receive a password reset link shortly."
+                    "message": "Please check your email for the password reset link."
                 }
             )
             

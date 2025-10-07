@@ -17,7 +17,6 @@ from passlib.context import CryptContext
 from ..models import (
     User, Profile, RefreshToken, #LegalDocument, LegalDocumentChunk,
     Subscription, Plan, Billing, UsageTracking, UserRole, Role,
-    EnjazAccount, CaseImported
 )
 
 from ..models.user import User

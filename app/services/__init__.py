@@ -7,7 +7,6 @@ for clean separation of concerns and business logic encapsulation.
 
 from .auth_service import AuthService
 from .email_service import EmailService
-from .enjaz_service import EnjazService
 from .legal_assistant_service import LegalAssistantService
 from .document_processing_service import DocumentProcessingService
 from .embedding_service import EmbeddingService
@@ -26,7 +25,6 @@ from .user_favorite_service import UserFavoriteService
 __all__ = [
     "AuthService",
     "EmailService",
-    "EnjazService",
     "LegalAssistantService",
     "DocumentProcessingService",
     "EmbeddingService",

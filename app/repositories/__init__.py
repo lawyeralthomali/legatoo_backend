@@ -6,7 +6,6 @@ for clean separation of concerns and testability.
 """
 
 from .base import BaseRepository
-from .enjaz_repository import EnjazRepository
 from .profile_repository import ProfileRepository
 from .user_repository import UserRepository
 from .contract_category_repository import ContractCategoryRepository
@@ -22,7 +21,6 @@ from .billing_repository import BillingRepository
 
 __all__ = [
     "BaseRepository",
-    "EnjazRepository", 
     "ProfileRepository",
     "UserRepository",
     "ContractCategoryRepository",
