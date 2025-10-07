@@ -2,14 +2,25 @@ from google import genai
 from google.genai import types
 import os
 from dotenv import load_dotenv
+
+# Load environment variables from the correct path
 load_dotenv("../supabase.env")
 
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-print(GEMINI_KEY)
+print(f"GEMINI_KEY loaded: {GEMINI_KEY}")
+
+# Check if the API key is properly loaded
+if not GEMINI_KEY:
+    print("ERROR: GEMINI_API_KEY not found in environment variables")
+    print("Available environment variables:")
+    for key, value in os.environ.items():
+        if "GEMINI" in key or "API" in key:
+            print(f"  {key}: {value}")
+    exit(1)
 # 1. إعداد العميل (كما كان سابقاً)
 client = genai.Client(api_key=GEMINI_KEY) 
 
-pdf_file_path = "test3.pdf" # **المسار إلى ملف PDF**
+pdf_file_path = "test4.pdf" # **المسار إلى ملف PDF**
 output_text_file = "extracted_legal_structure.json" # **اسم الملف JSON الناتج**
 
 prompt_text = """
@@ -115,27 +126,7 @@ prompt_text = """
       ]
     }
   ],
-  "legal_cases": [
-    {
-      "case_number": "قضية أفنان",
-      "title": "قضية تزوير العملة والاتجار بالبشر",
-      "description": "قضية تتعلق بتزوير العملة والاتجار بالبشر في منتجع أفنان",
-      "jurisdiction": "ميرام",
-      "court_name": "محكمة الجنايات",
-      "case_type": "جنائي",
-      "court_level": "جنايات",
-      "sections": [
-        {
-          "section_type": "facts",
-          "content": "يقع المنتجع السياحي الساحلي (أفنان) في مدينة (سقاف)..."
-        },
-        {
-          "section_type": "legal_basis",
-          "content": "التهم الموجهة: التزوير، الاتجار بالبشر، الاتجار بالمخدرات، غسل الأموال"
-        }
-      ]
-    }
-  ],
+
   "processing_report": {
     "warnings": [],
     "errors": [],

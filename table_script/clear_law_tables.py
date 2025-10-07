@@ -7,12 +7,18 @@ This script will delete ALL records from:
 
 Use this to start fresh with improved parser.
 """
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import asyncio
 from sqlalchemy import select, func, delete
 from app.db.database import AsyncSessionLocal
 from app.models.legal_knowledge import (
     LawSource, LawBranch, LawChapter, LawArticle, 
-    KnowledgeDocument, KnowledgeChunk
+    KnowledgeDocument, KnowledgeChunk, LegalCase, CaseSection, LegalTerm
 )
 
 async def show_current_stats():
@@ -29,6 +35,9 @@ async def show_current_stats():
             (LawBranch, "Law Branches"),
             (LawChapter, "Law Chapters"),
             (LawArticle, "Law Articles"),
+            (LegalCase, "Legal Cases"),
+            (CaseSection, "Case Sections"),
+            (LegalTerm, "Legal Terms"),
             (KnowledgeChunk, "Knowledge Chunks"),
         ]
         

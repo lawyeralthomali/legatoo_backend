@@ -430,6 +430,45 @@ class LegalCaseRepository:
         )
         return result.scalars().all()
 
+    async def update_legal_case(
+        self,
+        case_id: int,
+        **updates
+    ) -> Optional[LegalCase]:
+        """Update a legal case with provided fields."""
+        result = await self.db.execute(
+            select(LegalCase).where(LegalCase.id == case_id)
+        )
+        case = result.scalar_one_or_none()
+        
+        if not case:
+            return None
+        
+        # Update only provided fields
+        for key, value in updates.items():
+            if hasattr(case, key) and value is not None:
+                setattr(case, key, value)
+        
+        await self.db.commit()
+        await self.db.refresh(case)
+        logger.info(f"Updated legal case {case.id}")
+        return case
+
+    async def delete_legal_case(self, case_id: int) -> bool:
+        """Delete a legal case and its sections (cascade)."""
+        result = await self.db.execute(
+            select(LegalCase).where(LegalCase.id == case_id)
+        )
+        case = result.scalar_one_or_none()
+        
+        if not case:
+            return False
+        
+        await self.db.delete(case)
+        await self.db.commit()
+        logger.info(f"Deleted legal case {case_id}")
+        return True
+
 
 class CaseSectionRepository:
     """Repository for case sections operations."""

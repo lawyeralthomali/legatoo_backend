@@ -27,8 +27,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.legal_document2 import LegalDocument, LegalDocumentChunk, ProcessingStatusEnum
 from ..repositories.legal_document_repository import LegalDocumentRepository
-from .enhanced_document_processor import EnhancedDocumentProcessor
-from .enhanced_embedding_service import EnhancedEmbeddingService
+from ..processors.enhanced_document_processor import EnhancedDocumentProcessor
+from ..processors.enhanced_embedding_service import EnhancedEmbeddingService
 from .faiss_search_service import FAISSSearchService
 
 logger = logging.getLogger(__name__)

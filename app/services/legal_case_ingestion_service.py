@@ -34,7 +34,7 @@ except ImportError:
 
 # Enhanced PDF processor for better Arabic text extraction
 try:
-    from .enhanced_arabic_pdf_processor import EnhancedArabicPDFProcessor
+    from ..processors.enhanced_arabic_pdf_processor import EnhancedArabicPDFProcessor
     ENHANCED_PDF_AVAILABLE = True
 except ImportError:
     ENHANCED_PDF_AVAILABLE = False

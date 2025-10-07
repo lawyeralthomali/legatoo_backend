@@ -18,7 +18,7 @@ from ..repositories.legal_knowledge_repository import (
     KnowledgeMetadataRepository
 )
 from .arabic_legal_processor import ArabicLegalDocumentProcessor
-from .hierarchical_document_processor import HierarchicalDocumentProcessor
+from ..processors.hierarchical_document_processor import HierarchicalDocumentProcessor
 from ..schemas.legal_knowledge import (
     LawSourceCreate, LawSourceUpdate, LawArticleCreate, LawArticleUpdate,
     LegalCaseCreate, LegalCaseUpdate, CaseSectionCreate, CaseSectionUpdate,
