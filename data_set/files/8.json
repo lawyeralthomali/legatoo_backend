@@ -368,13 +368,11 @@
                   "order_index": 10
                 }
               ]
-            }
+        }
           ]
         }
-      ]
-    }
-  ],
-  "legal_cases": [],
+    ],
+
   "processing_report": {
     "warnings": [],
     "errors": [],

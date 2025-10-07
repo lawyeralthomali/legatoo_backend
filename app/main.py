@@ -245,6 +245,19 @@ async def root():
                 "analysis_results": "/api/v1/legal-knowledge/analysis-results",
                 "unified_search": "/api/v1/legal-knowledge/search",
                 "statistics": "/api/v1/legal-knowledge/stats"
+            },
+            "legal_laws": {
+                "upload": "/api/v1/laws/upload",
+                "upload_gemini_only": "/api/v1/laws/upload-gemini-only",
+                "upload_json": "/api/v1/laws/upload-json",
+                "list": "/api/v1/laws/",
+                "get_tree": "/api/v1/laws/{law_id}/tree",
+                "get_metadata": "/api/v1/laws/{law_id}",
+                "update": "/api/v1/laws/{law_id}",
+                "delete": "/api/v1/laws/{law_id}",
+                "reparse": "/api/v1/laws/{law_id}/reparse",
+                "analyze": "/api/v1/laws/{law_id}/analyze",
+                "statistics": "/api/v1/laws/{law_id}/statistics"
             }
         }
     }

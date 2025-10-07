@@ -452,27 +452,8 @@ class KnowledgeChunkResponse(KnowledgeChunkBase):
 
 
 # ===========================================
-# ARABIC DOCUMENT PROCESSING SCHEMAS
+# TEXT EXTRACTION SCHEMAS
 # ===========================================
-
-class ArabicDocumentProcessRequest(BaseModel):
-    """Schema for Arabic document processing request with file upload"""
-    law_source_details: Optional[Dict[str, Any]] = Field(
-        None, 
-        description="Optional existing law source details"
-    )
-    uploaded_by: Optional[int] = Field(None, description="User ID who uploaded the document")
-
-
-class MultipleDocumentsProcessRequest(BaseModel):
-    """Schema for processing multiple Arabic documents"""
-    file_paths: List[str] = Field(..., min_items=1, max_items=10, description="List of file paths")
-    law_source_details: Optional[Dict[str, Any]] = Field(
-        None, 
-        description="Optional existing law source details"
-    )
-    uploaded_by: Optional[int] = Field(None, description="User ID who uploaded the documents")
-
 
 class TextExtractionRequest(BaseModel):
     """Schema for text extraction request"""

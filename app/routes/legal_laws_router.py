@@ -10,6 +10,7 @@ import os
 import shutil
 import hashlib
 import uuid
+import json
 from typing import Optional, List
 from datetime import datetime, date
 from fastapi import APIRouter, Depends, Query, HTTPException, Path, UploadFile, File, Form
@@ -50,6 +51,8 @@ async def upload_and_parse_law(
     description: Optional[str] = Form(None, description="Law description"),
     source_url: Optional[str] = Form(None, description="Source URL"),
     pdf_file: UploadFile = File(..., description="PDF file to upload and parse"),
+    use_ai: bool = Query(True, description="Use Gemini AI extractor"),
+    fallback_on_failure: bool = Query(True, description="Fallback to local parser if AI fails"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -137,7 +140,9 @@ async def upload_and_parse_law(
             file_hash=file_hash,
             original_filename=pdf_file.filename,
             law_source_details=law_source_details,
-            uploaded_by=current_user.sub
+            uploaded_by=current_user.sub,
+            use_ai=use_ai,
+            fallback_on_failure=fallback_on_failure
         )
         
         if result["success"]:
@@ -170,6 +175,300 @@ async def upload_and_parse_law(
         
         return create_error_response(
             message=f"Failed to upload and parse law: {str(e)}"
+        )
+
+
+@router.post("/upload-gemini-only", response_model=ApiResponse)
+async def upload_and_parse_law_gemini_only(
+    law_name: str = Form(..., description="Name of the law"),
+    law_type: str = Form(..., description="Type: law, regulation, code, directive, decree"),
+    jurisdiction: Optional[str] = Form(None, description="Jurisdiction (e.g., المملكة العربية السعودية)"),
+    issuing_authority: Optional[str] = Form(None, description="Issuing authority (e.g., وزارة العمل)"),
+    issue_date: Optional[str] = Form(None, description="Issue date (YYYY-MM-DD format)"),
+    last_update: Optional[str] = Form(None, description="Last update date (YYYY-MM-DD)"),
+    description: Optional[str] = Form(None, description="Law description"),
+    source_url: Optional[str] = Form(None, description="Source URL"),
+    pdf_file: UploadFile = File(..., description="PDF file to upload and parse"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Upload and parse a legal law PDF using ONLY Gemini AI extractor.
+    
+    **Key Differences from /upload:**
+    - Uses ONLY Gemini AI for extraction (no local parser fallback)
+    - Fails immediately if Gemini AI is unavailable or fails
+    - Ensures consistent AI-powered extraction quality
+    - No fallback mechanisms - pure AI processing
+    
+    **Workflow:**
+    1. Save PDF and calculate SHA-256 hash
+    2. Create KnowledgeDocument with file hash (prevents duplicates)
+    3. Create LawSource linked to KnowledgeDocument
+    4. Parse PDF using ONLY Gemini AI to extract hierarchy: Branches → Chapters → Articles
+    5. Create KnowledgeChunks for each article
+    6. Update status to 'processed'
+    7. Return full hierarchical tree
+    
+    **Returns:**
+    Complete law structure with branches, chapters, and articles.
+    
+    **Error Handling:**
+    - Returns error if Gemini AI fails (no fallback)
+    - Returns error if AI service is unavailable
+    - Ensures consistent AI-powered results
+    """
+    try:
+        # Validate file type
+        if not pdf_file.filename:
+            return create_error_response(message="No file provided")
+        
+        file_extension = os.path.splitext(pdf_file.filename)[1].lower()
+        if file_extension not in ['.pdf', '.docx', '.doc']:
+            return create_error_response(
+                message="Invalid file type. Only PDF and DOCX files are supported"
+            )
+        
+        # Validate law_type
+        valid_types = ['law', 'regulation', 'code', 'directive', 'decree']
+        if law_type not in valid_types:
+            return create_error_response(
+                message=f"Invalid law_type. Must be one of: {', '.join(valid_types)}"
+            )
+        
+        # Create uploads directory
+        upload_dir = "uploads/legal_documents"
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Generate unique filename
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = os.path.join(upload_dir, unique_filename)
+        
+        # Save uploaded file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(pdf_file.file, buffer)
+        
+        # Calculate file hash for duplicate detection
+        file_hash = calculate_file_hash(file_path)
+        logger.info(f"Uploaded file hash: {file_hash}")
+        
+        # Parse dates if provided
+        parsed_issue_date = None
+        parsed_last_update = None
+        
+        if issue_date:
+            try:
+                parsed_issue_date = datetime.strptime(issue_date, "%Y-%m-%d").date()
+            except ValueError:
+                return create_error_response(message="Invalid issue_date format. Use YYYY-MM-DD")
+        
+        if last_update:
+            try:
+                parsed_last_update = datetime.strptime(last_update, "%Y-%m-%d").date()
+            except ValueError:
+                return create_error_response(message="Invalid last_update format. Use YYYY-MM-DD")
+        
+        # Prepare law source details
+        law_source_details = {
+            "name": law_name,
+            "type": law_type,
+            "jurisdiction": jurisdiction,
+            "issuing_authority": issuing_authority,
+            "issue_date": parsed_issue_date,
+            "last_update": parsed_last_update,
+            "description": description,
+            "source_url": source_url
+        }
+        
+        # Process the document using ONLY Gemini AI (no fallback)
+        service = LegalLawsService(db)
+        result = await service.upload_and_parse_law(
+            file_path=file_path,
+            file_hash=file_hash,
+            original_filename=pdf_file.filename,
+            law_source_details=law_source_details,
+            uploaded_by=current_user.sub,
+            use_ai=True,  # Force AI usage
+            fallback_on_failure=False  # Disable fallback - Gemini only
+        )
+        
+        if result["success"]:
+            return create_success_response(
+                message=f"✅ Successfully processed using Gemini AI only: {result['message']}",
+                data=result["data"]
+            )
+        else:
+            # Clean up file on failure
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            except Exception as e:
+                logger.warning(f"Failed to clean up file {file_path}: {e}")
+            
+            return create_error_response(
+                message=f"❌ Gemini AI processing failed: {result['message']}",
+                errors=result.get("errors", [])
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to upload and parse law with Gemini only: {str(e)}")
+        
+        # Clean up file on error
+        try:
+            if 'file_path' in locals() and os.path.exists(file_path):
+                os.remove(file_path)
+        except:
+            pass
+        
+        return create_error_response(
+            message=f"Failed to upload and parse law with Gemini only: {str(e)}"
+        )
+
+
+@router.post("/upload-json", response_model=ApiResponse)
+async def upload_law_json(
+    json_file: UploadFile = File(..., description="JSON file containing law structure"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Upload a JSON file containing extracted law structure and save to database.
+    
+    **JSON Format Expected (Law Structure):**
+    ```json
+    {
+      "law_sources": [
+        {
+          "name": "نظام العمل السعودي",
+          "type": "law",
+          "jurisdiction": "المملكة العربية السعودية",
+          "issuing_authority": "وزارة الموارد البشرية والتنمية الاجتماعية",
+          "issue_date": "1426-08-23",
+          "last_update": "1442-01-07",
+          "description": "نظام العمل السعودي الصادر بالمرسوم الملكي رقم (م/51)",
+          "source_url": "https://example.com/law-url",
+          "branches": [
+            {
+              "branch_number": "الأول",
+              "branch_name": "التعريفات / الأحكام العامة",
+              "description": "يتناول هذا الباب التعريفات الأساسية المستخدمة في نظام العمل",
+              "order_index": 1,
+              "chapters": [
+                {
+                  "chapter_number": "الأول",
+                  "chapter_name": "التعريفات",
+                  "description": "يتضمن تعريفات للمصطلحات الرئيسية المستخدمة في نظام العمل",
+                  "order_index": 1,
+                  "articles": [
+                    {
+                      "article_number": "الأولى",
+                      "title": "اسم النظام",
+                      "content": "يسمى هذا النظام نظام العمل.",
+                      "keywords": ["نظام العمل", "اسم النظام"],
+                      "order_index": 1
+                    },
+                    {
+                      "article_number": "الثانية",
+                      "title": "تعريفات",
+                      "content": "يقصد بالألفاظ والعبارات الآتية - أينما وردت في هذا النظام - المعاني المبينة أمامها...",
+                      "keywords": ["تعريفات", "ألفاظ", "عبارات", "معاني"],
+                      "order_index": 2
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "processing_report": {
+        "structure_confidence": 0.98,
+        "total_branches": 3,
+        "total_chapters": 6,
+        "total_articles": 30,
+        "warnings": [],
+        "errors": [],
+        "suggestions": ["تحقق من ترقيم المواد", "تأكد من اكتمال النصوص"]
+      }
+    }
+    ```
+    
+    **Important Notes:**
+    - This is for **LAW** structure, not legal cases
+    - `type` must be one of: 'law', 'regulation', 'code', 'directive', 'decree'
+    - `issue_date` and `last_update` should be in YYYY-MM-DD format
+    - `keywords` should be an array of strings
+    - `order_index` is used for sorting within each level
+    
+    **Workflow:**
+    1. Validate JSON file format
+    2. Parse law structure from JSON
+    3. Create KnowledgeDocument (no file, just metadata)
+    4. Create LawSource with extracted metadata
+    5. Create hierarchical structure: Branches → Chapters → Articles
+    6. Create KnowledgeChunks for each article
+    7. Return success with statistics
+    
+    **Returns:**
+    Success message with processing statistics.
+    """
+    try:
+        # Validate file type
+        if not json_file.filename:
+            return create_error_response(message="No file provided")
+        
+        if not json_file.filename.lower().endswith('.json'):
+            return create_error_response(
+                message="Invalid file type. Only JSON files are supported"
+            )
+        
+        # Read and parse JSON content
+        try:
+            content = await json_file.read()
+            json_data = json.loads(content.decode('utf-8'))
+        except json.JSONDecodeError as e:
+            return create_error_response(
+                message=f"Invalid JSON format: {str(e)}"
+            )
+        except Exception as e:
+            return create_error_response(
+                message=f"Failed to read JSON file: {str(e)}"
+            )
+        
+        # Validate JSON structure
+        if "law_sources" not in json_data or not json_data["law_sources"]:
+            return create_error_response(
+                message="Invalid JSON structure. Missing 'law_sources' array"
+            )
+        
+        law_source_data = json_data["law_sources"][0]
+        if "branches" not in law_source_data:
+            return create_error_response(
+                message="Invalid JSON structure. Missing 'branches' in law_source"
+            )
+        
+        # Process the JSON data using LegalLawsService
+        service = LegalLawsService(db)
+        result = await service.upload_json_law_structure(
+            json_data=json_data,
+            uploaded_by=1  # Use hardcoded user ID 1
+        )
+        
+        if result["success"]:
+            return create_success_response(
+                message=f"✅ Successfully processed JSON law structure: {result['message']}",
+                data=result["data"]
+            )
+        else:
+            return create_error_response(
+                message=f"❌ Failed to process JSON law structure: {result['message']}",
+                errors=result.get("errors", [])
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to upload JSON law structure: {str(e)}")
+        return create_error_response(
+            message=f"Failed to upload JSON law structure: {str(e)}"
         )
 
 
