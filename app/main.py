@@ -41,6 +41,8 @@ from .routes.legal_laws_router import router as legal_laws_router
 from .routes.legal_hierarchy_router import router as legal_hierarchy_router
 from .routes.legal_cases_router import router as legal_cases_router
 from .routes.chunk_processing_router import router as chunk_processing_router
+from .routes.embedding_router import router as embedding_router
+from .routes.search_router import router as search_router
 
 from pydantic import BaseModel
 from typing import List
@@ -192,6 +194,9 @@ app.include_router(legal_laws_router)  # Legal Laws Management (New API)
 app.include_router(legal_hierarchy_router)  # Legal Hierarchy CRUD (Branches, Chapters, Articles)
 app.include_router(legal_cases_router)  # Legal Cases Ingestion Pipeline
 app.include_router(chunk_processing_router)  # Chunk Processing with AI
+app.include_router(embedding_router)  # Embeddings Service
+app.include_router(search_router)     # Semantic Search Service
+
 @app.on_event("startup")
 async def startup_event():
     """Create database tables on startup."""

@@ -6,14 +6,18 @@ Provides clean separation between routes and data access.
 """
 
 import logging
+import json
+import hashlib
 from typing import Dict, Any, Optional
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from ..repositories.legal_knowledge_repository import (
     LegalCaseRepository,
     CaseSectionRepository
 )
+from ..models.legal_knowledge import LegalCase, CaseSection, KnowledgeDocument, KnowledgeChunk
 
 logger = logging.getLogger(__name__)
 
@@ -367,4 +371,233 @@ class LegalCaseService:
                 "data": None,
                 "errors": [{"field": None, "message": str(e)}]
             }
+
+    async def upload_json_case_structure(
+        self,
+        json_data: Dict[str, Any],
+        uploaded_by: int = 1
+    ) -> Dict[str, Any]:
+        """
+        Upload legal case structure from JSON data directly to database.
+        
+        Args:
+            json_data: JSON data containing legal case structure
+            uploaded_by: User ID who uploaded the data
+            
+        Returns:
+            Dict with success status and processing results
+            
+        Expected JSON structure:
+        {
+            "legal_cases": [
+                {
+                    "case_number": "123/2024",
+                    "title": "Case Title",
+                    "description": "Case description",
+                    "jurisdiction": "الرياض",
+                    "court_name": "المحكمة العامة",
+                    "decision_date": "2024-01-15",
+                    "case_type": "مدني",
+                    "court_level": "ابتدائي",
+                    "sections": [
+                        {
+                            "section_type": "summary",
+                            "content": "Case summary..."
+                        },
+                        {
+                            "section_type": "facts",
+                            "content": "Facts of the case..."
+                        },
+                        {
+                            "section_type": "ruling",
+                            "content": "Court ruling..."
+                        }
+                    ]
+                }
+            ],
+            "processing_report": {
+                "total_cases": 1,
+                "warnings": [],
+                "errors": []
+            }
+        }
+        """
+        try:
+            logger.info("Starting JSON case structure upload")
+            
+            # Extract legal cases data
+            legal_cases = json_data.get("legal_cases", [])
+            if not legal_cases:
+                return {
+                    "success": False,
+                    "message": "No legal cases found in JSON",
+                    "data": None,
+                    "errors": [{"field": "legal_cases", "message": "Missing or empty legal_cases array"}]
+                }
+            
+            processing_report = json_data.get("processing_report", {})
+            
+            # Generate unique hash for JSON upload based on content
+            json_content = json.dumps(json_data, sort_keys=True, ensure_ascii=False)
+            unique_hash = hashlib.sha256(json_content.encode('utf-8')).hexdigest()
+            
+            total_cases = 0
+            total_sections = 0
+            created_case_ids = []
+            
+            # Process each legal case
+            for case_data in legal_cases:
+                # Create KnowledgeDocument for the case (no file, just metadata)
+                case_title = case_data.get("title", "Unknown Case")
+                knowledge_doc = KnowledgeDocument(
+                    title=f"JSON Upload: {case_title}",
+                    category="legal_case",
+                    file_path=f"json_upload_case_{unique_hash[:8]}_{total_cases}.json",
+                    file_hash=f"{unique_hash}_{total_cases}",  # Unique hash per case
+                    source_type="uploaded",
+                    uploaded_by=uploaded_by,
+                    status="processed",
+                    document_metadata={
+                        "source": "json_upload",
+                        "case_type": case_data.get("case_type"),
+                        "court_level": case_data.get("court_level"),
+                        "processing_report": processing_report
+                    }
+                )
+                
+                self.db.add(knowledge_doc)
+                await self.db.flush()
+                logger.info(f"Created KnowledgeDocument {knowledge_doc.id} for case")
+                
+                # Parse decision_date if provided
+                decision_date = None
+                if case_data.get("decision_date"):
+                    decision_date = self._parse_date(case_data.get("decision_date"))
+                
+                # Create LegalCase
+                legal_case = LegalCase(
+                    document_id=knowledge_doc.id,
+                    case_number=case_data.get("case_number"),
+                    title=case_title,
+                    description=case_data.get("description"),
+                    jurisdiction=case_data.get("jurisdiction"),
+                    court_name=case_data.get("court_name"),
+                    decision_date=decision_date,
+                    case_type=case_data.get("case_type"),
+                    court_level=case_data.get("court_level"),
+                    status="processed",
+                    created_at=datetime.utcnow()
+                )
+                
+                self.db.add(legal_case)
+                await self.db.flush()
+                logger.info(f"Created LegalCase {legal_case.id}: {legal_case.title}")
+                
+                total_cases += 1
+                created_case_ids.append(legal_case.id)
+                
+                # Process case sections
+                sections_data = case_data.get("sections", [])
+                chunk_index = 0
+                
+                for section_data in sections_data:
+                    section_type = section_data.get("section_type", "summary")
+                    content = section_data.get("content", "")
+                    
+                    # Validate section_type
+                    valid_types = ["summary", "facts", "arguments", "ruling", "legal_basis"]
+                    if section_type not in valid_types:
+                        logger.warning(f"Invalid section_type '{section_type}', defaulting to 'summary'")
+                        section_type = "summary"
+                    
+                    # Create CaseSection
+                    case_section = CaseSection(
+                        case_id=legal_case.id,
+                        section_type=section_type,
+                        content=content,
+                        created_at=datetime.utcnow()
+                    )
+                    
+                    self.db.add(case_section)
+                    await self.db.flush()
+                    total_sections += 1
+                    
+                    # Create KnowledgeChunk for the section
+                    chunk = KnowledgeChunk(
+                        document_id=knowledge_doc.id,
+                        chunk_index=chunk_index,
+                        content=content,
+                        case_id=legal_case.id,
+                        created_at=datetime.utcnow()
+                    )
+                    
+                    self.db.add(chunk)
+                    chunk_index += 1
+            
+            # Commit all changes
+            await self.db.commit()
+            
+            # Prepare response data
+            response_data = {
+                "cases": [
+                    {
+                        "id": case_id,
+                        "case_number": legal_cases[idx].get("case_number"),
+                        "title": legal_cases[idx].get("title")
+                    }
+                    for idx, case_id in enumerate(created_case_ids)
+                ],
+                "statistics": {
+                    "total_cases": total_cases,
+                    "total_sections": total_sections,
+                    "processing_report": processing_report
+                }
+            }
+            
+            logger.info(f"Successfully processed JSON case structure: {total_cases} cases, {total_sections} sections")
+            
+            return {
+                "success": True,
+                "message": f"Successfully processed {total_cases} legal case(s) with {total_sections} section(s)",
+                "data": response_data,
+                "errors": []
+            }
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to upload JSON case structure: {str(e)}")
+            return {
+                "success": False,
+                "message": f"Failed to upload JSON case structure: {str(e)}",
+                "data": None,
+                "errors": [{"field": None, "message": str(e)}]
+            }
+
+    def _parse_date(self, date_str: Optional[str]) -> Optional[datetime]:
+        """Parse date string to datetime object."""
+        if not date_str:
+            return None
+        
+        try:
+            # Try different date formats
+            formats = [
+                "%Y-%m-%d",
+                "%d/%m/%Y",
+                "%m/%d/%Y",
+                "%Y/%m/%d"
+            ]
+            
+            for fmt in formats:
+                try:
+                    return datetime.strptime(date_str, fmt).date()
+                except ValueError:
+                    continue
+            
+            # If no format works, return None
+            logger.warning(f"Could not parse date: {date_str}")
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Error parsing date {date_str}: {str(e)}")
+            return None
 

@@ -1,7 +1,7 @@
 """add document_id to legal_cases
 
-Revision ID: 007
-Revises: 006
+Revision ID: 007_add_document_id_to_legal_cases
+Revises: 006_update_legal_knowledge_schema
 Create Date: 2025-10-06
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '007'
-down_revision = '006'
+revision = '007_add_document_id_to_legal_cases'
+down_revision = '006_update_legal_knowledge_schema'
 branch_labels = None
 depends_on = None
 

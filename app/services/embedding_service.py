@@ -1,266 +1,608 @@
 """
-Embedding Service for generating vector embeddings.
+Embedding Service - خدمة متكاملة لتوليد وإدارة embeddings للنصوص القانونية العربية
 
-This service generates high-quality multilingual embeddings for semantic search,
-supporting both Arabic and English legal documents.
+This service handles:
+- Generating embeddings for legal text chunks using multilingual models
+- Storing embeddings in the database
+- Finding similar chunks using cosine similarity
+- Batch processing for large datasets
 """
 
 import logging
-import os
-from typing import List, Optional
-import asyncio
-import httpx
+import json
 import numpy as np
+from typing import List, Dict, Any, Optional, Tuple
+from datetime import datetime
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_, or_, func, update
+from sentence_transformers import SentenceTransformer
+import torch
+
+from ..models.legal_knowledge import KnowledgeChunk, KnowledgeDocument
+from ..repositories.legal_knowledge_repository import KnowledgeChunkRepository
 
 logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
-    """Service for generating text embeddings."""
-
-    def __init__(self):
-        """Initialize embedding service with OpenAI API."""
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        self.model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
-        self.embedding_dimension = 3072  # text-embedding-3-large dimension
-        self.base_url = "https://api.openai.com/v1/embeddings"
-        
-        # Fallback to local embedding if no API key
-        self.use_local_fallback = not self.api_key
-        
-        if self.use_local_fallback:
-            logger.warning("No OpenAI API key found. Using local fallback embeddings.")
-        else:
-            logger.info(f"Using OpenAI embedding model: {self.model}")
-
-    async def generate_embedding(
-        self,
-        text: str,
-        max_retries: int = 3
-    ) -> List[float]:
+    """
+    خدمة متكاملة لتوليد وإدارة الـ embeddings للنصوص القانونية العربية.
+    
+    Features:
+    - Support for Arabic legal texts
+    - Batch processing for efficiency
+    - Similarity search with threshold
+    - Caching for repeated queries
+    - Error handling and retry logic
+    """
+    
+    # Model configurations
+    MODELS = {
+        'default': 'sentence-transformers/paraphrase-multilingual-mpnet-base-v2',
+        'large': 'intfloat/multilingual-e5-large',
+        'small': 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
+    }
+    
+    def __init__(self, db: AsyncSession, model_name: str = 'default'):
         """
-        Generate embedding vector for text.
+        Initialize the embedding service.
         
         Args:
-            text: Text to embed
-            max_retries: Maximum number of retry attempts
-            
-        Returns:
-            Embedding vector as list of floats
-            
+            db: Async database session
+            model_name: Name of the model to use ('default', 'large', or 'small')
+        """
+        self.db = db
+        self.model_name = model_name
+        self.model: Optional[SentenceTransformer] = None
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.chunk_repo = KnowledgeChunkRepository(db)
+        
+        # Performance settings
+        self.batch_size = 32
+        self.max_seq_length = 512
+        
+        # Cache for embeddings (in-memory cache for frequent queries)
+        self._embedding_cache: Dict[str, List[float]] = {}
+        self._cache_max_size = 1000
+    
+    def initialize_model(self) -> None:
+        """
+        تهيئة نموذج الـ embeddings المناسب للنصوص العربية القانونية.
+        
+        Uses sentence-transformers with multilingual support.
+        Optimized for Arabic legal text understanding.
+        
         Raises:
-            RuntimeError: If embedding generation fails
+            RuntimeError: If model fails to load
         """
-        if not text or not text.strip():
-            logger.warning("Empty text provided for embedding")
-            return self._get_zero_embedding()
-        
-        # Truncate text if too long (max 8191 tokens for OpenAI)
-        text = self._truncate_text(text, max_tokens=8000)
-        
-        if self.use_local_fallback:
-            return await self._generate_local_embedding(text)
-        
-        for attempt in range(max_retries):
-            try:
-                return await self._generate_openai_embedding(text)
-            except Exception as e:
-                logger.warning(f"Embedding attempt {attempt + 1} failed: {str(e)}")
-                if attempt == max_retries - 1:
-                    logger.error("All embedding attempts failed. Using fallback.")
-                    return await self._generate_local_embedding(text)
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
-        
-        return self._get_zero_embedding()
-
-    async def generate_embeddings_batch(
-        self,
-        texts: List[str],
-        batch_size: int = 100
-    ) -> List[List[float]]:
+        try:
+            model_path = self.MODELS.get(self.model_name, self.MODELS['default'])
+            
+            logger.info(f"🚀 Initializing embedding model: {model_path}")
+            logger.info(f"📱 Using device: {self.device}")
+            
+            self.model = SentenceTransformer(model_path)
+            self.model.to(self.device)
+            
+            # Set max sequence length
+            self.model.max_seq_length = self.max_seq_length
+            
+            logger.info(f"✅ Model initialized successfully")
+            logger.info(f"   Embedding dimension: {self.model.get_sentence_embedding_dimension()}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize embedding model: {str(e)}")
+            raise RuntimeError(f"Failed to initialize embedding model: {str(e)}")
+    
+    def _ensure_model_loaded(self) -> None:
+        """Ensure model is loaded before use."""
+        if self.model is None:
+            self.initialize_model()
+    
+    def _truncate_text(self, text: str, max_tokens: int = 512) -> str:
         """
-        Generate embeddings for multiple texts in batches.
+        Truncate text to fit within model's max sequence length.
         
         Args:
-            texts: List of texts to embed
-            batch_size: Number of texts per batch
-            
-        Returns:
-            List of embedding vectors
-        """
-        embeddings = []
-        
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            logger.info(f"Processing batch {i // batch_size + 1}, size: {len(batch)}")
-            
-            # Process batch concurrently
-            batch_embeddings = await asyncio.gather(
-                *[self.generate_embedding(text) for text in batch],
-                return_exceptions=True
-            )
-            
-            # Handle exceptions
-            for j, embedding in enumerate(batch_embeddings):
-                if isinstance(embedding, Exception):
-                    logger.error(f"Failed to embed text at index {i + j}: {str(embedding)}")
-                    embeddings.append(self._get_zero_embedding())
-                else:
-                    embeddings.append(embedding)
-        
-        logger.info(f"Generated {len(embeddings)} embeddings")
-        return embeddings
-
-    async def _generate_openai_embedding(self, text: str) -> List[float]:
-        """
-        Generate embedding using OpenAI API.
-        
-        Args:
-            text: Text to embed
-            
-        Returns:
-            Embedding vector
-        """
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "input": text,
-            "model": self.model
-        }
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                self.base_url,
-                headers=headers,
-                json=payload
-            )
-            
-            if response.status_code != 200:
-                raise RuntimeError(f"OpenAI API error: {response.status_code} - {response.text}")
-            
-            data = response.json()
-            embedding = data["data"][0]["embedding"]
-            
-            return embedding
-
-    async def _generate_local_embedding(self, text: str) -> List[float]:
-        """
-        Generate simple local embedding as fallback.
-        
-        This is a basic TF-IDF-like approach for demonstration.
-        In production, consider using sentence-transformers or similar.
-        
-        Args:
-            text: Text to embed
-            
-        Returns:
-            Embedding vector
-        """
-        # Simple hash-based embedding for fallback
-        # This maintains consistent dimensions but is not semantically meaningful
-        words = text.lower().split()
-        
-        # Create a simple frequency-based vector
-        embedding = np.zeros(self.embedding_dimension)
-        
-        for i, word in enumerate(words[:1000]):  # Limit to first 1000 words
-            # Use hash to map words to embedding dimensions
-            for j in range(3):  # Multiple positions per word
-                idx = (hash(word + str(j)) % self.embedding_dimension)
-                embedding[idx] += 1.0 / (i + 1)  # Position-weighted
-        
-        # Normalize
-        norm = np.linalg.norm(embedding)
-        if norm > 0:
-            embedding = embedding / norm
-        
-        return embedding.tolist()
-
-    def _get_zero_embedding(self) -> List[float]:
-        """
-        Get zero embedding vector.
-        
-        Returns:
-            Zero vector of correct dimension
-        """
-        return [0.0] * self.embedding_dimension
-
-    def _truncate_text(self, text: str, max_tokens: int = 8000) -> str:
-        """
-        Truncate text to maximum token count.
-        
-        Args:
-            text: Text to truncate
+            text: Input text
             max_tokens: Maximum number of tokens
             
         Returns:
             Truncated text
         """
-        # Rough approximation: 1 token ≈ 4 characters for English, ≈ 2 for Arabic
-        max_chars = max_tokens * 3
+        # Simple truncation by character count (approximate)
+        # For more accurate truncation, use tokenizer
+        max_chars = max_tokens * 4  # Approximate: 1 token ≈ 4 chars
+        if len(text) > max_chars:
+            logger.warning(f"⚠️ Truncating text from {len(text)} to {max_chars} characters")
+            return text[:max_chars]
+        return text
+    
+    def _encode_text(self, text: str) -> List[float]:
+        """
+        Encode a single text into embedding vector.
         
-        if len(text) <= max_chars:
-            return text
+        Args:
+            text: Input text
+            
+        Returns:
+            Embedding vector as list of floats
+        """
+        self._ensure_model_loaded()
         
-        # Truncate at word boundary
-        truncated = text[:max_chars]
-        last_space = truncated.rfind(' ')
+        # Check cache first
+        if text in self._embedding_cache:
+            logger.debug(f"📦 Using cached embedding")
+            return self._embedding_cache[text]
         
-        if last_space > 0:
-            truncated = truncated[:last_space]
+        # Truncate if necessary
+        text = self._truncate_text(text)
         
-        logger.info(f"Truncated text from {len(text)} to {len(truncated)} characters")
-        return truncated
-
+        # Generate embedding
+        embedding = self.model.encode(text, convert_to_numpy=True)
+        embedding_list = embedding.tolist()
+        
+        # Cache the result
+        if len(self._embedding_cache) < self._cache_max_size:
+            self._embedding_cache[text] = embedding_list
+        
+        return embedding_list
+    
+    async def generate_chunk_embedding(
+        self,
+        chunk: KnowledgeChunk,
+        save_to_db: bool = True
+    ) -> Dict[str, Any]:
+        """
+        يولد embedding لـ chunk فردي.
+        
+        Args:
+            chunk: KnowledgeChunk instance
+            save_to_db: Whether to save embedding to database
+            
+        Returns:
+            Dict with success status and embedding info
+        """
+        try:
+            logger.info(f"🔄 Generating embedding for chunk {chunk.id}")
+            
+            # Generate embedding
+            start_time = datetime.utcnow()
+            embedding = self._encode_text(chunk.content)
+            processing_time = (datetime.utcnow() - start_time).total_seconds()
+            
+            # Save to database if requested
+            if save_to_db:
+                chunk.embedding_vector = json.dumps(embedding)
+                await self.db.commit()
+                await self.db.refresh(chunk)
+                logger.info(f"✅ Saved embedding for chunk {chunk.id}")
+            
+            return {
+                "success": True,
+                "chunk_id": chunk.id,
+                "embedding_dimension": len(embedding),
+                "processing_time": processing_time,
+                "embedding": embedding
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to generate embedding for chunk {chunk.id}: {str(e)}")
+            return {
+                "success": False,
+                "chunk_id": chunk.id,
+                "error": str(e)
+            }
+    
+    async def generate_document_embeddings(
+        self,
+        document_id: int,
+        overwrite: bool = False
+    ) -> Dict[str, Any]:
+        """
+        يولد embeddings لكل الـ chunks في document معين.
+        
+        Args:
+            document_id: ID of the document
+            overwrite: Whether to overwrite existing embeddings
+            
+        Returns:
+            Dict with processing statistics
+        """
+        try:
+            logger.info(f"📄 Processing document {document_id}")
+            
+            # Get all chunks for this document
+            query = select(KnowledgeChunk).where(
+                KnowledgeChunk.document_id == document_id
+            )
+            
+            # Filter out chunks that already have embeddings (unless overwrite)
+            if not overwrite:
+                query = query.where(
+                    or_(
+                        KnowledgeChunk.embedding_vector.is_(None),
+                        KnowledgeChunk.embedding_vector == ''
+                    )
+                )
+            
+            result = await self.db.execute(query)
+            chunks = result.scalars().all()
+            
+            if not chunks:
+                logger.warning(f"⚠️ No chunks to process for document {document_id}")
+                return {
+                    "success": True,
+                    "document_id": document_id,
+                    "total_chunks": 0,
+                    "processed_chunks": 0,
+                    "failed_chunks": 0,
+                    "processing_time": "0s"
+                }
+            
+            logger.info(f"📦 Found {len(chunks)} chunks to process")
+            
+            # Process in batches
+            start_time = datetime.utcnow()
+            processed = 0
+            failed = 0
+            
+            for i in range(0, len(chunks), self.batch_size):
+                batch = chunks[i:i + self.batch_size]
+                logger.info(f"⚙️ Processing batch {i // self.batch_size + 1}/{(len(chunks) + self.batch_size - 1) // self.batch_size}")
+                
+                # Extract texts
+                texts = [chunk.content for chunk in batch]
+                
+                # Generate embeddings for batch
+                self._ensure_model_loaded()
+                embeddings = self.model.encode(
+                    texts,
+                    batch_size=len(batch),
+                    convert_to_numpy=True,
+                    show_progress_bar=False
+                )
+                
+                # Save to database
+                for chunk, embedding in zip(batch, embeddings):
+                    try:
+                        chunk.embedding_vector = json.dumps(embedding.tolist())
+                        processed += 1
+                    except Exception as e:
+                        logger.error(f"❌ Failed to save embedding for chunk {chunk.id}: {str(e)}")
+                        failed += 1
+                
+                # Commit batch
+                await self.db.commit()
+            
+            processing_time = (datetime.utcnow() - start_time).total_seconds()
+            
+            logger.info(f"✅ Document {document_id} processed: {processed} successful, {failed} failed")
+            
+            return {
+                "success": True,
+                "document_id": document_id,
+                "total_chunks": len(chunks),
+                "processed_chunks": processed,
+                "failed_chunks": failed,
+                "processing_time": f"{processing_time:.2f}s"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to process document {document_id}: {str(e)}")
+            await self.db.rollback()
+            return {
+                "success": False,
+                "document_id": document_id,
+                "error": str(e)
+            }
+    
+    async def generate_batch_embeddings(
+        self,
+        chunk_ids: List[int],
+        overwrite: bool = False
+    ) -> Dict[str, Any]:
+        """
+        يولد embeddings لمجموعة من الـ chunks.
+        
+        Args:
+            chunk_ids: List of chunk IDs to process
+            overwrite: Whether to overwrite existing embeddings
+            
+        Returns:
+            Dict with processing statistics
+        """
+        try:
+            logger.info(f"📦 Processing {len(chunk_ids)} chunks")
+            
+            # Get chunks
+            query = select(KnowledgeChunk).where(
+                KnowledgeChunk.id.in_(chunk_ids)
+            )
+            
+            if not overwrite:
+                query = query.where(
+                    or_(
+                        KnowledgeChunk.embedding_vector.is_(None),
+                        KnowledgeChunk.embedding_vector == ''
+                    )
+                )
+            
+            result = await self.db.execute(query)
+            chunks = result.scalars().all()
+            
+            if not chunks:
+                return {
+                    "success": True,
+                    "total_chunks": 0,
+                    "processed_chunks": 0,
+                    "failed_chunks": 0,
+                    "processing_time": "0s"
+                }
+            
+            # Process in batches
+            start_time = datetime.utcnow()
+            processed = 0
+            failed = 0
+            
+            for i in range(0, len(chunks), self.batch_size):
+                batch = chunks[i:i + self.batch_size]
+                
+                texts = [chunk.content for chunk in batch]
+                
+                self._ensure_model_loaded()
+                embeddings = self.model.encode(
+                    texts,
+                    batch_size=len(batch),
+                    convert_to_numpy=True,
+                    show_progress_bar=False
+                )
+                
+                for chunk, embedding in zip(batch, embeddings):
+                    try:
+                        chunk.embedding_vector = json.dumps(embedding.tolist())
+                        processed += 1
+                    except Exception as e:
+                        logger.error(f"❌ Failed to save embedding for chunk {chunk.id}: {str(e)}")
+                        failed += 1
+                
+                await self.db.commit()
+            
+            processing_time = (datetime.utcnow() - start_time).total_seconds()
+            
+            return {
+                "success": True,
+                "total_chunks": len(chunks),
+                "processed_chunks": processed,
+                "failed_chunks": failed,
+                "processing_time": f"{processing_time:.2f}s"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to process batch: {str(e)}")
+            await self.db.rollback()
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
     def calculate_similarity(
         self,
         embedding1: List[float],
         embedding2: List[float]
     ) -> float:
         """
-        Calculate cosine similarity between two embeddings.
+        يحسب التشابه بين embeddingين باستخدام cosine similarity.
         
         Args:
             embedding1: First embedding vector
             embedding2: Second embedding vector
             
         Returns:
-            Similarity score between 0 and 1
+            Similarity score (0.0 to 1.0)
         """
-        if len(embedding1) != len(embedding2):
-            logger.error("Embedding dimensions don't match")
+        try:
+            vec1 = np.array(embedding1)
+            vec2 = np.array(embedding2)
+            
+            # Cosine similarity
+            dot_product = np.dot(vec1, vec2)
+            norm1 = np.linalg.norm(vec1)
+            norm2 = np.linalg.norm(vec2)
+            
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+            
+            similarity = dot_product / (norm1 * norm2)
+            return float(similarity)
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to calculate similarity: {str(e)}")
             return 0.0
-        
-        # Cosine similarity
-        dot_product = sum(a * b for a, b in zip(embedding1, embedding2))
-        norm1 = sum(a * a for a in embedding1) ** 0.5
-        norm2 = sum(b * b for b in embedding2) ** 0.5
-        
-        if norm1 == 0 or norm2 == 0:
-            return 0.0
-        
-        similarity = dot_product / (norm1 * norm2)
-        
-        # Normalize to 0-1 range
-        return max(0.0, min(1.0, (similarity + 1) / 2))
-
-    async def check_api_status(self) -> bool:
+    
+    async def find_similar_chunks(
+        self,
+        query: str,
+        top_k: int = 10,
+        threshold: float = 0.7,
+        filters: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
         """
-        Check if OpenAI API is accessible.
+        يبحث عن الـ chunks الأكثر تشابهاً مع query.
+        
+        Args:
+            query: Search query text
+            top_k: Number of top results to return
+            threshold: Minimum similarity threshold (0.0 to 1.0)
+            filters: Optional filters (e.g., {"case_id": 123})
+            
+        Returns:
+            List of similar chunks with similarity scores
+        """
+        try:
+            logger.info(f"🔍 Searching for: '{query[:50]}...'")
+            
+            # Generate query embedding
+            query_embedding = self._encode_text(query)
+            
+            # Get all chunks with embeddings
+            query_builder = select(KnowledgeChunk).where(
+                and_(
+                    KnowledgeChunk.embedding_vector.isnot(None),
+                    KnowledgeChunk.embedding_vector != ''
+                )
+            )
+            
+            # Apply filters if provided
+            if filters:
+                if 'document_id' in filters:
+                    query_builder = query_builder.where(
+                        KnowledgeChunk.document_id == filters['document_id']
+                    )
+                if 'case_id' in filters:
+                    query_builder = query_builder.where(
+                        KnowledgeChunk.case_id == filters['case_id']
+                    )
+                if 'law_source_id' in filters:
+                    query_builder = query_builder.where(
+                        KnowledgeChunk.law_source_id == filters['law_source_id']
+                    )
+            
+            result = await self.db.execute(query_builder)
+            chunks = result.scalars().all()
+            
+            logger.info(f"📊 Found {len(chunks)} chunks with embeddings")
+            
+            if not chunks:
+                return []
+            
+            # Calculate similarities
+            similarities = []
+            for chunk in chunks:
+                try:
+                    chunk_embedding = json.loads(chunk.embedding_vector)
+                    similarity = self.calculate_similarity(query_embedding, chunk_embedding)
+                    
+                    if similarity >= threshold:
+                        similarities.append({
+                            "chunk_id": chunk.id,
+                            "content": chunk.content,
+                            "similarity": round(similarity, 4),
+                            "document_id": chunk.document_id,
+                            "chunk_index": chunk.chunk_index,
+                            "law_source_id": chunk.law_source_id,
+                            "case_id": chunk.case_id,
+                            "article_id": chunk.article_id,
+                            "tokens_count": chunk.tokens_count
+                        })
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to process chunk {chunk.id}: {str(e)}")
+                    continue
+            
+            # Sort by similarity (descending) and take top_k
+            similarities.sort(key=lambda x: x['similarity'], reverse=True)
+            results = similarities[:top_k]
+            
+            logger.info(f"✅ Found {len(results)} similar chunks above threshold {threshold}")
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to search for similar chunks: {str(e)}")
+            return []
+    
+    async def get_embedding_status(self, document_id: int) -> Dict[str, Any]:
+        """
+        يعرض حالة الـ embeddings لـ document محدد.
+        
+        Args:
+            document_id: ID of the document
+            
+        Returns:
+            Dict with embedding statistics
+        """
+        try:
+            # Get total chunks
+            total_result = await self.db.execute(
+                select(func.count(KnowledgeChunk.id)).where(
+                    KnowledgeChunk.document_id == document_id
+                )
+            )
+            total_chunks = total_result.scalar() or 0
+            
+            # Get chunks with embeddings
+            with_embeddings_result = await self.db.execute(
+                select(func.count(KnowledgeChunk.id)).where(
+                    and_(
+                        KnowledgeChunk.document_id == document_id,
+                        KnowledgeChunk.embedding_vector.isnot(None),
+                        KnowledgeChunk.embedding_vector != ''
+                    )
+                )
+            )
+            with_embeddings = with_embeddings_result.scalar() or 0
+            
+            # Calculate completion percentage
+            completion = (with_embeddings / total_chunks * 100) if total_chunks > 0 else 0
+            
+            return {
+                "success": True,
+                "document_id": document_id,
+                "total_chunks": total_chunks,
+                "chunks_with_embeddings": with_embeddings,
+                "chunks_without_embeddings": total_chunks - with_embeddings,
+                "completion_percentage": round(completion, 2),
+                "status": "complete" if completion == 100 else "partial" if completion > 0 else "not_started"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to get embedding status: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def get_global_embedding_status(self) -> Dict[str, Any]:
+        """
+        يعرض حالة الـ embeddings لكل النظام.
         
         Returns:
-            True if API is accessible, False otherwise
+            Dict with global embedding statistics
         """
-        if self.use_local_fallback:
-            return False
-        
         try:
-            test_embedding = await self._generate_openai_embedding("test")
-            return len(test_embedding) > 0
+            # Get total chunks
+            total_result = await self.db.execute(
+                select(func.count(KnowledgeChunk.id))
+            )
+            total_chunks = total_result.scalar() or 0
+            
+            # Get chunks with embeddings
+            with_embeddings_result = await self.db.execute(
+                select(func.count(KnowledgeChunk.id)).where(
+                    and_(
+                        KnowledgeChunk.embedding_vector.isnot(None),
+                        KnowledgeChunk.embedding_vector != ''
+                    )
+                )
+            )
+            with_embeddings = with_embeddings_result.scalar() or 0
+            
+            # Calculate completion percentage
+            completion = (with_embeddings / total_chunks * 100) if total_chunks > 0 else 0
+            
+            return {
+                "success": True,
+                "total_chunks": total_chunks,
+                "chunks_with_embeddings": with_embeddings,
+                "chunks_without_embeddings": total_chunks - with_embeddings,
+                "completion_percentage": round(completion, 2),
+                "model_name": self.model_name,
+                "device": self.device
+            }
+            
         except Exception as e:
-            logger.error(f"API status check failed: {str(e)}")
-            return False
-
+            logger.error(f"❌ Failed to get global embedding status: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }

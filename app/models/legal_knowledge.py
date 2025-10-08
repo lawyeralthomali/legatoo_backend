@@ -222,7 +222,8 @@ class KnowledgeChunk(Base):
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
     tokens_count = Column(Integer)
-    embedding = Column(Text)
+    embedding = Column(Text)  # Legacy field for backward compatibility
+    embedding_vector = Column(JSON)  # New field for sentence-transformers embeddings
     verified_by_admin = Column(Boolean, default=False, index=True)
     
     # ✅ تحديث أسماء الحقول لتعكس الهيكل الجديد
