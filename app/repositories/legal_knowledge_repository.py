@@ -735,6 +735,43 @@ class KnowledgeChunkRepository:
         result = await self.db.execute(query)
         return result.scalars().all()
 
+    async def save_chunks_batch(self, chunks: List[KnowledgeChunk]) -> bool:
+        """Save multiple chunks in a batch operation."""
+        try:
+            for chunk in chunks:
+                self.db.add(chunk)
+            await self.db.commit()
+            logger.info(f"Saved batch of {len(chunks)} chunks")
+            return True
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to save chunks batch: {e}")
+            raise e
+
+    async def get_chunks_statistics(self, document_id: int) -> Dict[str, int]:
+        """Get statistics about chunks for a specific document."""
+        total_chunks_result = await self.db.execute(
+            select(func.count(KnowledgeChunk.id))
+            .where(KnowledgeChunk.document_id == document_id)
+        )
+        total_chunks = total_chunks_result.scalar() or 0
+        
+        chunks_with_embeddings_result = await self.db.execute(
+            select(func.count(KnowledgeChunk.id))
+            .where(
+                and_(
+                    KnowledgeChunk.document_id == document_id,
+                    KnowledgeChunk.embedding.isnot(None)
+                )
+            )
+        )
+        chunks_with_embeddings = chunks_with_embeddings_result.scalar() or 0
+        
+        return {
+            "total_chunks": total_chunks,
+            "chunks_with_embeddings": chunks_with_embeddings
+        }
+
 
 class AnalysisResultRepository:
     """Repository for analysis results operations."""
