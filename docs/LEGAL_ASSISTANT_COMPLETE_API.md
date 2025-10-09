@@ -636,3 +636,4 @@ curl -X GET "http://localhost:8000/api/v1/legal-assistant/documents?page=1&page_
 - Arabic text is properly handled with RTL support
 - Processing is asynchronous with status tracking
 - Comprehensive error handling with field-specific errors
+

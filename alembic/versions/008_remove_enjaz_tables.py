@@ -55,3 +55,4 @@ def downgrade() -> None:
         sa.UniqueConstraint('user_id', 'case_number', name='uq_user_case_number')
     )
     op.create_index(op.f('ix_cases_imported_user_id'), 'cases_imported', ['user_id'], unique=False)
+
