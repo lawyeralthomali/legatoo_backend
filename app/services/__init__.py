@@ -9,8 +9,15 @@ from .auth_service import AuthService
 from .email_service import EmailService
 from .legal_assistant_service import LegalAssistantService
 from .document_processing_service import DocumentProcessingService
+
+# NEW: Arabic-optimized services (RECOMMENDED)
+from .arabic_legal_embedding_service import ArabicLegalEmbeddingService
+from .arabic_legal_search_service import ArabicLegalSearchService
+
+# OLD: Generic services (DEPRECATED - kept for backward compatibility)
 from .embedding_service import EmbeddingService
 from .semantic_search_service import SemanticSearchService
+
 from .plan_service import PlanService
 from .premium_service import PremiumService
 from .profile_service import ProfileService
@@ -27,6 +34,10 @@ __all__ = [
     "EmailService",
     "LegalAssistantService",
     "DocumentProcessingService",
+    # New Arabic services (use these!)
+    "ArabicLegalEmbeddingService",
+    "ArabicLegalSearchService",
+    # Old services (deprecated)
     "EmbeddingService",
     "SemanticSearchService",
     "PlanService",

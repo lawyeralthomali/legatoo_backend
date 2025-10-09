@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
-from ..services.embedding_service import EmbeddingService
+from ..services.arabic_legal_embedding_service import ArabicLegalEmbeddingService
 from ..utils.auth import get_current_user
 from ..models.user import User
 from ..schemas.embedding import (
@@ -79,8 +79,9 @@ async def generate_document_embeddings(
     try:
         logger.info(f"📄 Generate embeddings request for document {document_id} by user {current_user.id}")
         
-        # Initialize embedding service
-        embedding_service = EmbeddingService(db)
+        # Initialize Arabic legal embedding service
+        embedding_service = ArabicLegalEmbeddingService(db, use_faiss=True)
+        embedding_service.initialize_model()
         
         # Generate embeddings
         result = await embedding_service.generate_document_embeddings(
@@ -167,8 +168,9 @@ async def generate_batch_embeddings(
         
         logger.info(f"📦 Batch generate request for {len(chunk_ids)} chunks by user {current_user.id}")
         
-        # Initialize embedding service
-        embedding_service = EmbeddingService(db)
+        # Initialize Arabic legal embedding service
+        embedding_service = ArabicLegalEmbeddingService(db, use_faiss=True)
+        embedding_service.initialize_model()
         
         # Generate embeddings
         result = await embedding_service.generate_batch_embeddings(
@@ -267,8 +269,9 @@ async def search_similar_chunks(
                 message="Query must be at least 3 characters"
             )
         
-        # Initialize embedding service
-        embedding_service = EmbeddingService(db)
+        # Initialize Arabic legal embedding service
+        embedding_service = ArabicLegalEmbeddingService(db, use_faiss=True)
+        embedding_service.initialize_model()
         
         # Build filters
         filters = {}
@@ -347,8 +350,9 @@ async def get_document_embedding_status(
     try:
         logger.info(f"📊 Embedding status request for document {document_id}")
         
-        # Initialize embedding service
-        embedding_service = EmbeddingService(db)
+        # Initialize Arabic legal embedding service
+        embedding_service = ArabicLegalEmbeddingService(db, use_faiss=True)
+        embedding_service.initialize_model()
         
         # Get status
         result = await embedding_service.get_embedding_status(document_id)
@@ -405,8 +409,9 @@ async def get_global_embedding_status(
     try:
         logger.info(f"📊 Global embedding status request by user {current_user.id}")
         
-        # Initialize embedding service
-        embedding_service = EmbeddingService(db)
+        # Initialize Arabic legal embedding service
+        embedding_service = ArabicLegalEmbeddingService(db, use_faiss=True)
+        embedding_service.initialize_model()
         
         # Get status
         result = await embedding_service.get_global_embedding_status()
@@ -463,9 +468,9 @@ async def get_model_info(
     try:
         logger.info(f"ℹ️ Model info request by user {current_user.id}")
         
-        # Initialize embedding service
-        embedding_service = EmbeddingService(db)
-        embedding_service._ensure_model_loaded()
+        # Initialize Arabic legal embedding service
+        embedding_service = ArabicLegalEmbeddingService(db, use_faiss=True)
+        embedding_service.initialize_model()
         
         # Get model info
         model_info = {

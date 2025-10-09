@@ -29,6 +29,22 @@ from ..processors.enhanced_embedding_service import EnhancedEmbeddingService
 logger = logging.getLogger(__name__)
 
 
+def _format_chunk_content(article_title: str, article_content: str) -> str:
+    """
+    Format chunk content to include article title for better search results.
+    
+    Args:
+        article_title: The title of the article
+        article_content: The content of the article
+        
+    Returns:
+        Formatted content with title and content combined
+    """
+    if article_title and article_title.strip():
+        return f"**{article_title}**\n\n{article_content}"
+    return article_content
+
+
 class LegalLawsService:
     """Service for managing legal laws with complete hierarchy support."""
 
@@ -214,12 +230,13 @@ class LegalLawsService:
                         
                         logger.info(f"Created Article {article.id}: {article.article_number}")
                         
-                        # Step 6: Create KnowledgeChunk for article
+                        # Step 6: Create KnowledgeChunk for article with title included
+                        chunk_content = _format_chunk_content(article.title, article.content)
                         chunk = KnowledgeChunk(
                             document_id=knowledge_doc.id,
                             chunk_index=chunk_index,
-                            content=article.content,
-                            tokens_count=len(article.content.split()),
+                            content=chunk_content,
+                            tokens_count=len(chunk_content.split()),
                             law_source_id=law_source.id,
                             branch_id=branch.id,
                             chapter_id=chapter.id,
@@ -453,11 +470,12 @@ class LegalLawsService:
                             await self.db.flush()
                             total_articles += 1
                             
-                            # Create KnowledgeChunk for the article
+                            # Create KnowledgeChunk for the article with title included
+                            chunk_content = _format_chunk_content(law_article.title, law_article.content)
                             chunk = KnowledgeChunk(
                                 document_id=knowledge_doc.id,
                                 chunk_index=law_article.order_index,
-                                content=law_article.content,
+                                content=chunk_content,
                                 law_source_id=law_source.id,
                                 branch_id=law_branch.id,
                                 chapter_id=law_chapter.id,
@@ -489,11 +507,12 @@ class LegalLawsService:
                     await self.db.flush()
                     total_articles += 1
                     
-                    # Create KnowledgeChunk for the article
+                    # Create KnowledgeChunk for the article with title included
+                    chunk_content = _format_chunk_content(law_article.title, law_article.content)
                     chunk = KnowledgeChunk(
                         document_id=knowledge_doc.id,
                         chunk_index=law_article.order_index,
-                        content=law_article.content,
+                        content=chunk_content,
                         law_source_id=law_source.id,
                         article_id=law_article.id
                     )
@@ -977,11 +996,13 @@ class LegalLawsService:
                             self.db.add(article)
                             await self.db.flush()
                             
+                            # Create KnowledgeChunk with title included
+                            chunk_content = _format_chunk_content(article.title, article.content)
                             chunk = KnowledgeChunk(
                                 document_id=law.knowledge_document_id,
                                 chunk_index=chunk_index,
-                                content=article.content,
-                                tokens_count=len(article.content.split()),
+                                content=chunk_content,
+                                tokens_count=len(chunk_content.split()),
                                 law_source_id=law.id,
                                 branch_id=branch.id,
                                 chapter_id=chapter.id,

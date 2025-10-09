@@ -22,6 +22,30 @@ from ..models.legal_knowledge import LegalCase, CaseSection, KnowledgeDocument, 
 logger = logging.getLogger(__name__)
 
 
+def _format_case_chunk_content(section_type: str, content: str) -> str:
+    """
+    Format case chunk content to include section type for better search results.
+    
+    Args:
+        section_type: The type of the case section (e.g., "summary", "facts", "ruling")
+        content: The content of the section
+        
+    Returns:
+        Formatted content with section type header and content combined
+    """
+    # Map section types to Arabic labels
+    section_labels = {
+        "summary": "ملخص القضية",
+        "facts": "وقائع القضية",
+        "arguments": "حجج الأطراف",
+        "ruling": "الحكم",
+        "legal_basis": "الأساس القانوني"
+    }
+    
+    label = section_labels.get(section_type, section_type)
+    return f"**{label}**\n\n{content}"
+
+
 class LegalCaseService:
     """Service for managing legal cases."""
 
@@ -451,7 +475,7 @@ class LegalCaseService:
                 case_title = case_data.get("title", "Unknown Case")
                 knowledge_doc = KnowledgeDocument(
                     title=f"JSON Upload: {case_title}",
-                    category="legal_case",
+                    category="case",
                     file_path=f"json_upload_case_{unique_hash[:8]}_{total_cases}.json",
                     file_hash=f"{unique_hash}_{total_cases}",  # Unique hash per case
                     source_type="uploaded",
@@ -522,11 +546,12 @@ class LegalCaseService:
                     await self.db.flush()
                     total_sections += 1
                     
-                    # Create KnowledgeChunk for the section
+                    # Create KnowledgeChunk for the section with section type included
+                    chunk_content = _format_case_chunk_content(section_type, content)
                     chunk = KnowledgeChunk(
                         document_id=knowledge_doc.id,
                         chunk_index=chunk_index,
-                        content=content,
+                        content=chunk_content,
                         case_id=legal_case.id,
                         created_at=datetime.utcnow()
                     )

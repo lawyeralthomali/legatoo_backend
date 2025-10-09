@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
-from ..services.semantic_search_service import SemanticSearchService
+from ..services.arabic_legal_search_service import ArabicLegalSearchService
 from ..utils.auth import get_current_user
 from ..schemas.profile_schemas import TokenData
 from ..schemas.search import (
@@ -105,8 +105,8 @@ async def search_similar_laws(
         if law_source_id:
             filters['law_source_id'] = law_source_id
         
-        # Initialize search service
-        search_service = SemanticSearchService(db)
+        # Initialize Arabic legal search service
+        search_service = ArabicLegalSearchService(db, use_faiss=True)
         
         # Perform search
         results = await search_service.find_similar_laws(
@@ -216,8 +216,8 @@ async def search_similar_cases(
         if court_level:
             filters['court_level'] = court_level
         
-        # Initialize search service
-        search_service = SemanticSearchService(db)
+        # Initialize Arabic legal search service
+        search_service = ArabicLegalSearchService(db, use_faiss=True)
         
         # Perform search
         results = await search_service.find_similar_cases(
@@ -320,8 +320,8 @@ async def hybrid_search(
         if jurisdiction:
             filters['jurisdiction'] = jurisdiction
         
-        # Initialize search service
-        search_service = SemanticSearchService(db)
+        # Initialize Arabic legal search service
+        search_service = ArabicLegalSearchService(db, use_faiss=True)
         
         # Perform hybrid search
         results = await search_service.hybrid_search(
@@ -394,8 +394,8 @@ async def get_search_suggestions(
     try:
         logger.info(f"💡 Search suggestions for: '{partial_query}' by user {current_user.sub}")
         
-        # Initialize search service
-        search_service = SemanticSearchService(db)
+        # Initialize Arabic legal search service
+        search_service = ArabicLegalSearchService(db, use_faiss=True)
         
         # Get suggestions
         suggestions = await search_service.get_search_suggestions(
@@ -459,8 +459,8 @@ async def get_search_statistics(
     try:
         logger.info(f"📊 Getting search statistics for user {current_user.sub}")
         
-        # Initialize search service
-        search_service = SemanticSearchService(db)
+        # Initialize Arabic legal search service
+        search_service = ArabicLegalSearchService(db, use_faiss=True)
         
         # Get statistics
         stats = await search_service.get_search_statistics()
@@ -510,8 +510,8 @@ async def clear_search_cache(
     try:
         logger.info(f"🗑️ Clearing search cache by user {current_user.sub}")
         
-        # Initialize search service
-        search_service = SemanticSearchService(db)
+        # Initialize Arabic legal search service
+        search_service = ArabicLegalSearchService(db, use_faiss=True)
         
         # Clear cache
         search_service.clear_cache()
