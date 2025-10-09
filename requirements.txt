@@ -44,7 +44,8 @@ PyYAML==6.0.3
 regex==2025.9.18
 python-docx==1.1.2
 openai==1.59.5
-google-genai>=0.3.0
+google-genai>=0.3.0  # For File API (PDF/DOC extraction)
+google-generativeai>=0.3.0  # For Text Generation API
 # Phase 3 & 4: Document processing and embeddings
 pdfplumber==0.11.4
 PyMuPDF==1.26.4
@@ -55,8 +56,13 @@ Pillow==11.1.0
 arabic-reshaper==3.0.0
 python-bidi==0.6.6
 numpy>=1.24.0
-faiss-cpu>=1.7.0
-sentence-transformers>=2.2.0
+
+# Embeddings and Search (Upgraded for Arabic Legal Models)
+transformers>=4.35.0  # Required for Arabic BERT models
+torch>=2.0.0  # PyTorch for model inference
+sentencepiece>=0.1.99  # Required for some tokenizers
+faiss-cpu>=1.7.4  # Fast similarity search (use faiss-gpu for GPU support)
+sentence-transformers>=2.2.0  # Sentence embeddings (fallback)
 # Legal Knowledge Management (Phase 5)
 # Note: pgvector is PostgreSQL-specific, using JSON storage for SQLite compatibility
 # For future PostgreSQL migration, add: pgvector>=0.2.0
