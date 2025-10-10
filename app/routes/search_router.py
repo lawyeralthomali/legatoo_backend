@@ -35,13 +35,14 @@ router = APIRouter(
 
 @router.post("/similar-laws", response_model=ApiResponse)
 async def search_similar_laws(
+   
     query: str = Query(..., description="Search query text", min_length=3),
     top_k: int = Query(10, description="Number of results", ge=1, le=100),
     threshold: float = Query(0.7, description="Similarity threshold", ge=0.0, le=1.0),
     jurisdiction: Optional[str] = Query(None, description="Filter by jurisdiction"),
     law_source_id: Optional[int] = Query(None, description="Filter by law source ID"),
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(get_current_user)
+    #current_user: TokenData = Depends(get_current_user)
 ):
     """
     يبحث عن القوانين والمواد القانونية المشابهة للاستعلام.
@@ -90,7 +91,7 @@ async def search_similar_laws(
     ```
     """
     try:
-        logger.info(f"🔍 Similar laws search: '{query[:50]}...' by user {current_user.sub}")
+        #logger.info(f"🔍 Similar laws search: '{query[:50]}...' by user {current_user.sub}")
         
         # Validate query
         if not query or len(query.strip()) < 3:

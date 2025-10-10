@@ -6,79 +6,79 @@
   "total_articles": 0,
   "errors": [
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\14.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\14.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 491)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\16.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\16.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 507)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\17.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\17.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 8 (char 485)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\19.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\19.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 492)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\21.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\21.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 525)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\23.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\23.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 511)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\25.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\25.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 499)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\27.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\27.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 540)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\28.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\28.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 8 (char 530)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\29.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\29.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 551)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\30.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\30.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 605)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\31.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\31.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 593)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\32.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\32.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 585)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\33.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\33.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 552)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\35.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\35.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 579)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\37.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\37.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 555)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\6.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\6.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 612)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\7.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\7.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 488)"
     },
     {
-      "file": "C:\\Users\\Lenovo\\my_project\\data_set\\files\\9.json",
+      "file": "C:\\Users\\hp\\legatoo_backend\\data_set\\files\\9.json",
       "error": "JSON decode error: Expecting ',' delimiter: line 12 column 10 (char 558)"
     }
   ]

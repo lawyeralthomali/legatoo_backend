@@ -43,7 +43,7 @@ class ArabicLegalSearchService:
     def __init__(
         self,
         db: AsyncSession,
-        model_name: str = 'paraphrase-multilingual',
+        model_name: str = 'sts-arabert',
         use_faiss: bool = True
     ):
         """
@@ -51,7 +51,7 @@ class ArabicLegalSearchService:
         
         Args:
             db: Async database session
-            model_name: Model to use ('paraphrase-multilingual', 'labse')
+            model_name: Model to use (default: 'sts-arabert' - specialized for semantic similarity)
             use_faiss: Whether to use FAISS for fast search
         """
         self.db = db

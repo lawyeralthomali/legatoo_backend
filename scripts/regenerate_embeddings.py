@@ -16,30 +16,28 @@ from app.services.arabic_legal_embedding_service import ArabicLegalEmbeddingServ
 
 
 async def regenerate_embeddings():
-    """Regenerate embeddings for all chunks without embeddings"""
+    """Regenerate embeddings for ALL chunks (overwrite existing)"""
     
     async with AsyncSessionLocal() as db:
         print("=" * 80)
-        print("🔄 Regenerating Embeddings with Arabic Model")
+        print("🔄 Regenerating ALL Embeddings (Overwrite Mode)")
         print("=" * 80)
         
-        # 1. Count chunks without embeddings
+        # 1. Count ALL chunks (including those with embeddings)
         result = await db.execute(
             select(func.count(KnowledgeChunk.id))
-            .where(KnowledgeChunk.embedding_vector.is_(None))
         )
-        chunks_to_process = result.scalar()
+        total_chunks = result.scalar()
         
-        print(f"\n📊 Chunks without embeddings: {chunks_to_process}")
+        print(f"\n📊 Total chunks in database: {total_chunks}")
         
-        if chunks_to_process == 0:
-            print("✅ All chunks already have embeddings!")
+        if total_chunks == 0:
+            print("⚠️  No chunks found in database!")
             return
         
-        # 2. Get all chunk IDs without embeddings
+        # 2. Get ALL chunk IDs (will overwrite existing embeddings)
         result = await db.execute(
             select(KnowledgeChunk.id)
-            .where(KnowledgeChunk.embedding_vector.is_(None))
             .order_by(KnowledgeChunk.id)
         )
         chunk_ids = [row[0] for row in result.all()]
@@ -47,20 +45,21 @@ async def regenerate_embeddings():
         print(f"🎯 Processing {len(chunk_ids)} chunks...")
         print(f"📝 Sample IDs: {chunk_ids[:10]}...")
         
-        # 3. Initialize Arabic embedding service
-        print(f"\n🤖 Initializing Arabic BERT model...")
+        # 3. Initialize Arabic embedding service (uses sts-arabert default)
+        print(f"\n🤖 Initializing STS-AraBERT model (256-dim)...")
         embedding_service = ArabicLegalEmbeddingService(
             db=db,
-            model_name='arabert',
+            # model_name not specified = uses default 'sts-arabert'
             use_faiss=True
         )
         embedding_service.initialize_model()
         
-        # 4. Generate embeddings in batches
-        print(f"\n⚡ Starting embedding generation...")
+        # 4. Generate embeddings in batches (OVERWRITE EXISTING)
+        print(f"\n⚡ Starting embedding generation (OVERWRITE MODE)...")
+        print(f"⚠️  This will regenerate ALL {len(chunk_ids)} embeddings!")
         result = await embedding_service.generate_batch_embeddings(
             chunk_ids=chunk_ids,
-            overwrite=True
+            overwrite=True  # ← This forces regeneration!
         )
         
         # 5. Show results
@@ -115,7 +114,8 @@ async def test_search():
     async with AsyncSessionLocal() as db:
         from app.services.arabic_legal_search_service import ArabicLegalSearchService
         
-        search_service = ArabicLegalSearchService(db, model_name='arabert', use_faiss=False)
+        # Use default arabert-st model
+        search_service = ArabicLegalSearchService(db, use_faiss=False)
         
         # Initialize embedding service
         search_service.embedding_service.initialize_model()
