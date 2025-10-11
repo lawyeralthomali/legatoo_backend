@@ -24,22 +24,13 @@ from ..models.legal_knowledge import (
 )
 from ..processors.hierarchical_document_processor import HierarchicalDocumentProcessor
 from ..parsers.parser_orchestrator import ParserOrchestrator
-from ..processors.enhanced_embedding_service import EnhancedEmbeddingService
+from .arabic_legal_embedding_service import ArabicLegalEmbeddingService
 
 logger = logging.getLogger(__name__)
 
 
 def _format_chunk_content(article_title: str, article_content: str) -> str:
-    """
-    Format chunk content to include article title for better search results.
-    
-    Args:
-        article_title: The title of the article
-        article_content: The content of the article
-        
-    Returns:
-        Formatted content with title and content combined
-    """
+
     if article_title and article_title.strip():
         return f"**{article_title}**\n\n{article_content}"
     return article_content
@@ -53,7 +44,15 @@ class LegalLawsService:
         self.db = db
         self.hierarchical_processor = HierarchicalDocumentProcessor(db)
         self.parser = ParserOrchestrator(self.hierarchical_processor)
-        self.embedding_service = EnhancedEmbeddingService()
+        self.embedding_service = ArabicLegalEmbeddingService(db, model_name='sts-arabert', use_faiss=True)
+        self._model_initialized = False
+    
+    def _ensure_embedding_model_loaded(self):
+        """Ensure embedding model is loaded before use."""
+        if not self._model_initialized:
+            logger.info("🤖 Initializing embedding model for chunk generation...")
+            self.embedding_service.initialize_model()
+            self._model_initialized = True
 
     # ===========================================
     # UPLOAD AND PARSE
@@ -244,6 +243,16 @@ class LegalLawsService:
                             verified_by_admin=False,
                             created_at=datetime.utcnow()
                         )
+                        
+                        # Generate embedding automatically using unified service
+                        try:
+                            self._ensure_embedding_model_loaded()
+                            embedding_vector = self.embedding_service.encode_text(chunk_content)
+                            chunk.embedding_vector = json.dumps(embedding_vector.tolist())
+                            logger.info(f"✅ Generated embedding for chunk {chunk_index} (256-dim)")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Failed to generate embedding for chunk: {e}")
+                        
                         self.db.add(chunk)
                         chunk_index += 1
             
@@ -339,6 +348,8 @@ class LegalLawsService:
         except Exception as e:
             logger.warning(f"Failed to convert structure to hierarchy dict: {e}")
             return {"branches": []}
+
+
 
     async def upload_json_law_structure(
         self,
@@ -476,11 +487,21 @@ class LegalLawsService:
                                 document_id=knowledge_doc.id,
                                 chunk_index=law_article.order_index,
                                 content=chunk_content,
+                                tokens_count=len(chunk_content.split()),
                                 law_source_id=law_source.id,
                                 branch_id=law_branch.id,
                                 chapter_id=law_chapter.id,
                                 article_id=law_article.id
                             )
+                            
+                            # Generate embedding automatically using unified service
+                            try:
+                                self._ensure_embedding_model_loaded()
+                                embedding_vector = self.embedding_service.encode_text(chunk_content)
+                                chunk.embedding_vector = json.dumps(embedding_vector.tolist())
+                                logger.info(f"✅ Generated embedding for chunk (256-dim)")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Failed to generate embedding for chunk: {e}")
                             
                             self.db.add(chunk)
             
@@ -513,14 +534,35 @@ class LegalLawsService:
                         document_id=knowledge_doc.id,
                         chunk_index=law_article.order_index,
                         content=chunk_content,
+                        tokens_count=len(chunk_content.split()),
                         law_source_id=law_source.id,
                         article_id=law_article.id
                     )
+                    
+                    # Generate embedding automatically using unified service
+                    try:
+                        self._ensure_embedding_model_loaded()
+                        embedding_vector = self.embedding_service.encode_text(chunk_content)
+                        chunk.embedding_vector = json.dumps(embedding_vector.tolist())
+                        logger.info(f"✅ Generated embedding for chunk (256-dim)")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Failed to generate embedding for chunk: {e}")
                     
                     self.db.add(chunk)
             
             # Commit all changes
             await self.db.commit()
+            
+            # 🌟 Rebuild FAISS index after successful data commitment
+            logger.info("🔨 Rebuilding FAISS search index...")
+            try:
+                index_result = await self.embedding_service.build_faiss_index()
+                if index_result.get("success"):
+                    logger.info(f"✅ FAISS index rebuilt successfully: {index_result.get('total_vectors')} vectors indexed")
+                else:
+                    logger.warning(f"⚠️ FAISS index rebuild failed: {index_result.get('error')}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to rebuild FAISS index: {e}")
             
             # Prepare response data
             response_data = {
@@ -539,11 +581,11 @@ class LegalLawsService:
                 }
             }
             
-            logger.info(f"Successfully processed JSON law structure: {total_branches} branches, {total_chapters} chapters, {total_articles} articles")
+            logger.info(f"Successfully processed JSON law structure with index rebuild: {total_branches} branches, {total_chapters} chapters, {total_articles} articles")
             
             return {
                 "success": True,
-                "message": f"Successfully processed JSON law structure: {total_branches} branches, {total_chapters} chapters, {total_articles} articles",
+                "message": f"Successfully processed JSON law structure with index rebuild: {total_branches} branches, {total_chapters} chapters, {total_articles} articles",
                 "data": response_data
             }
             
@@ -1010,6 +1052,16 @@ class LegalLawsService:
                                 verified_by_admin=False,
                                 created_at=datetime.utcnow()
                             )
+                            
+                            # Generate embedding automatically using unified service
+                            try:
+                                self._ensure_embedding_model_loaded()
+                                embedding_vector = self.embedding_service.encode_text(chunk_content)
+                                chunk.embedding_vector = json.dumps(embedding_vector.tolist())
+                                logger.info(f"✅ Generated embedding for chunk {chunk_index} (256-dim)")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Failed to generate embedding for chunk: {e}")
+                            
                             self.db.add(chunk)
                             chunk_index += 1
                 
@@ -1073,11 +1125,11 @@ class LegalLawsService:
                 if article.ai_processed_at and not update_existing:
                     continue
                 
-                # Generate embeddings
+                # Generate embeddings using unified Arabic embedding service
                 if generate_embeddings and article.content:
                     try:
-                        embedding = await self.embedding_service.generate_embedding(article.content)
-                        article.embedding = json.dumps(embedding)
+                        embedding = self.embedding_service.encode_text(article.content)
+                        article.embedding = json.dumps(embedding.tolist())
                     except Exception as e:
                         logger.warning(f"Failed to generate embedding for article {article.id}: {e}")
                 

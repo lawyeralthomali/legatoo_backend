@@ -1,16 +1,3 @@
-"""
-Arabic Legal Search Service - High-Performance Semantic Search
-
-Optimized search service using Arabic legal models and FAISS indexing.
-Replaces the generic search service with specialized Arabic legal retrieval.
-
-Performance Improvements:
-- 3-5x faster than generic multilingual models
-- FAISS indexing for sub-second search
-- Better accuracy for Arabic legal terms
-- Optimized batching and caching
-"""
-
 import logging
 import json
 import numpy as np
@@ -248,63 +235,102 @@ class ArabicLegalSearchService:
         
         return results
     
-    async def _standard_search_laws(
+    async def _execute_standard_search_query(
         self,
-        query: str,
-        top_k: int,
-        threshold: float,
-        filters: Optional[Dict[str, Any]]
+        query_vector: np.ndarray,
+        source_type: str,
+        filters: Optional[Dict[str, Any]] = None,
+        top_k: int = 10,
+        threshold: float = 0.7
     ) -> List[Dict[str, Any]]:
         """
-        Standard search without FAISS.
+        Unified standard search logic for both laws and cases.
         
         Args:
-            query: Search query
-            top_k: Number of results
-            threshold: Similarity threshold
-            filters: Optional filters
+            query_vector: Pre-computed query embedding vector
+            source_type: Type of source ('law' or 'case')
+            filters: Optional filters dictionary
+            top_k: Number of results to return
+            threshold: Minimum similarity threshold
             
         Returns:
-            List of enriched results
+            List of enriched search results
         """
-        logger.info("🔍 Using standard search")
+        logger.info(f"🔍 Using standard search for {source_type}s")
         
-        # Generate query embedding
-        query_embedding = self.embedding_service.encode_text(query)
-        
-        # Build database query
-        query_builder = select(KnowledgeChunk).where(
-            and_(
-                KnowledgeChunk.embedding_vector.isnot(None),
-                KnowledgeChunk.embedding_vector != '',
-                KnowledgeChunk.law_source_id.isnot(None)
-            )
-        )
-        
-        # Apply filters
-        if filters:
-            if 'law_source_id' in filters:
-                query_builder = query_builder.where(
-                    KnowledgeChunk.law_source_id == filters['law_source_id']
+        # Build base query based on source type
+        if source_type == 'law':
+            query_builder = select(KnowledgeChunk).where(
+                and_(
+                    KnowledgeChunk.embedding_vector.isnot(None),
+                    KnowledgeChunk.embedding_vector != '',
+                    KnowledgeChunk.law_source_id.isnot(None)
                 )
-            if 'jurisdiction' in filters:
-                query_builder = query_builder.join(
-                    LawSource,
-                    KnowledgeChunk.law_source_id == LawSource.id
-                ).where(LawSource.jurisdiction == filters['jurisdiction'])
+            )
+            
+            # Apply law-specific filters
+            if filters:
+                if 'law_source_id' in filters:
+                    query_builder = query_builder.where(
+                        KnowledgeChunk.law_source_id == filters['law_source_id']
+                    )
+                if 'jurisdiction' in filters:
+                    query_builder = query_builder.join(
+                        LawSource,
+                        KnowledgeChunk.law_source_id == LawSource.id
+                    ).where(LawSource.jurisdiction == filters['jurisdiction'])
+                    
+        elif source_type == 'case':
+            query_builder = select(KnowledgeChunk).where(
+                and_(
+                    KnowledgeChunk.embedding_vector.isnot(None),
+                    KnowledgeChunk.embedding_vector != '',
+                    KnowledgeChunk.case_id.isnot(None)
+                )
+            )
+            
+            # Apply case-specific filters
+            if filters:
+                if 'case_id' in filters:
+                    query_builder = query_builder.where(
+                        KnowledgeChunk.case_id == filters['case_id']
+                    )
+                if 'jurisdiction' in filters or 'case_type' in filters or 'court_level' in filters:
+                    query_builder = query_builder.join(
+                        LegalCase,
+                        KnowledgeChunk.case_id == LegalCase.id
+                    )
+                    if 'jurisdiction' in filters:
+                        query_builder = query_builder.where(
+                            LegalCase.jurisdiction == filters['jurisdiction']
+                        )
+                    if 'case_type' in filters:
+                        query_builder = query_builder.where(
+                            LegalCase.case_type == filters['case_type']
+                        )
+                    if 'court_level' in filters:
+                        query_builder = query_builder.where(
+                            LegalCase.court_level == filters['court_level']
+                        )
+        else:
+            raise ValueError(f"Invalid source_type: {source_type}. Must be 'law' or 'case'")
         
+        # Execute query
         result = await self.db.execute(query_builder)
         chunks = result.scalars().all()
         
-        logger.info(f"📊 Found {len(chunks)} law chunks to search")
+        logger.info(f"📊 Found {len(chunks)} {source_type} chunks to search")
         
         # Calculate similarities
         results = []
         for chunk in chunks:
             try:
+                # Deserialize embedding vector from JSON string (SQLite compatible)
                 chunk_embedding = np.array(json.loads(chunk.embedding_vector))
+                
+                # Calculate cosine similarity
                 base_similarity = self.embedding_service.cosine_similarity(
-                    query_embedding,
+                    query_vector,
                     chunk_embedding
                 )
                 
@@ -315,19 +341,58 @@ class ArabicLegalSearchService:
                     apply_boosts=True
                 )
                 
+                # Filter by threshold
                 if similarity >= threshold:
-                    enriched = await self._enrich_law_result(chunk, similarity)
+                    # Enrich based on source type
+                    if source_type == 'law':
+                        enriched = await self._enrich_law_result(chunk, similarity)
+                    else:
+                        enriched = await self._enrich_case_result(chunk, similarity)
+                    
                     results.append(enriched)
                     
             except Exception as e:
                 logger.warning(f"⚠️  Failed to process chunk {chunk.id}: {str(e)}")
                 continue
         
-        # Sort and limit
+        # Sort by similarity (descending) and limit to top_k
         results.sort(key=lambda x: x['similarity'], reverse=True)
         results = results[:top_k]
         
+        logger.info(f"✅ Found {len(results)} similar {source_type}s above threshold")
+        
         return results
+    
+    async def _standard_search_laws(
+        self,
+        query: str,
+        top_k: int,
+        threshold: float,
+        filters: Optional[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Standard search for laws (wrapper for unified search logic).
+        
+        Args:
+            query: Search query
+            top_k: Number of results
+            threshold: Similarity threshold
+            filters: Optional filters
+            
+        Returns:
+            List of enriched law results
+        """
+        # Generate query embedding
+        query_embedding = self.embedding_service.encode_text(query)
+        
+        # Use unified search logic
+        return await self._execute_standard_search_query(
+            query_vector=query_embedding,
+            source_type='law',
+            filters=filters,
+            top_k=top_k,
+            threshold=threshold
+        )
     
     async def _enrich_law_result(
         self,
@@ -419,7 +484,7 @@ class ArabicLegalSearchService:
         filters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Find similar legal cases.
+        Find similar legal cases (wrapper for unified search logic).
         
         Args:
             query: Search query
@@ -436,72 +501,14 @@ class ArabicLegalSearchService:
             # Generate query embedding
             query_embedding = self.embedding_service.encode_text(query)
             
-            # Build query
-            query_builder = select(KnowledgeChunk).where(
-                and_(
-                    KnowledgeChunk.embedding_vector.isnot(None),
-                    KnowledgeChunk.embedding_vector != '',
-                    KnowledgeChunk.case_id.isnot(None)
-                )
+            # Use unified search logic
+            results = await self._execute_standard_search_query(
+                query_vector=query_embedding,
+                source_type='case',
+                filters=filters,
+                top_k=top_k,
+                threshold=threshold
             )
-            
-            # Apply filters
-            if filters:
-                if 'case_id' in filters:
-                    query_builder = query_builder.where(
-                        KnowledgeChunk.case_id == filters['case_id']
-                    )
-                if 'jurisdiction' in filters or 'case_type' in filters or 'court_level' in filters:
-                    query_builder = query_builder.join(
-                        LegalCase,
-                        KnowledgeChunk.case_id == LegalCase.id
-                    )
-                    if 'jurisdiction' in filters:
-                        query_builder = query_builder.where(
-                            LegalCase.jurisdiction == filters['jurisdiction']
-                        )
-                    if 'case_type' in filters:
-                        query_builder = query_builder.where(
-                            LegalCase.case_type == filters['case_type']
-                        )
-                    if 'court_level' in filters:
-                        query_builder = query_builder.where(
-                            LegalCase.court_level == filters['court_level']
-                        )
-            
-            result = await self.db.execute(query_builder)
-            chunks = result.scalars().all()
-            
-            logger.info(f"📊 Found {len(chunks)} case chunks to search")
-            
-            # Calculate similarities
-            results = []
-            for chunk in chunks:
-                try:
-                    chunk_embedding = np.array(json.loads(chunk.embedding_vector))
-                    base_similarity = self.embedding_service.cosine_similarity(
-                        query_embedding,
-                        chunk_embedding
-                    )
-                    
-                    # Apply boosts
-                    similarity = self._calculate_relevance_score(
-                        base_similarity,
-                        chunk,
-                        apply_boosts=True
-                    )
-                    
-                    if similarity >= threshold:
-                        enriched = await self._enrich_case_result(chunk, similarity)
-                        results.append(enriched)
-                        
-                except Exception as e:
-                    logger.warning(f"⚠️  Failed to process chunk {chunk.id}: {str(e)}")
-                    continue
-            
-            # Sort and limit
-            results.sort(key=lambda x: x['similarity'], reverse=True)
-            results = results[:top_k]
             
             logger.info(f"✅ Found {len(results)} similar cases")
             
@@ -547,6 +554,128 @@ class ArabicLegalSearchService:
                 }
         
         return result
+    
+    async def hybrid_search(
+        self,
+        query: str,
+        search_types: List[str] = ['laws', 'cases'],
+        top_k: int = 5,
+        threshold: float = 0.6,
+        filters: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Hybrid search across multiple document types.
+        
+        Args:
+            query: Search query
+            search_types: Types to search ['laws', 'cases', 'all']
+            top_k: Number of results per type
+            threshold: Similarity threshold
+            filters: Optional filters
+            
+        Returns:
+            Dictionary with results from each type
+        """
+        try:
+            logger.info(f"🔍 Hybrid search: '{query[:50]}...' across {search_types}")
+            
+            results = {
+                'query': query,
+                'search_types': search_types,
+                'total_results': 0
+            }
+            
+            # Search laws
+            if 'laws' in search_types or 'all' in search_types:
+                law_results = await self.find_similar_laws(
+                    query=query,
+                    top_k=top_k,
+                    threshold=threshold,
+                    filters=filters
+                )
+                results['laws'] = {
+                    'count': len(law_results),
+                    'results': law_results
+                }
+                results['total_results'] += len(law_results)
+            
+            # Search cases
+            if 'cases' in search_types or 'all' in search_types:
+                case_results = await self.find_similar_cases(
+                    query=query,
+                    top_k=top_k,
+                    threshold=threshold,
+                    filters=filters
+                )
+                results['cases'] = {
+                    'count': len(case_results),
+                    'results': case_results
+                }
+                results['total_results'] += len(case_results)
+            
+            logger.info(f"✅ Hybrid search complete: {results['total_results']} total results")
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"❌ Hybrid search failed: {str(e)}")
+            return {
+                'query': query,
+                'error': str(e),
+                'total_results': 0
+            }
+    
+    async def get_search_suggestions(
+        self,
+        partial_query: str,
+        limit: int = 5
+    ) -> List[str]:
+        """
+        Get search suggestions based on partial query.
+        
+        Args:
+            partial_query: Partial search query
+            limit: Maximum number of suggestions
+            
+        Returns:
+            List of search suggestions
+        """
+        try:
+            logger.info(f"💡 Getting suggestions for: '{partial_query}'")
+            
+            suggestions = []
+            
+            # Search in law names
+            law_query = select(LawSource.name).where(
+                LawSource.name.ilike(f"%{partial_query}%")
+            ).limit(limit)
+            
+            law_result = await self.db.execute(law_query)
+            law_names = law_result.scalars().all()
+            suggestions.extend(law_names)
+            
+            # Search in case titles if LegalCase exists
+            try:
+                case_query = select(LegalCase.title).where(
+                    LegalCase.title.ilike(f"%{partial_query}%")
+                ).limit(limit)
+                
+                case_result = await self.db.execute(case_query)
+                case_titles = case_result.scalars().all()
+                suggestions.extend(case_titles)
+            except:
+                pass  # LegalCase might not have title field
+            
+            # Remove duplicates and limit
+            suggestions = list(set(suggestions))[:limit]
+            
+            logger.info(f"✅ Found {len(suggestions)} suggestions")
+            
+            return suggestions
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to get suggestions: {str(e)}")
+            return []
     
     def clear_cache(self) -> None:
         """Clear query cache."""

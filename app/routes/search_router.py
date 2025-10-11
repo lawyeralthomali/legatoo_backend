@@ -6,7 +6,7 @@ Provides REST API endpoints for semantic search across legal documents.
 
 import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
@@ -35,94 +35,38 @@ router = APIRouter(
 
 @router.post("/similar-laws", response_model=ApiResponse)
 async def search_similar_laws(
-   
-    query: str = Query(..., description="Search query text", min_length=3),
-    top_k: int = Query(10, description="Number of results", ge=1, le=100),
-    threshold: float = Query(0.7, description="Similarity threshold", ge=0.0, le=1.0),
-    jurisdiction: Optional[str] = Query(None, description="Filter by jurisdiction"),
-    law_source_id: Optional[int] = Query(None, description="Filter by law source ID"),
+    request: SimilarSearchRequest = Body(..., description="Search request parameters"),
     db: AsyncSession = Depends(get_db),
     #current_user: TokenData = Depends(get_current_user)
 ):
-    """
-    يبحث عن القوانين والمواد القانونية المشابهة للاستعلام.
     
-    **Semantic Search for Laws**:
-    - Uses AI embeddings to find semantically similar laws
-    - Not just keyword matching - understands meaning
-    - Returns relevance scores for each result
-    
-    **Parameters**:
-    - query: Your search query (Arabic or English)
-    - top_k: Number of top results to return (1-100)
-    - threshold: Minimum similarity score (0.0-1.0)
-    - jurisdiction: Filter by jurisdiction (optional)
-    - law_source_id: Filter by specific law source (optional)
-    
-    **Example**:
-    ```
-    GET /api/v1/search/similar-laws?query=فسخ+عقد+العمل&top_k=10&threshold=0.75
-    ```
-    
-    **Response**:
-    ```json
-    {
-      "success": true,
-      "message": "Found 8 similar laws",
-      "data": {
-        "query": "فسخ عقد العمل",
-        "results": [
-          {
-            "chunk_id": 123,
-            "content": "المادة 74: يجوز لصاحب العمل فسخ العقد...",
-            "similarity": 0.89,
-            "source_type": "law",
-            "law_metadata": {
-              "law_name": "نظام العمل",
-              "article_number": "74"
-            }
-          }
-        ],
-        "total_results": 8,
-        "threshold": 0.75
-      },
-      "errors": []
-    }
-    ```
-    """
     try:
-        #logger.info(f"🔍 Similar laws search: '{query[:50]}...' by user {current_user.sub}")
+        #logger.info(f"🔍 Similar laws search: '{request.query[:50]}...' by user {current_user.sub}")
         
-        # Validate query
-        if not query or len(query.strip()) < 3:
-            return create_error_response(
-                message="Query must be at least 3 characters"
-            )
-        
-        # Build filters
+        # Build filters from request
         filters = {}
-        if jurisdiction:
-            filters['jurisdiction'] = jurisdiction
-        if law_source_id:
-            filters['law_source_id'] = law_source_id
+        if request.jurisdiction:
+            filters['jurisdiction'] = request.jurisdiction
+        if request.law_source_id:
+            filters['law_source_id'] = request.law_source_id
         
         # Initialize Arabic legal search service
         search_service = ArabicLegalSearchService(db, use_faiss=True)
         
         # Perform search
         results = await search_service.find_similar_laws(
-            query=query.strip(),
-            top_k=top_k,
-            threshold=threshold,
+            query=request.query,
+            top_k=request.top_k,
+            threshold=request.threshold,
             filters=filters if filters else None
         )
         
         # Format response
         response_data = {
-            "query": query.strip(),
+            "query": request.query,
             "results": results,
             "total_results": len(results),
-            "threshold": threshold
+            "threshold": request.threshold
         }
         
         message = f"Found {len(results)} similar laws"
@@ -143,12 +87,7 @@ async def search_similar_laws(
 
 @router.post("/similar-cases", response_model=ApiResponse)
 async def search_similar_cases(
-    query: str = Query(..., description="Search query text", min_length=3),
-    top_k: int = Query(10, description="Number of results", ge=1, le=100),
-    threshold: float = Query(0.7, description="Similarity threshold", ge=0.0, le=1.0),
-    jurisdiction: Optional[str] = Query(None, description="Filter by jurisdiction"),
-    case_type: Optional[str] = Query(None, description="Filter by case type"),
-    court_level: Optional[str] = Query(None, description="Filter by court level"),
+    request: SimilarCasesRequest = Body(..., description="Search request parameters"),
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
 ):
@@ -168,9 +107,16 @@ async def search_similar_cases(
     - case_type: Filter by type (مدني, جنائي, تجاري, عمل, إداري)
     - court_level: Filter by level (ابتدائي, استئناف, تمييز, عالي)
     
-    **Example**:
-    ```
-    GET /api/v1/search/similar-cases?query=إنهاء+خدمات+عامل&case_type=عمل
+    **Example Request Body**:
+    ```json
+    {
+      "query": "إنهاء خدمات عامل",
+      "top_k": 10,
+      "threshold": 0.7,
+      "case_type": "عمل",
+      "court_level": "ابتدائي",
+      "jurisdiction": "المملكة العربية السعودية"
+    }
     ```
     
     **Response**:
@@ -200,40 +146,36 @@ async def search_similar_cases(
     ```
     """
     try:
-        logger.info(f"🔍 Similar cases search: '{query[:50]}...' by user {current_user.sub}")
+        logger.info(f"🔍 Similar cases search: '{request.query[:50]}...' by user {current_user.sub}")
         
-        # Validate query
-        if not query or len(query.strip()) < 3:
-            return create_error_response(
-                message="Query must be at least 3 characters"
-            )
-        
-        # Build filters
+        # Build filters from request
         filters = {}
-        if jurisdiction:
-            filters['jurisdiction'] = jurisdiction
-        if case_type:
-            filters['case_type'] = case_type
-        if court_level:
-            filters['court_level'] = court_level
+        if request.jurisdiction:
+            filters['jurisdiction'] = request.jurisdiction
+        if request.case_type:
+            filters['case_type'] = request.case_type
+        if request.court_level:
+            filters['court_level'] = request.court_level
+        if request.case_id:
+            filters['case_id'] = request.case_id
         
         # Initialize Arabic legal search service
         search_service = ArabicLegalSearchService(db, use_faiss=True)
         
         # Perform search
         results = await search_service.find_similar_cases(
-            query=query.strip(),
-            top_k=top_k,
-            threshold=threshold,
+            query=request.query,
+            top_k=request.top_k,
+            threshold=request.threshold,
             filters=filters if filters else None
         )
         
         # Format response
         response_data = {
-            "query": query.strip(),
+            "query": request.query,
             "results": results,
             "total_results": len(results),
-            "threshold": threshold
+            "threshold": request.threshold
         }
         
         message = f"Found {len(results)} similar cases"
@@ -254,11 +196,7 @@ async def search_similar_cases(
 
 @router.post("/hybrid", response_model=ApiResponse)
 async def hybrid_search(
-    query: str = Query(..., description="Search query text", min_length=3),
-    search_types: str = Query("laws,cases", description="Types to search (comma-separated)"),
-    top_k: int = Query(5, description="Results per type", ge=1, le=50),
-    threshold: float = Query(0.6, description="Similarity threshold", ge=0.0, le=1.0),
-    jurisdiction: Optional[str] = Query(None, description="Filter by jurisdiction"),
+    request: HybridSearchRequest = Body(..., description="Hybrid search request parameters"),
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
 ):
@@ -277,9 +215,15 @@ async def hybrid_search(
     - threshold: Similarity threshold (0.0-1.0)
     - jurisdiction: Filter by jurisdiction (optional)
     
-    **Example**:
-    ```
-    GET /api/v1/search/hybrid?query=حقوق+العامل&search_types=laws,cases&top_k=5
+    **Example Request Body**:
+    ```json
+    {
+      "query": "حقوق العامل",
+      "search_types": ["laws", "cases"],
+      "top_k": 5,
+      "threshold": 0.6,
+      "jurisdiction": "المملكة العربية السعودية"
+    }
     ```
     
     **Response**:
@@ -305,38 +249,29 @@ async def hybrid_search(
     ```
     """
     try:
-        logger.info(f"🔍 Hybrid search: '{query[:50]}...' by user {current_user.sub}")
+        logger.info(f"🔍 Hybrid search: '{request.query[:50]}...' by user {current_user.sub}")
         
-        # Validate query
-        if not query or len(query.strip()) < 3:
-            return create_error_response(
-                message="Query must be at least 3 characters"
-            )
-        
-        # Parse search types
-        types_list = [t.strip() for t in search_types.split(',')]
-        
-        # Build filters
+        # Build filters from request
         filters = {}
-        if jurisdiction:
-            filters['jurisdiction'] = jurisdiction
+        if request.jurisdiction:
+            filters['jurisdiction'] = request.jurisdiction
         
         # Initialize Arabic legal search service
         search_service = ArabicLegalSearchService(db, use_faiss=True)
         
         # Perform hybrid search
         results = await search_service.hybrid_search(
-            query=query.strip(),
-            search_types=types_list,
-            top_k=top_k,
-            threshold=threshold,
+            query=request.query,
+            search_types=request.search_types,
+            top_k=request.top_k,
+            threshold=request.threshold,
             filters=filters if filters else None
         )
         
         total = results.get('total_results', 0)
         message = f"Found {total} total results"
-        if len(types_list) > 1:
-            message += f" across {len(types_list)} types"
+        if len(request.search_types) > 1:
+            message += f" across {len(request.search_types)} types"
         
         return create_success_response(
             message=message,
@@ -464,7 +399,7 @@ async def get_search_statistics(
         search_service = ArabicLegalSearchService(db, use_faiss=True)
         
         # Get statistics
-        stats = await search_service.get_search_statistics()
+        stats = await search_service.get_statistics()
         
         return create_success_response(
             message="Search statistics",
