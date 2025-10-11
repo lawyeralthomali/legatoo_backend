@@ -752,6 +752,69 @@ class StructureCorrectionResponse(BaseModel):
     updated_structure: Optional[DocumentStructure] = Field(None, description="Updated structure after corrections")
 
 
+# ===========================================
+# RAG SYSTEM SCHEMAS
+# ===========================================
+
+class RAGLawArticleSchema(BaseModel):
+    """Schema for law article in RAG ingestion"""
+    article_number: Optional[str] = Field(None, description="Article number (e.g., '1', '75/2')")
+    title: Optional[str] = Field(None, description="Article title")
+    content: str = Field(..., min_length=1, description="Article content")
+    keywords: Optional[List[str]] = Field(default_factory=list, description="Article keywords")
+
+
+class RAGLawUploadRequest(BaseModel):
+    """Schema for RAG law upload request"""
+    law_name: str = Field(..., min_length=1, description="Name of the law")
+    law_type: LawSourceTypeEnum = Field(..., description="Type of law: law, regulation, code, directive, decree")
+    jurisdiction: Optional[str] = Field(None, description="Legal jurisdiction (e.g., 'المملكة العربية السعودية')")
+    issuing_authority: Optional[str] = Field(None, description="Issuing authority")
+    issue_date: Optional[str] = Field(None, description="Issue date (YYYY-MM-DD)")
+    last_update: Optional[str] = Field(None, description="Last update date (YYYY-MM-DD)")
+    description: Optional[str] = Field(None, description="Law description")
+    source_url: Optional[str] = Field(None, description="Source URL")
+    articles: List[RAGLawArticleSchema] = Field(..., min_items=1, description="List of law articles")
+
+
+class RAGSearchRequest(BaseModel):
+    """Schema for RAG search request"""
+    query: str = Field(..., min_length=1, max_length=500, description="User question or search query")
+    top_k: int = Field(default=5, ge=1, le=50, description="Number of relevant chunks to return")
+    threshold: float = Field(default=0.6, ge=0.0, le=1.0, description="Minimum similarity threshold")
+    law_source_id: Optional[int] = Field(None, description="Filter by specific law source ID")
+
+
+class RAGChunkResult(BaseModel):
+    """Schema for RAG chunk result"""
+    chunk_id: int = Field(..., description="Chunk ID")
+    content: str = Field(..., description="Chunk content")
+    similarity_score: float = Field(..., description="Similarity score (0.0-1.0)")
+    law_source_name: str = Field(..., description="Law source name")
+    law_source_id: int = Field(..., description="Law source ID")
+    article_number: Optional[str] = Field(None, description="Article number")
+    article_title: Optional[str] = Field(None, description="Article title")
+    article_id: Optional[int] = Field(None, description="Article ID")
+
+
+class RAGSearchResponse(BaseModel):
+    """Schema for RAG search response"""
+    query: str = Field(..., description="Original search query")
+    total_results: int = Field(..., description="Total number of results found")
+    results: List[RAGChunkResult] = Field(..., description="List of relevant chunks")
+    processing_time: float = Field(..., description="Processing time in seconds")
+
+
+class RAGUploadResponse(BaseModel):
+    """Schema for RAG upload response"""
+    law_source_id: int = Field(..., description="Created law source ID")
+    law_name: str = Field(..., description="Law name")
+    articles_created: int = Field(..., description="Number of articles created")
+    chunks_created: int = Field(..., description="Number of chunks created")
+    processing_time: float = Field(..., description="Processing time in seconds")
+    status: str = Field(..., description="Processing status")
+
+
 # Update forward references
 ArticleStructure.model_rebuild()
 SectionStructure.model_rebuild()

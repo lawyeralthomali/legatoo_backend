@@ -44,6 +44,7 @@ from .routes.chunk_processing_router import router as chunk_processing_router
 from .routes.embedding_router import router as embedding_router
 from .routes.search_router import router as search_router
 from .routes.analysis_router import router as analysis_router
+from .routes.rag_route import router as rag_router
 
 from pydantic import BaseModel
 from typing import List
@@ -198,6 +199,7 @@ app.include_router(chunk_processing_router)  # Chunk Processing with AI
 app.include_router(embedding_router)  # Embeddings Service
 app.include_router(search_router)     # Semantic Search Service
 app.include_router(analysis_router)   # AI Legal Analysis Service (Gemini + RAG)
+app.include_router(rag_router)        # RAG Service for Legal Laws
 
 @app.on_event("startup")
 async def startup_event():
@@ -267,6 +269,11 @@ async def root():
                 "reparse": "/api/v1/laws/{law_id}/reparse",
                 "analyze": "/api/v1/laws/{law_id}/analyze",
                 "statistics": "/api/v1/laws/{law_id}/statistics"
+            },
+            "rag": {
+                "upload": "/api/v1/rag/upload",
+                "search": "/api/v1/rag/search",
+                "status": "/api/v1/rag/status"
             }
         }
     }

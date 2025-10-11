@@ -10,6 +10,7 @@ This service handles:
 
 import logging
 import json
+import re
 import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
@@ -40,7 +41,8 @@ class EmbeddingService:
     MODELS = {
         'default': 'sentence-transformers/paraphrase-multilingual-mpnet-base-v2',
         'large': 'intfloat/multilingual-e5-large',
-        'small': 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
+        'small': 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
+        'arabic': 'Ezzaldin-97/STS-Arabert',
     }
     
     def __init__(self, db: AsyncSession, model_name: str = 'default'):
@@ -121,33 +123,39 @@ class EmbeddingService:
     def _encode_text(self, text: str) -> List[float]:
         """
         Encode a single text into embedding vector.
-        
-        Args:
-            text: Input text
-            
-        Returns:
-            Embedding vector as list of floats
+        - Normalizes text for caching key
+        - Truncates to safe length
+        - Uses normalize_embeddings=True for cosine-friendly vectors
         """
         self._ensure_model_loaded()
-        
-        # Check cache first
-        if text in self._embedding_cache:
-            logger.debug(f"📦 Using cached embedding")
-            return self._embedding_cache[text]
-        
+
+        # Lightweight normalization for cache key (no heavy Arabic normalization here)
+        key = re.sub(r'\s+', ' ', (text or '').strip())
+
+        # Cache first
+        if key in self._embedding_cache:
+            logger.debug("📦 Using cached embedding")
+            return self._embedding_cache[key]
+
         # Truncate if necessary
         text = self._truncate_text(text)
-        
-        # Generate embedding
-        embedding = self.model.encode(text, convert_to_numpy=True)
+
+        # Generate embedding (normalized to unit length -> better cosine)
+        embedding = self.model.encode(
+            text,
+            convert_to_numpy=True,
+            normalize_embeddings=True,   # <<<<<<<<<< مهم
+            show_progress_bar=False
+        )
+
         embedding_list = embedding.tolist()
-        
-        # Cache the result
+        # Cache
         if len(self._embedding_cache) < self._cache_max_size:
-            self._embedding_cache[text] = embedding_list
-        
-        return embedding_list
-    
+            self._embedding_cache[key] = embedding_list
+
+        return embedding_list  
+
+
     async def generate_chunk_embedding(
         self,
         chunk: KnowledgeChunk,
@@ -260,6 +268,7 @@ class EmbeddingService:
                     texts,
                     batch_size=len(batch),
                     convert_to_numpy=True,
+                    normalize_embeddings=True,
                     show_progress_bar=False
                 )
                 
@@ -355,6 +364,7 @@ class EmbeddingService:
                     texts,
                     batch_size=len(batch),
                     convert_to_numpy=True,
+                    normalize_embeddings=True,
                     show_progress_bar=False
                 )
                 

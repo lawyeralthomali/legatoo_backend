@@ -1,0 +1,819 @@
+{
+  "test_config": {
+    "api_url": "http://localhost:8000",
+    "top_k": 5,
+    "threshold": 0.5,
+    "total_articles": 30,
+    "total_keywords": 57
+  },
+  "overall_accuracy": 0.1311904761904762,
+  "total_successes": 17,
+  "total_failures": 40,
+  "article_results": [
+    {
+      "article_number": "الأولى",
+      "title": "تعريفات",
+      "keywords": {
+        "تعريف التزوير": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5313
+        },
+        "الخاتم": {
+          "success": true,
+          "found_in_position": 1,
+          "top_score": 0.5069
+        },
+        "الطابع": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5269
+        },
+        "العلامة": {
+          "success": true,
+          "found_in_position": 1,
+          "top_score": 0.5329
+        },
+        "المحرر": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5982
+        },
+        "الأوراق الخاصة بالمصارف": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "الوثيقة التاريخية": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 2,
+      "total_keywords": 7,
+      "accuracy": 0.2857142857142857
+    },
+    {
+      "article_number": "الثانية",
+      "title": "طرق التزوير",
+      "keywords": {
+        "طرق التزوير": {
+          "success": true,
+          "found_in_position": 3,
+          "top_score": 0.5274
+        },
+        "صنع محرر لا أصل له": {
+          "success": true,
+          "found_in_position": 1,
+          "top_score": 0.5354
+        },
+        "تضمين توقيع بالخداع": {
+          "success": true,
+          "found_in_position": 1,
+          "top_score": 0.6889
+        },
+        "التغيير أو التحريف": {
+          "success": true,
+          "found_in_position": 1,
+          "top_score": 0.523
+        },
+        "إساءة استخدام توقيع على بياض": {
+          "success": true,
+          "found_in_position": 1,
+          "top_score": 0.7142
+        }
+      },
+      "success_count": 5,
+      "total_keywords": 5,
+      "accuracy": 1.0
+    },
+    {
+      "article_number": "الثالثة",
+      "title": "عقوبة تزوير خاتم الدولة أو الملك",
+      "keywords": {
+        "تزوير خاتم الدولة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5958
+        },
+        "تزوير خاتم الملك": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "ولي العهد": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.6513
+        },
+        "ديوان الملكي": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "مليون ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 5,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "الرابعة",
+      "title": "تزوير خاتم أو علامة لجهة عامة",
+      "keywords": {
+        "تزوير خاتم جهة عامة": {
+          "success": true,
+          "found_in_position": 5,
+          "top_score": 0.6144
+        },
+        "تزوير علامة جهة عامة": {
+          "success": true,
+          "found_in_position": 5,
+          "top_score": 0.7253
+        },
+        "خاتم القانون الدولي العام": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.6165
+        },
+        "سبعمائة ألف ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 2,
+      "total_keywords": 4,
+      "accuracy": 0.5
+    },
+    {
+      "article_number": "الخامسة",
+      "title": "تزوير خاتم جهة غير عامة",
+      "keywords": {
+        "تزوير خاتم جهة غير عامة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.612
+        },
+        "ثلاثمائة ألف ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 2,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "السادسة",
+      "title": "تزوير طابع",
+      "keywords": {
+        "تزوير طابع": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.6468
+        },
+        "خمسمائة ألف ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "دفع ما فات على الخزينة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 3,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "السابعة",
+      "title": "إعادة استعمال طابع سبق تحصيل قيمته",
+      "keywords": {
+        "إعادة استعمال طابع": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5478
+        },
+        "ثلاثة أشهر سجن": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5438
+        },
+        "ثلاثين ألف ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "الخزينة العامة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 4,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "الثامنة",
+      "title": "تزوير محرر منسوب لجهة عامة",
+      "keywords": {
+        "تزوير محرر جهة عامة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.6692
+        },
+        "محرر القانون الدولي العام": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.6505
+        },
+        "خمسمائة ألف ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 3,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "التاسعة",
+      "title": "تزوير محرر عرفي",
+      "keywords": {
+        "تزوير محرر عرفي": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.7378
+        },
+        "ثلاثمائة ألف ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 2,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "العاشرة",
+      "title": "تزوير محرر منسوب للملك أو ولي العهد (صورة مشددة)",
+      "keywords": {
+        "تزوير محرر الملك": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.6141
+        },
+        "ولي العهد": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.6513
+        },
+        "رئيس مجلس الوزراء": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "عقوبة مشددة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.8008
+        },
+        "مليون ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 5,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "الحادية عشرة",
+      "title": "تزوير سندات وأوراق الخزينة العامة (صورة مشددة)",
+      "keywords": {
+        "تزوير سندات": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "أوراق الخزينة العامة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "مليون ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 3,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "الثانية عشرة",
+      "title": "تزوير موظف عام لمحرر يختص بتحريره (صورة مشددة)",
+      "keywords": {
+        "موظف عام": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "تزوير محرر مختص": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.7161
+        },
+        "سبعمائة ألف ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 3,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "الثالثة عشرة",
+      "title": "تزوير أوراق تجارية ومالية (صورة مشددة)",
+      "keywords": {
+        "تزوير أوراق تجارية": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5442
+        },
+        "أوراق مالية": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "أوراق المصارف": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "وثائق تأمين": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "أربعمائة ألف ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 5,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "الرابعة عشرة",
+      "title": "تزوير تقرير أو شهادة طبية (صورة مخففة)",
+      "keywords": {
+        "تزوير تقرير طبي": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "شهادة طبية على خلاف الحقيقة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "سنة سجن": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.6941
+        },
+        "مائة ألف ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 4,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "الخامسة عشرة",
+      "title": "تزوير أوراق الاختبارات الدراسية (صورة مخففة)",
+      "keywords": {
+        "تزوير أوراق اختبارات": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5566
+        },
+        "بيانات رصد نتائج": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "ستة أشهر سجن": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5111
+        },
+        "ستين ألف ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 4,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "السادسة عشرة",
+      "title": "تزوير محرر إثبات الحضور والانصراف (صورة مخففة)",
+      "keywords": {
+        "تزوير إثبات حضور": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5691
+        },
+        "انصراف الموظف": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5095
+        },
+        "ثلاثة أشهر سجن": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5438
+        },
+        "ثلاثين ألف ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 4,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "السابعة عشرة",
+      "title": "استعمال محرر منتهي الصلاحية للإيهام بحجيته (صورة ملحقة)",
+      "keywords": {
+        "استعمال حكم منتهي الصلاحية": {
+          "success": true,
+          "found_in_position": 1,
+          "top_score": 0.7512
+        },
+        "وكالة منتهية الصلاحية": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "الإيهام بالحجية": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "سنة سجن": {
+          "success": true,
+          "found_in_position": 1,
+          "top_score": 0.6941
+        },
+        "مائة ألف ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 2,
+      "total_keywords": 5,
+      "accuracy": 0.4
+    },
+    {
+      "article_number": "الثامنة عشرة",
+      "title": "تزوير وثيقة تاريخية (صورة ملحقة)",
+      "keywords": {
+        "تزوير وثيقة تاريخية": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5706
+        },
+        "ثمانية أشهر سجن": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5028
+        },
+        "ثمانين ألف ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 3,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "التاسعة عشرة",
+      "title": "عقوبة الاستعمال والحيازة والجلب",
+      "keywords": {
+        "عقوبة الاستعمال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.6974
+        },
+        "الجلب والحيازة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "العلم بالتزوير": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "نفس عقوبة التزوير": {
+          "success": true,
+          "found_in_position": 1,
+          "top_score": 0.7334
+        }
+      },
+      "success_count": 1,
+      "total_keywords": 4,
+      "accuracy": 0.25
+    },
+    {
+      "article_number": "العشرون",
+      "title": "عقوبة الشروع",
+      "keywords": {
+        "عقوبة الشروع": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.7333
+        },
+        "نصف الحد الأقصى": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 2,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "الحادية والعشرون",
+      "title": "عقوبة الاشتراك",
+      "keywords": {
+        "الاشتراك في الجريمة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "الاتفاق أو التحريض أو المساعدة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5243
+        },
+        "العقوبة نفسها": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.6978
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 3,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "الثانية والعشرون",
+      "title": "المصادرة",
+      "keywords": {
+        "مصادرة الأشياء المضبوطة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5173
+        },
+        "المتحصلة من الجريمة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5863
+        },
+        "حسن النية": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 3,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "الثالثة والعشرون",
+      "title": "عقوبة المنشآت الخاصة",
+      "keywords": {
+        "عقوبة المنشآت الخاصة": {
+          "success": true,
+          "found_in_position": 3,
+          "top_score": 0.7177
+        },
+        "غرامة عشرة ملايين ريال": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "الحرمان من التعاقد مع جهة عامة": {
+          "success": true,
+          "found_in_position": 1,
+          "top_score": 0.6324
+        },
+        "علم المنشأة ومصلحتها": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5294
+        }
+      },
+      "success_count": 2,
+      "total_keywords": 4,
+      "accuracy": 0.5
+    },
+    {
+      "article_number": "الرابعة والعشرون",
+      "title": "إيقاف العقوبة التبعية",
+      "keywords": {
+        "إيقاف العقوبة التبعية": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.7115
+        },
+        "المواد المخففة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 2,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "الخامسة والعشرون",
+      "title": "الإعفاء من العقوبة (الإبلاغ والإرشاد)",
+      "keywords": {
+        "الإعفاء من العقوبة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.7161
+        },
+        "الإبلاغ قبل الاكتشاف": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "الإرشاد عن الجناة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "تسهيل القبض": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 4,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "السادسة والعشرون",
+      "title": "الاختصاص القضائي (خارج المملكة)",
+      "keywords": {
+        "الاختصاص القضائي": {
+          "success": true,
+          "found_in_position": 3,
+          "top_score": 0.6963
+        },
+        "جرائم ارتكبت خارج المملكة": {
+          "success": true,
+          "found_in_position": 1,
+          "top_score": 0.6596
+        },
+        "استثناء الحكم القضائي الأجنبي": {
+          "success": true,
+          "found_in_position": 1,
+          "top_score": 0.68
+        }
+      },
+      "success_count": 3,
+      "total_keywords": 3,
+      "accuracy": 1.0
+    },
+    {
+      "article_number": "السابعة والعشرون",
+      "title": "انقضاء الدعوى الجزائية",
+      "keywords": {
+        "انقضاء الدعوى الجزائية": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.6961
+        },
+        "عشر سنوات": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "استثناء المادتين 3 و 10": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 3,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "الثامنة والعشرون",
+      "title": "نشر العقوبة",
+      "keywords": {
+        "نشر العقوبة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.7272
+        },
+        "يجوز الحكم": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.6729
+        },
+        "استثناء المواد المخففة": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 3,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "التاسعة والعشرون",
+      "title": "الإلغاء",
+      "keywords": {
+        "إلغاء النظام السابق": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "نظام مكافحة التزوير": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0.5112
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 2,
+      "accuracy": 0.0
+    },
+    {
+      "article_number": "الثلاثون",
+      "title": "تاريخ العمل بالنظام",
+      "keywords": {
+        "تاريخ العمل بالنظام": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "ثلاثين يوماً": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        },
+        "الجريدة الرسمية": {
+          "success": false,
+          "found_in_position": null,
+          "top_score": 0
+        }
+      },
+      "success_count": 0,
+      "total_keywords": 3,
+      "accuracy": 0.0
+    }
+  ]
+}
