@@ -181,9 +181,8 @@ class ArabicLegalEmbeddingService:
         """
         Normalize Arabic legal text to improve embedding quality.
         
-        Performs two essential normalization operations:
-        1. Remove Arabic diacritics (Harakat)
-        2. Normalize Alif forms and Ta'a Marbuta
+        Clean and safe normalization that preserves linguistic correctness.
+        CRITICAL: Keeps 'ة' (Ta Marbuta) unchanged as it's semantically important.
         
         Args:
             text: Input Arabic text
@@ -195,15 +194,21 @@ class ArabicLegalEmbeddingService:
         arabic_diacritics = re.compile(r'[\u064B-\u065F\u0670]')
         text = arabic_diacritics.sub('', text)
         
+        # Remove tatweel (elongation character)
+        text = text.replace('ـ', '')
+        
         # Normalize Alif forms: أ إ آ → ا
         text = text.replace('أ', 'ا')
         text = text.replace('إ', 'ا')
         text = text.replace('آ', 'ا')
         
-        # Normalize Ta'a Marbuta: ة → ه
-        text = text.replace('ة', 'ه')
+        # Normalize alif maqsura to ya: ى → ي
+        text = text.replace('ى', 'ي')
         
-        return text
+        # Keep 'ة' (Ta Marbuta) as is - VERY IMPORTANT for legal accuracy
+        # Do NOT replace ة → ه as it changes semantic meaning
+        
+        return text.strip()
     
     def _encode_batch(self, texts: List[str]) -> np.ndarray:
         """

@@ -16,16 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class ArabicLegalSearchService:
-    """
-    خدمة البحث الدلالي المتخصصة للنصوص القانونية العربية
-    
-    Features:
-    - Arabic-specialized BERT models
-    - FAISS fast indexing
-    - Sub-second search times
-    - Better accuracy for legal terminology
-    - Optimized result enrichment
-    """
+  
     
     def __init__(
         self,
@@ -33,14 +24,7 @@ class ArabicLegalSearchService:
         model_name: str = 'sts-arabert',
         use_faiss: bool = True
     ):
-        """
-        Initialize Arabic Legal Search Service.
-        
-        Args:
-            db: Async database session
-            model_name: Model to use (default: 'sts-arabert' - specialized for semantic similarity)
-            use_faiss: Whether to use FAISS for fast search
-        """
+       
         self.db = db
         self.embedding_service = ArabicLegalEmbeddingService(
             db=db,
@@ -114,7 +98,7 @@ class ArabicLegalSearchService:
         self,
         query: str,
         top_k: int = 10,
-        threshold: float = 0.7,
+        threshold: float = 0.6,
         filters: Optional[Dict[str, Any]] = None,
         use_fast_search: bool = True
     ) -> List[Dict[str, Any]]:
@@ -124,7 +108,7 @@ class ArabicLegalSearchService:
         Args:
             query: Search query
             top_k: Number of results
-            threshold: Minimum similarity threshold
+            threshold: Minimum similarity threshold (default: 0.6, optimized for Arabic)
             filters: Optional filters (jurisdiction, law_source_id)
             use_fast_search: Use FAISS if available
             
@@ -133,6 +117,14 @@ class ArabicLegalSearchService:
         """
         try:
             logger.info(f"🔍 Searching for similar laws: '{query[:50]}...'")
+            
+            # Ensure FAISS index is available
+            if self.embedding_service.use_faiss and self.embedding_service.faiss_index is None:
+                logger.info("🧠 FAISS index missing, rebuilding...")
+                try:
+                    await self.embedding_service.build_faiss_index()
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to rebuild FAISS index automatically: {e}")
             
             # Check cache
             cache_key = f"laws_{query}_{top_k}_{threshold}_{str(filters)}"
@@ -179,8 +171,8 @@ class ArabicLegalSearchService:
         """
         logger.info("⚡ Using FAISS fast search")
         
-        # Get top candidates from FAISS (get more for filtering)
-        candidates_k = top_k * 3 if filters else top_k
+        # Get top candidates from FAISS (get more for filtering) - optimized for accuracy
+        candidates_k = max(top_k * 5, 100) if filters else max(top_k * 3, 50)
         faiss_results = await self.embedding_service.search_similar_fast(
             query=query,
             top_k=candidates_k
@@ -200,11 +192,11 @@ class ArabicLegalSearchService:
                 query_builder = query_builder.where(
                     KnowledgeChunk.law_source_id == filters['law_source_id']
                 )
-            if 'jurisdiction' in filters:
-                query_builder = query_builder.join(
-                    LawSource,
-                    KnowledgeChunk.law_source_id == LawSource.id
-                ).where(LawSource.jurisdiction == filters['jurisdiction'])
+                if 'jurisdiction' in filters:
+                    query_builder = query_builder.join(
+                        LawSource,
+                        KnowledgeChunk.law_source_id == LawSource.id
+                    ).where(LawSource.jurisdiction.ilike(filters['jurisdiction']))
         
         result = await self.db.execute(query_builder)
         chunks = {chunk.id: chunk for chunk in result.scalars().all()}
@@ -278,7 +270,7 @@ class ArabicLegalSearchService:
                     query_builder = query_builder.join(
                         LawSource,
                         KnowledgeChunk.law_source_id == LawSource.id
-                    ).where(LawSource.jurisdiction == filters['jurisdiction'])
+                    ).where(LawSource.jurisdiction.ilike(filters['jurisdiction']))
                     
         elif source_type == 'case':
             query_builder = select(KnowledgeChunk).where(
@@ -302,7 +294,7 @@ class ArabicLegalSearchService:
                     )
                     if 'jurisdiction' in filters:
                         query_builder = query_builder.where(
-                            LegalCase.jurisdiction == filters['jurisdiction']
+                            LegalCase.jurisdiction.ilike(filters['jurisdiction'])
                         )
                     if 'case_type' in filters:
                         query_builder = query_builder.where(

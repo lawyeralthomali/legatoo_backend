@@ -15,7 +15,7 @@ class SimilarSearchRequest(BaseModel):
     """Request schema for similar document search."""
     query: str = Field(..., description="Search query text", min_length=3, max_length=2000)
     top_k: int = Field(10, description="Number of top results", ge=1, le=100)
-    threshold: float = Field(0.7, description="Minimum similarity threshold", ge=0.0, le=1.0)
+    threshold: float = Field(0.6, description="Minimum similarity threshold (optimized for Arabic semantic search)", ge=0.0, le=1.0)
     
     # Optional filters
     jurisdiction: Optional[str] = Field(None, description="Filter by jurisdiction")
@@ -32,7 +32,7 @@ class SimilarCasesRequest(BaseModel):
     """Request schema for similar cases search."""
     query: str = Field(..., description="Search query text", min_length=3, max_length=2000)
     top_k: int = Field(10, description="Number of top results", ge=1, le=100)
-    threshold: float = Field(0.7, description="Minimum similarity threshold", ge=0.0, le=1.0)
+    threshold: float = Field(0.6, description="Minimum similarity threshold (optimized for Arabic semantic search)", ge=0.0, le=1.0)
     
     # Optional filters
     jurisdiction: Optional[str] = Field(None, description="Filter by jurisdiction")
@@ -68,7 +68,7 @@ class HybridSearchRequest(BaseModel):
     query: str = Field(..., description="Search query text", min_length=3, max_length=2000)
     search_types: List[str] = Field(['laws', 'cases'], description="Types to search")
     top_k: int = Field(5, description="Results per type", ge=1, le=50)
-    threshold: float = Field(0.6, description="Minimum similarity threshold", ge=0.0, le=1.0)
+    threshold: float = Field(0.6, description="Minimum similarity threshold (optimized for Arabic semantic search)", ge=0.0, le=1.0)
     
     # Optional filters
     jurisdiction: Optional[str] = Field(None, description="Filter by jurisdiction")

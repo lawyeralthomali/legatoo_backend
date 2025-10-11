@@ -53,12 +53,16 @@ async def search_similar_laws(
         # Initialize Arabic legal search service
         search_service = ArabicLegalSearchService(db, use_faiss=True)
         
-        # Perform search
+        # 🔥 CRITICAL FIX: Initialize the service (load model + build FAISS index)
+        await search_service.initialize()
+        
+        # Perform search (using STANDARD search for testing, not FAISS)
         results = await search_service.find_similar_laws(
             query=request.query,
             top_k=request.top_k,
             threshold=request.threshold,
-            filters=filters if filters else None
+            filters=filters if filters else None,
+            use_fast_search=False  # 🧪 Testing standard search (non-FAISS)
         )
         
         # Format response
@@ -162,6 +166,9 @@ async def search_similar_cases(
         # Initialize Arabic legal search service
         search_service = ArabicLegalSearchService(db, use_faiss=True)
         
+        # 🔥 CRITICAL FIX: Initialize the service (load model + build FAISS index)
+        await search_service.initialize()
+        
         # Perform search
         results = await search_service.find_similar_cases(
             query=request.query,
@@ -259,6 +266,9 @@ async def hybrid_search(
         # Initialize Arabic legal search service
         search_service = ArabicLegalSearchService(db, use_faiss=True)
         
+        # 🔥 CRITICAL FIX: Initialize the service (load model + build FAISS index)
+        await search_service.initialize()
+        
         # Perform hybrid search
         results = await search_service.hybrid_search(
             query=request.query,
@@ -332,6 +342,8 @@ async def get_search_suggestions(
         
         # Initialize Arabic legal search service
         search_service = ArabicLegalSearchService(db, use_faiss=True)
+        
+        # Note: Suggestions don't need full initialization
         
         # Get suggestions
         suggestions = await search_service.get_search_suggestions(

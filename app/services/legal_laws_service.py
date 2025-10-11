@@ -1,13 +1,3 @@
-"""
-Legal Laws Management Service
-
-This service handles the complete lifecycle of legal laws including:
-- Upload and parsing
-- Hierarchy extraction (Branches → Chapters → Articles)
-- Knowledge chunk creation
-- CRUD operations
-- AI analysis integration
-"""
 
 import logging
 import json
@@ -29,11 +19,58 @@ from .arabic_legal_embedding_service import ArabicLegalEmbeddingService
 logger = logging.getLogger(__name__)
 
 
-def _format_chunk_content(article_title: str, article_content: str) -> str:
-
+def _format_chunk_content(
+    article_title: str, 
+    article_content: str, 
+    article_number: Optional[str] = None
+) -> str:
+    
+    header_parts = []
+    
+    # Add article number if provided
+    if article_number:
+        header_parts.append(f"المادة {article_number}")
+    
+    # Add article title if provided
     if article_title and article_title.strip():
-        return f"**{article_title}**\n\n{article_content}"
-    return article_content
+        header_parts.append(article_title.strip())
+    
+    # Build header
+    header = " - ".join(header_parts) if header_parts else ""
+    
+    # Combine header with content
+    if header:
+        return f"{header}\n{article_content or ''}".strip()
+    
+    return (article_content or '').strip()
+
+
+def _split_to_segments(text: str, seg_chars: int = 1200, overlap: int = 150) -> List[str]:
+    
+    text = (text or '').strip()
+    
+    # If text is short enough, return as single segment
+    if len(text) <= seg_chars:
+        return [text]
+    
+    segments = []
+    start = 0
+    
+    while start < len(text):
+        end = min(start + seg_chars, len(text))
+        seg = text[start:end]
+        segments.append(seg)
+        
+        # If we've reached the end, break
+        if end == len(text):
+            break
+        
+        # Move start position with overlap
+        start = end - overlap
+        if start < 0:
+            start = 0
+    
+    return segments
 
 
 class LegalLawsService:
@@ -54,7 +91,298 @@ class LegalLawsService:
             self.embedding_service.initialize_model()
             self._model_initialized = True
 
-    # ===========================================
+    
+
+
+    async def upload_json_law_structure(
+        self,
+        json_data: Dict[str, Any],
+        uploaded_by: int = 1  # Default to user ID 1
+    ) -> Dict[str, Any]:
+       
+        try:
+            logger.info("Starting JSON law structure upload")
+            
+            # Extract law source data
+            law_sources = json_data.get("law_sources", [])
+            if not law_sources:
+                return {"success": False, "message": "No law sources found in JSON", "data": None}
+            
+            law_source_data = law_sources[0]
+            processing_report = json_data.get("processing_report", {})
+            
+            # Generate unique hash for JSON upload based on content
+            json_content = json.dumps(json_data, sort_keys=True, ensure_ascii=False)
+            unique_hash = hashlib.sha256(json_content.encode('utf-8')).hexdigest()
+            
+            # Create KnowledgeDocument (no file, just metadata)
+            knowledge_doc = KnowledgeDocument(
+                title=f"JSON Upload: {law_source_data.get('name', 'Unknown Law')}",
+                category="law",
+                file_path=f"json_upload_{unique_hash[:8]}.json",  # Unique path for JSON uploads
+                file_hash=unique_hash,  # Unique hash for JSON uploads
+                source_type="uploaded",
+                uploaded_by=uploaded_by,
+                document_metadata={
+                    "source": "json_upload",
+                    "processing_report": processing_report
+                }
+            )
+            
+            self.db.add(knowledge_doc)
+            await self.db.flush()
+            logger.info(f"Created KnowledgeDocument {knowledge_doc.id}")
+            
+            # Create LawSource
+            law_source = LawSource(
+                knowledge_document_id=knowledge_doc.id,
+                name=law_source_data.get("name", "Unknown Law"),
+                type=law_source_data.get("type", "law"),
+                jurisdiction=law_source_data.get("jurisdiction"),
+                issuing_authority=law_source_data.get("issuing_authority"),
+                issue_date=self._parse_date(law_source_data.get("issue_date")),
+                last_update=self._parse_date(law_source_data.get("last_update")),
+                description=law_source_data.get("description"),
+                source_url=law_source_data.get("source_url"),
+                status="processed"
+            )
+            
+            self.db.add(law_source)
+            await self.db.flush()
+            logger.info(f"Created LawSource {law_source.id}")
+            
+            # Process law structure - handle both hierarchical and direct article structures
+            total_branches = 0
+            total_chapters = 0
+            total_articles = 0
+            chunk_index = 0  # Initialize incremental chunk counter
+            
+            # Check if it has branches structure (hierarchical)
+            branches_data = law_source_data.get("branches", [])
+            if branches_data:
+                # Process hierarchical structure: branches -> chapters -> articles
+                for branch_data in branches_data:
+                    # Create LawBranch
+                    law_branch = LawBranch(
+                        law_source_id=law_source.id,
+                        branch_number=branch_data.get("branch_number", ""),
+                        branch_name=branch_data.get("branch_name", ""),
+                        description=branch_data.get("description"),
+                        order_index=branch_data.get("order_index", 0),
+                        source_document_id=knowledge_doc.id,
+                        created_at=datetime.utcnow()
+                    )
+                    
+                    self.db.add(law_branch)
+                    await self.db.flush()
+                    total_branches += 1
+                    
+                    # Process chapters
+                    chapters_data = branch_data.get("chapters", [])
+                    for chapter_data in chapters_data:
+                        # Create LawChapter
+                        law_chapter = LawChapter(
+                            branch_id=law_branch.id,
+                            chapter_number=chapter_data.get("chapter_number", ""),
+                            chapter_name=chapter_data.get("chapter_name", ""),
+                            description=chapter_data.get("description"),
+                            order_index=chapter_data.get("order_index", 0),
+                            source_document_id=knowledge_doc.id,
+                            created_at=datetime.utcnow()
+                        )
+                        
+                        self.db.add(law_chapter)
+                        await self.db.flush()
+                        total_chapters += 1
+                        
+                        # Process articles
+                        articles_data = chapter_data.get("articles", [])
+                        for article_data in articles_data:
+                            # Create LawArticle
+                            law_article = LawArticle(
+                                law_source_id=law_source.id,
+                                branch_id=law_branch.id,
+                                chapter_id=law_chapter.id,
+                                article_number=article_data.get("article_number", ""),
+                                title=article_data.get("title"),
+                                content=article_data.get("content", ""),
+                                keywords=article_data.get("keywords", []),
+                                order_index=article_data.get("order_index", 0),
+                                source_document_id=knowledge_doc.id,
+                                created_at=datetime.utcnow()
+                            )
+                            
+                            self.db.add(law_article)
+                            await self.db.flush()
+                            total_articles += 1
+                            
+                            # Split article content into segments for better RAG retrieval
+                            segments = _split_to_segments(law_article.content)
+                            
+                            for s_idx, seg in enumerate(segments):
+                                # Format chunk with article number and title
+                                seg_content = _format_chunk_content(
+                                    article_title=law_article.title,
+                                    article_content=seg,
+                                    article_number=law_article.article_number
+                                )
+                                
+                                chunk = KnowledgeChunk(
+                                    document_id=knowledge_doc.id,
+                                    chunk_index=chunk_index,
+                                    content=seg_content,
+                                    tokens_count=len(seg_content.split()),
+                                    law_source_id=law_source.id,
+                                    branch_id=law_branch.id,
+                                    chapter_id=law_chapter.id,
+                                    article_id=law_article.id,
+                                    verified_by_admin=False,
+                                    created_at=datetime.utcnow()
+                                )
+                                
+                                # Generate embedding automatically using unified service
+                                try:
+                                    self._ensure_embedding_model_loaded()
+                                    embedding_vector = self.embedding_service.encode_text(seg_content)
+                                    chunk.embedding_vector = json.dumps(embedding_vector.tolist())
+                                    logger.info(f"✅ Generated embedding for chunk ({self.embedding_service.embedding_dimension}-dim)")
+                                except Exception as e:
+                                    logger.warning(f"⚠️ Failed to generate embedding for chunk: {e}")
+                                
+                                self.db.add(chunk)
+                                chunk_index += 1
+            
+            # Check if it has direct articles structure (like 1.json)
+            elif law_source_data.get("articles"):
+                # Process direct articles structure (no branches/chapters)
+                articles_data = law_source_data.get("articles", [])
+                for article_data in articles_data:
+                    # Create LawArticle directly under law source
+                    law_article = LawArticle(
+                        law_source_id=law_source.id,
+                        branch_id=None,  # No branch
+                        chapter_id=None,  # No chapter
+                        article_number=article_data.get("article_number", ""),
+                        title=article_data.get("title"),
+                        content=article_data.get("content", ""),
+                        keywords=article_data.get("keywords", []),
+                        order_index=article_data.get("order_index", 0),
+                        source_document_id=knowledge_doc.id,
+                        created_at=datetime.utcnow()
+                    )
+                    
+                    self.db.add(law_article)
+                    await self.db.flush()
+                    total_articles += 1
+                    
+                    # Split article content into segments for better RAG retrieval
+                    segments = _split_to_segments(law_article.content)
+                    
+                    for s_idx, seg in enumerate(segments):
+                        # Format chunk with article number and title
+                        seg_content = _format_chunk_content(
+                            article_title=law_article.title,
+                            article_content=seg,
+                            article_number=law_article.article_number
+                        )
+                        
+                        chunk = KnowledgeChunk(
+                            document_id=knowledge_doc.id,
+                            chunk_index=chunk_index,
+                            content=seg_content,
+                            tokens_count=len(seg_content.split()),
+                            law_source_id=law_source.id,
+                            article_id=law_article.id,
+                            verified_by_admin=False,
+                            created_at=datetime.utcnow()
+                        )
+                        
+                        # Generate embedding automatically using unified service
+                        try:
+                            self._ensure_embedding_model_loaded()
+                            embedding_vector = self.embedding_service.encode_text(seg_content)
+                            chunk.embedding_vector = json.dumps(embedding_vector.tolist())
+                            logger.info(f"✅ Generated embedding for chunk ({self.embedding_service.embedding_dimension}-dim)")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Failed to generate embedding for chunk: {e}")
+                        
+                        self.db.add(chunk)
+                        chunk_index += 1
+            
+            # Commit all changes
+            await self.db.commit()
+            
+            # 🌟 Rebuild FAISS index after successful data commitment
+            logger.info("🔨 Rebuilding FAISS search index...")
+            try:
+                index_result = await self.embedding_service.build_faiss_index()
+                if index_result.get("success"):
+                    logger.info(f"✅ FAISS index rebuilt successfully: {index_result.get('total_vectors')} vectors indexed")
+                else:
+                    logger.warning(f"⚠️ FAISS index rebuild failed: {index_result.get('error')}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to rebuild FAISS index: {e}")
+            
+            # Prepare response data
+            response_data = {
+                "law_source": {
+                    "id": law_source.id,
+                    "name": law_source.name,
+                    "type": law_source.type,
+                    "jurisdiction": law_source.jurisdiction,
+                    "issuing_authority": law_source.issuing_authority
+                },
+                "statistics": {
+                    "total_branches": total_branches,
+                    "total_chapters": total_chapters,
+                    "total_articles": total_articles,
+                    "processing_report": processing_report
+                }
+            }
+            
+            logger.info(f"Successfully processed JSON law structure with index rebuild: {total_branches} branches, {total_chapters} chapters, {total_articles} articles")
+            
+            return {
+                "success": True,
+                "message": f"Successfully processed JSON law structure with index rebuild: {total_branches} branches, {total_chapters} chapters, {total_articles} articles",
+                "data": response_data
+            }
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Failed to upload JSON law structure: {str(e)}")
+            return {"success": False, "message": f"Failed to upload JSON law structure: {str(e)}", "data": None}
+
+    def _parse_date(self, date_str: Optional[str]) -> Optional[datetime]:
+        """Parse date string to datetime object."""
+        if not date_str:
+            return None
+        
+        try:
+            # Try different date formats
+            formats = [
+                "%Y-%m-%d",
+                "%d/%m/%Y",
+                "%m/%d/%Y",
+                "%Y/%m/%d"
+            ]
+            
+            for fmt in formats:
+                try:
+                    return datetime.strptime(date_str, fmt).date()
+                except ValueError:
+                    continue
+            
+            # If no format works, return None
+            logger.warning(f"Could not parse date: {date_str}")
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Error parsing date {date_str}: {str(e)}")
+            return None
+
+
+# ===========================================
     # UPLOAD AND PARSE
     # ===========================================
 
@@ -68,18 +396,7 @@ class LegalLawsService:
         use_ai: bool = True,
         fallback_on_failure: bool = True
     ) -> Dict[str, Any]:
-        """
-        Upload PDF, create KnowledgeDocument and LawSource, parse hierarchy.
-        
-        Workflow:
-        1. Check for duplicate via file_hash
-        2. Create KnowledgeDocument
-        3. Create LawSource
-        4. Parse PDF to extract hierarchy
-        5. Create branches, chapters, articles
-        6. Create knowledge chunks
-        7. Update status to 'processed'
-        """
+       
         try:
             # Step 1: Check for duplicate
             duplicate_check = await self.db.execute(
@@ -348,279 +665,6 @@ class LegalLawsService:
         except Exception as e:
             logger.warning(f"Failed to convert structure to hierarchy dict: {e}")
             return {"branches": []}
-
-
-
-    async def upload_json_law_structure(
-        self,
-        json_data: Dict[str, Any],
-        uploaded_by: int = 1  # Default to user ID 1
-    ) -> Dict[str, Any]:
-        """
-        Upload law structure from JSON data directly to database.
-        
-        Args:
-            json_data: JSON data containing law structure
-            uploaded_by: User ID who uploaded the data
-            
-        Returns:
-            Dict with success status and processing results
-        """
-        try:
-            logger.info("Starting JSON law structure upload")
-            
-            # Extract law source data
-            law_sources = json_data.get("law_sources", [])
-            if not law_sources:
-                return {"success": False, "message": "No law sources found in JSON", "data": None}
-            
-            law_source_data = law_sources[0]
-            processing_report = json_data.get("processing_report", {})
-            
-            # Generate unique hash for JSON upload based on content
-            json_content = json.dumps(json_data, sort_keys=True, ensure_ascii=False)
-            unique_hash = hashlib.sha256(json_content.encode('utf-8')).hexdigest()
-            
-            # Create KnowledgeDocument (no file, just metadata)
-            knowledge_doc = KnowledgeDocument(
-                title=f"JSON Upload: {law_source_data.get('name', 'Unknown Law')}",
-                category="law",
-                file_path=f"json_upload_{unique_hash[:8]}.json",  # Unique path for JSON uploads
-                file_hash=unique_hash,  # Unique hash for JSON uploads
-                source_type="uploaded",
-                uploaded_by=uploaded_by,
-                document_metadata={
-                    "source": "json_upload",
-                    "processing_report": processing_report
-                }
-            )
-            
-            self.db.add(knowledge_doc)
-            await self.db.flush()
-            logger.info(f"Created KnowledgeDocument {knowledge_doc.id}")
-            
-            # Create LawSource
-            law_source = LawSource(
-                knowledge_document_id=knowledge_doc.id,
-                name=law_source_data.get("name", "Unknown Law"),
-                type=law_source_data.get("type", "law"),
-                jurisdiction=law_source_data.get("jurisdiction"),
-                issuing_authority=law_source_data.get("issuing_authority"),
-                issue_date=self._parse_date(law_source_data.get("issue_date")),
-                last_update=self._parse_date(law_source_data.get("last_update")),
-                description=law_source_data.get("description"),
-                source_url=law_source_data.get("source_url"),
-                status="processed"
-            )
-            
-            self.db.add(law_source)
-            await self.db.flush()
-            logger.info(f"Created LawSource {law_source.id}")
-            
-            # Process law structure - handle both hierarchical and direct article structures
-            total_branches = 0
-            total_chapters = 0
-            total_articles = 0
-            
-            # Check if it has branches structure (hierarchical)
-            branches_data = law_source_data.get("branches", [])
-            if branches_data:
-                # Process hierarchical structure: branches -> chapters -> articles
-                for branch_data in branches_data:
-                    # Create LawBranch
-                    law_branch = LawBranch(
-                        law_source_id=law_source.id,
-                        branch_number=branch_data.get("branch_number", ""),
-                        branch_name=branch_data.get("branch_name", ""),
-                        description=branch_data.get("description"),
-                        order_index=branch_data.get("order_index", 0),
-                        source_document_id=knowledge_doc.id,
-                        created_at=datetime.utcnow()
-                    )
-                    
-                    self.db.add(law_branch)
-                    await self.db.flush()
-                    total_branches += 1
-                    
-                    # Process chapters
-                    chapters_data = branch_data.get("chapters", [])
-                    for chapter_data in chapters_data:
-                        # Create LawChapter
-                        law_chapter = LawChapter(
-                            branch_id=law_branch.id,
-                            chapter_number=chapter_data.get("chapter_number", ""),
-                            chapter_name=chapter_data.get("chapter_name", ""),
-                            description=chapter_data.get("description"),
-                            order_index=chapter_data.get("order_index", 0),
-                            source_document_id=knowledge_doc.id,
-                            created_at=datetime.utcnow()
-                        )
-                        
-                        self.db.add(law_chapter)
-                        await self.db.flush()
-                        total_chapters += 1
-                        
-                        # Process articles
-                        articles_data = chapter_data.get("articles", [])
-                        for article_data in articles_data:
-                            # Create LawArticle
-                            law_article = LawArticle(
-                                law_source_id=law_source.id,
-                                branch_id=law_branch.id,
-                                chapter_id=law_chapter.id,
-                                article_number=article_data.get("article_number", ""),
-                                title=article_data.get("title"),
-                                content=article_data.get("content", ""),
-                                keywords=article_data.get("keywords", []),
-                                order_index=article_data.get("order_index", 0),
-                                source_document_id=knowledge_doc.id,
-                                created_at=datetime.utcnow()
-                            )
-                            
-                            self.db.add(law_article)
-                            await self.db.flush()
-                            total_articles += 1
-                            
-                            # Create KnowledgeChunk for the article with title included
-                            chunk_content = _format_chunk_content(law_article.title, law_article.content)
-                            chunk = KnowledgeChunk(
-                                document_id=knowledge_doc.id,
-                                chunk_index=law_article.order_index,
-                                content=chunk_content,
-                                tokens_count=len(chunk_content.split()),
-                                law_source_id=law_source.id,
-                                branch_id=law_branch.id,
-                                chapter_id=law_chapter.id,
-                                article_id=law_article.id
-                            )
-                            
-                            # Generate embedding automatically using unified service
-                            try:
-                                self._ensure_embedding_model_loaded()
-                                embedding_vector = self.embedding_service.encode_text(chunk_content)
-                                chunk.embedding_vector = json.dumps(embedding_vector.tolist())
-                                logger.info(f"✅ Generated embedding for chunk (256-dim)")
-                            except Exception as e:
-                                logger.warning(f"⚠️ Failed to generate embedding for chunk: {e}")
-                            
-                            self.db.add(chunk)
-            
-            # Check if it has direct articles structure (like 1.json)
-            elif law_source_data.get("articles"):
-                # Process direct articles structure (no branches/chapters)
-                articles_data = law_source_data.get("articles", [])
-                for article_data in articles_data:
-                    # Create LawArticle directly under law source
-                    law_article = LawArticle(
-                        law_source_id=law_source.id,
-                        branch_id=None,  # No branch
-                        chapter_id=None,  # No chapter
-                        article_number=article_data.get("article_number", ""),
-                        title=article_data.get("title"),
-                        content=article_data.get("content", ""),
-                        keywords=article_data.get("keywords", []),
-                        order_index=article_data.get("order_index", 0),
-                        source_document_id=knowledge_doc.id,
-                        created_at=datetime.utcnow()
-                    )
-                    
-                    self.db.add(law_article)
-                    await self.db.flush()
-                    total_articles += 1
-                    
-                    # Create KnowledgeChunk for the article with title included
-                    chunk_content = _format_chunk_content(law_article.title, law_article.content)
-                    chunk = KnowledgeChunk(
-                        document_id=knowledge_doc.id,
-                        chunk_index=law_article.order_index,
-                        content=chunk_content,
-                        tokens_count=len(chunk_content.split()),
-                        law_source_id=law_source.id,
-                        article_id=law_article.id
-                    )
-                    
-                    # Generate embedding automatically using unified service
-                    try:
-                        self._ensure_embedding_model_loaded()
-                        embedding_vector = self.embedding_service.encode_text(chunk_content)
-                        chunk.embedding_vector = json.dumps(embedding_vector.tolist())
-                        logger.info(f"✅ Generated embedding for chunk (256-dim)")
-                    except Exception as e:
-                        logger.warning(f"⚠️ Failed to generate embedding for chunk: {e}")
-                    
-                    self.db.add(chunk)
-            
-            # Commit all changes
-            await self.db.commit()
-            
-            # 🌟 Rebuild FAISS index after successful data commitment
-            logger.info("🔨 Rebuilding FAISS search index...")
-            try:
-                index_result = await self.embedding_service.build_faiss_index()
-                if index_result.get("success"):
-                    logger.info(f"✅ FAISS index rebuilt successfully: {index_result.get('total_vectors')} vectors indexed")
-                else:
-                    logger.warning(f"⚠️ FAISS index rebuild failed: {index_result.get('error')}")
-            except Exception as e:
-                logger.warning(f"⚠️ Failed to rebuild FAISS index: {e}")
-            
-            # Prepare response data
-            response_data = {
-                "law_source": {
-                    "id": law_source.id,
-                    "name": law_source.name,
-                    "type": law_source.type,
-                    "jurisdiction": law_source.jurisdiction,
-                    "issuing_authority": law_source.issuing_authority
-                },
-                "statistics": {
-                    "total_branches": total_branches,
-                    "total_chapters": total_chapters,
-                    "total_articles": total_articles,
-                    "processing_report": processing_report
-                }
-            }
-            
-            logger.info(f"Successfully processed JSON law structure with index rebuild: {total_branches} branches, {total_chapters} chapters, {total_articles} articles")
-            
-            return {
-                "success": True,
-                "message": f"Successfully processed JSON law structure with index rebuild: {total_branches} branches, {total_chapters} chapters, {total_articles} articles",
-                "data": response_data
-            }
-            
-        except Exception as e:
-            await self.db.rollback()
-            logger.error(f"Failed to upload JSON law structure: {str(e)}")
-            return {"success": False, "message": f"Failed to upload JSON law structure: {str(e)}", "data": None}
-
-    def _parse_date(self, date_str: Optional[str]) -> Optional[datetime]:
-        """Parse date string to datetime object."""
-        if not date_str:
-            return None
-        
-        try:
-            # Try different date formats
-            formats = [
-                "%Y-%m-%d",
-                "%d/%m/%Y",
-                "%m/%d/%Y",
-                "%Y/%m/%d"
-            ]
-            
-            for fmt in formats:
-                try:
-                    return datetime.strptime(date_str, fmt).date()
-                except ValueError:
-                    continue
-            
-            # If no format works, return None
-            logger.warning(f"Could not parse date: {date_str}")
-            return None
-            
-        except Exception as e:
-            logger.warning(f"Error parsing date {date_str}: {str(e)}")
-            return None
 
     # ===========================================
     # CRUD OPERATIONS
