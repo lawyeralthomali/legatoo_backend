@@ -33,7 +33,7 @@ class LawChunk(Base):
     tokens_count = Column(Integer)
     embedding_vector = Column(JSON)
     chunk_index = Column(Integer, default=0)
-    metadata = Column(JSON)
+    chunk_metadata = Column(JSON)  # Renamed from 'metadata' (reserved in SQLAlchemy)
     embedding_model = Column(String(100), default='sentence-transformers/paraphrase-multilingual-mpnet-base-v2')
     is_processed = Column(Boolean, default=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
