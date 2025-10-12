@@ -1,19 +1,19 @@
 """
-Enhanced RAG Router - API endpoints for Document-Based Legal RAG System
+RAG Router - FastAPI endpoints for legal document processing and semantic search.
 
-This module provides REST API endpoints for RAG-based law document ingestion and search:
-- /rag/upload-document: Ingest law documents directly from files
-- /rag/search: Semantic search for relevant law chunks
-- /rag/status: System status and statistics
-
-All endpoints follow the unified API response format.
+Provides REST API endpoints for:
+- Document upload and processing (PDF/DOCX/TXT)
+- Semantic search across law chunks
+- System status and health checks
+- Embedding service management
 """
 
 import logging
 import tempfile
 import os
-from typing import Dict, Any, List
-from fastapi import APIRouter, Depends, Body, File, UploadFile, Form, HTTPException
+from typing import Dict, Any, List, Optional
+
+from fastapi import APIRouter, Depends, Body, File, UploadFile, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
@@ -34,6 +34,106 @@ router = APIRouter(
 )
 
 
+# Constants
+ALLOWED_FILE_EXTENSIONS = {'.pdf', '.docx', '.txt'}
+MAX_FILE_SIZE_MB = 50
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+MIN_QUERY_LENGTH = 2
+MAX_TOP_K = 50
+MIN_TOP_K = 1
+
+
+def _validate_file_extension(filename: str) -> Optional[str]:
+    """
+    Validate file extension.
+    
+    Returns:
+        File extension if valid, None otherwise
+    """
+    if '.' not in filename:
+        return None
+    
+    extension = f".{filename.lower().split('.')[-1]}"
+    return extension if extension in ALLOWED_FILE_EXTENSIONS else None
+
+
+def _validate_file_size(file: UploadFile) -> tuple[bool, int]:
+    """
+    Validate file size.
+    
+    Returns:
+        Tuple of (is_valid, file_size_bytes)
+    """
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    file.file.seek(0)
+    
+    return (file_size <= MAX_FILE_SIZE_BYTES, file_size)
+
+
+async def _save_uploaded_file(file: UploadFile, extension: str) -> str:
+    """
+    Save uploaded file to temporary location.
+    
+    Returns:
+        Path to temporary file
+    """
+    with tempfile.NamedTemporaryFile(delete=False, suffix=extension) as temp_file:
+        content = await file.read()
+        temp_file.write(content)
+        return temp_file.name
+
+
+def _cleanup_temp_file(file_path: str) -> None:
+    """Safely remove temporary file."""
+    try:
+        if os.path.exists(file_path):
+            os.unlink(file_path)
+    except Exception as e:
+        logger.warning(f"Failed to cleanup temp file: {e}")
+
+
+def _validate_search_params(
+    query: str,
+    top_k: Optional[int],
+    threshold: Optional[float]
+) -> Optional[ApiResponse]:
+    """
+    Validate search parameters.
+    
+    Returns:
+        Error response if validation fails, None if valid
+    """
+    if not query or len(query.strip()) < MIN_QUERY_LENGTH:
+        return create_error_response(
+            message="Invalid search query",
+            errors=[ErrorDetail(
+                field="query",
+                message=f"Query must be at least {MIN_QUERY_LENGTH} characters"
+            )]
+        )
+    
+    if top_k and (top_k < MIN_TOP_K or top_k > MAX_TOP_K):
+        return create_error_response(
+            message="Invalid top_k parameter",
+            errors=[ErrorDetail(
+                field="top_k",
+                message=f"top_k must be between {MIN_TOP_K} and {MAX_TOP_K}"
+            )]
+        )
+    
+    if threshold and (threshold < 0.0 or threshold > 1.0):
+        return create_error_response(
+            message="Invalid threshold parameter",
+            errors=[ErrorDetail(
+                field="threshold",
+                message="threshold must be between 0.0 and 1.0"
+            )]
+        )
+    
+    return None
+
+
 @router.post("/upload-document", response_model=ApiResponse[Dict])
 async def upload_law_document(
     file: UploadFile = File(..., description="Law document file (PDF/DOCX/TXT)"),
@@ -44,89 +144,47 @@ async def upload_law_document(
     db: AsyncSession = Depends(get_db)
 ) -> ApiResponse[Dict]:
     """
-    Upload and process law document directly from file.
+    Upload and process law document from file.
     
-    This endpoint processes legal documents by:
-    1. Validating file type and size
-    2. Reading document content
-    3. Smart text chunking with context preservation
-    4. Generating embeddings for each chunk
-    5. Storing chunks with document metadata
+    Performs end-to-end processing:
+    1. Validates file type and size
+    2. Extracts text from document
+    3. Generates smart chunks with context preservation
+    4. Creates embeddings for semantic search
+    5. Stores in database with metadata
     
-    **Supported Formats**: PDF, DOCX, TXT
-    **Max File Size**: 50MB
-    
-    **Response Example**:
-    ```json
-    {
-      "success": true,
-      "message": "Law document processed successfully: 25 chunks created",
-      "data": {
-        "law_name": "نظام العمل السعودي",
-        "chunks_created": 25,
-        "chunks_stored": 25,
-        "processing_time": 12.45,
-        "file_type": "PDF",
-        "total_words": 8450
-      },
-      "errors": []
-    }
-    ```
-    
-    **Error Response Example**:
-    ```json
-    {
-      "success": false,
-      "message": "Upload failed: Unsupported file format",
-      "data": null,
-      "errors": [
-        {
-          "field": "file",
-          "message": "Only PDF, DOCX, and TXT files are supported"
-        }
-      ]
-    }
+    Supported formats: PDF, DOCX, TXT (max 50MB)
     """
-    # Validate file type
-    allowed_extensions = {'.pdf', '.docx', '.txt'}
-    file_extension = f".{file.filename.lower().split('.')[-1]}" if '.' in file.filename else ''
-    
-    if file_extension not in allowed_extensions:
+    # Validate file extension
+    file_extension = _validate_file_extension(file.filename)
+    if not file_extension:
         return create_error_response(
             message="Unsupported file format",
             errors=[ErrorDetail(
                 field="file",
-                message=f"Supported formats: {', '.join([ext.upper() for ext in allowed_extensions])}"
+                message=f"Supported: {', '.join([e.upper() for e in ALLOWED_FILE_EXTENSIONS])}"
             )]
         )
     
-    # Validate file size (50MB max)
-    max_size = 50 * 1024 * 1024  # 50MB
-    file.file.seek(0, 2)  # Seek to end
-    file_size = file.file.tell()
-    file.file.seek(0)  # Reset to beginning
-    
-    if file_size > max_size:
+    # Validate file size
+    is_valid_size, file_size = _validate_file_size(file)
+    if not is_valid_size:
         return create_error_response(
             message="File too large",
             errors=[ErrorDetail(
                 field="file",
-                message=f"Maximum file size is 50MB. Your file is {file_size / (1024*1024):.1f}MB"
+                message=f"Max size: {MAX_FILE_SIZE_MB}MB (your file: {file_size/(1024*1024):.1f}MB)"
             )]
         )
     
-    # Create temporary file
-    temp_file = None
+    temp_path = None
     try:
-        logger.info(f"📥 Document upload request: {file.filename} for law: {law_name}")
+        logger.info(f"Processing upload: {file.filename} for law: {law_name}")
         
-        # Create secure temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
-            content = await file.read()
-            temp_file.write(content)
-            temp_path = temp_file.name
+        # Save uploaded file
+        temp_path = await _save_uploaded_file(file, file_extension)
         
-        # Prepare law metadata
+        # Prepare metadata
         law_metadata = {
             'law_name': law_name,
             'law_type': law_type,
@@ -140,15 +198,13 @@ async def upload_law_document(
         rag_service = RAGService(db)
         result = await rag_service.ingest_law_document(temp_path, law_metadata)
         
-        # Clean up temporary file
-        try:
-            os.unlink(temp_path)
-        except Exception as cleanup_error:
-            logger.warning(f"⚠️ Failed to clean up temp file: {cleanup_error}")
+        # Cleanup
+        _cleanup_temp_file(temp_path)
         
+        # Format response
         if result['success']:
             return create_success_response(
-                message=f"✅ Law document processed successfully: {result['chunks_created']} chunks created",
+                message=f"Document processed: {result['chunks_created']} chunks created",
                 data={
                     'law_name': result['law_name'],
                     'chunks_created': result['chunks_created'],
@@ -160,19 +216,15 @@ async def upload_law_document(
             )
         else:
             return create_error_response(
-                message=f"❌ Failed to process document: {result.get('error', 'Unknown error')}",
+                message=f"Processing failed: {result.get('error', 'Unknown error')}",
                 errors=[ErrorDetail(message=result.get('error', 'Processing failed'))]
             )
-            
-    except Exception as e:
-        # Clean up temporary file in case of error
-        if temp_file and os.path.exists(temp_file.name):
-            try:
-                os.unlink(temp_file.name)
-            except:
-                pass
         
-        logger.error(f"❌ Document upload failed: {str(e)}", exc_info=True)
+    except Exception as e:
+        if temp_path:
+            _cleanup_temp_file(temp_path)
+        
+        logger.error(f"Upload failed: {str(e)}", exc_info=True)
         return create_error_response(
             message=f"Upload failed: {str(e)}",
             errors=[ErrorDetail(message=str(e))]
@@ -185,91 +237,29 @@ async def search_law_chunks(
     db: AsyncSession = Depends(get_db)
 ) -> ApiResponse[RAGSearchResponse]:
     """
-    Search for relevant law chunks using semantic similarity.
+    Semantic search for relevant law chunks.
     
-    This endpoint performs RAG-based search by:
-    1. Generating embedding for the query
-    2. Computing semantic similarity with all law chunks
-    3. Applying hybrid search (semantic + lexical)
-    4. Filtering by similarity threshold
-    5. Returning top-k most relevant chunks with metadata
+    Performs RAG-based search using:
+    - Query embedding generation
+    - Semantic similarity computation
+    - Threshold filtering
+    - Top-k ranking
     
-    **Request Body Example**:
-    ```json
-    {
-      "query": "ما هي حقوق العامل عند إنهاء عقد العمل؟",
-      "top_k": 5,
-      "threshold": 0.6,
-      "law_source_id": null
-    }
-    ```
-    
-    **Parameters**:
-    - `query` (required): Search query or question in Arabic/English
-    - `top_k` (optional): Number of results to return (1-50, default: 5)
-    - `threshold` (optional): Minimum similarity score (0.0-1.0, default: 0.6)
-    - `law_source_id` (optional): Filter by specific law source ID
-    
-    **Response Example**:
-    ```json
-    {
-      "success": true,
-      "message": "Found 5 relevant law chunks",
-      "data": {
-        "query": "ما هي حقوق العامل عند إنهاء عقد العمل؟",
-        "total_results": 5,
-        "results": [
-          {
-            "chunk_id": 123,
-            "content": "للعامل الحق في مكافأة نهاية الخدمة عند إنهاء عقد العمل...",
-            "similarity_score": 0.8745,
-            "law_source_id": 1,
-            "law_source_name": "نظام العمل السعودي",
-            "word_count": 45,
-            "metadata": {
-              "law_name": "نظام العمل السعودي",
-              "jurisdiction": "السعودية"
-            }
-          }
-        ],
-        "processing_time": 0.45
-      },
-      "errors": []
-    }
-    ```
+    Returns matching chunks with similarity scores and metadata.
     """
     try:
-        logger.info(f"🔍 RAG Search: '{request.query[:50]}...' (top_k={request.top_k}, threshold={request.threshold})")
+        logger.info(f"Search: '{request.query[:50]}...' (k={request.top_k}, t={request.threshold})")
         
         # Validate parameters
-        if not request.query or len(request.query.strip()) < 2:
-            return create_error_response(
-                message="Invalid search query",
-                errors=[ErrorDetail(
-                    field="query", 
-                    message="Search query must be at least 2 characters long"
-                )]
-            )
+        validation_error = _validate_search_params(
+            request.query,
+            request.top_k,
+            request.threshold
+        )
+        if validation_error:
+            return validation_error
         
-        if request.top_k and (request.top_k < 1 or request.top_k > 50):
-            return create_error_response(
-                message="Invalid top_k parameter",
-                errors=[ErrorDetail(
-                    field="top_k",
-                    message="top_k must be between 1 and 50"
-                )]
-            )
-        
-        if request.threshold and (request.threshold < 0.0 or request.threshold > 1.0):
-            return create_error_response(
-                message="Invalid threshold parameter",
-                errors=[ErrorDetail(
-                    field="threshold",
-                    message="threshold must be between 0.0 and 1.0"
-                )]
-            )
-        
-        # Initialize RAG service and perform search
+        # Perform search
         rag_service = RAGService(db)
         search_result = await rag_service.search(
             query=request.query,
@@ -280,8 +270,8 @@ async def search_law_chunks(
         
         if not search_result.get('success'):
             return create_error_response(
-                message="Search operation failed",
-                errors=[ErrorDetail(message=search_result.get('error', 'Search failed'))]
+                message="Search failed",
+                errors=[ErrorDetail(message=search_result.get('error', 'Search operation failed'))]
             )
         
         # Format response
@@ -292,29 +282,27 @@ async def search_law_chunks(
             processing_time=search_result['processing_time']
         )
         
-        # Generate appropriate message
-        if search_result['total_results'] == 0:
-            message = "No relevant law chunks found"
-        elif search_result['total_results'] == 1:
-            message = "Found 1 relevant law chunk"
+        # Generate message
+        count = search_result['total_results']
+        if count == 0:
+            message = "No relevant chunks found"
+        elif count == 1:
+            message = "Found 1 relevant chunk"
         else:
-            message = f"Found {search_result['total_results']} relevant law chunks"
+            message = f"Found {count} relevant chunks"
         
-        logger.info(f"✅ Search completed: {search_result['total_results']} results in {search_result['processing_time']}s")
+        logger.info(f"Search complete: {count} results in {search_result['processing_time']}s")
         
-        return create_success_response(
-            message=message,
-            data=response_data
-        )
+        return create_success_response(message=message, data=response_data)
         
     except Exception as e:
-        logger.error(f"❌ Search failed: {str(e)}", exc_info=True)
+        logger.error(f"Search failed: {str(e)}", exc_info=True)
         return create_error_response(
             message=f"Search operation failed: {str(e)}",
             errors=[ErrorDetail(message=str(e))]
         )
 
-
+        
 @router.get("/status", response_model=ApiResponse[Dict[str, Any]])
 async def get_rag_status(
     db: AsyncSession = Depends(get_db)
@@ -322,82 +310,65 @@ async def get_rag_status(
     """
     Get RAG system status and statistics.
     
-    Returns comprehensive information about:
-    - System health and operational status
-    - Document and chunk statistics
-    - Embedding coverage and model information
-    - Performance metrics and settings
-    
-    **Response Example**:
-    ```json
-    {
-      "success": true,
-      "message": "RAG system is operational",
-      "data": {
-        "status": "operational",
-        "total_chunks": 1532,
-        "chunks_with_embeddings": 1532,
-        "embedding_coverage": 100.0,
-        "chunking_settings": {
-          "max_chunk_words": 400,
-          "min_chunk_words": 50,
-          "chunk_overlap_words": 50
-        },
-        "search_settings": {
-          "default_top_k": 5,
-          "default_threshold": 0.6
-        },
-        "model_info": {
-          "name": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
-          "dimension": 768
-        }
-      },
-      "errors": []
-    }
-    ```
+    Returns:
+    - System health status
+    - Document and chunk counts
+    - Embedding coverage metrics
+    - Configuration settings
+    - Model information
     """
     try:
-        logger.info("📊 RAG status check requested")
+        logger.info("Status check requested")
         
-        # Get system status from RAG service
         rag_service = RAGService(db)
         system_status = await rag_service.get_system_status()
         
         if system_status.get('status') == 'error':
             return create_error_response(
-                message="Failed to retrieve system status",
+                message="Failed to retrieve status",
                 errors=[ErrorDetail(message=system_status.get('error', 'Unknown error'))]
             )
         
-        # Enhanced status data
+        # Get model info from embedding service
+        try:
+            embedding_stats = await rag_service.embedding_service.get_embedding_stats()
+            model_info = embedding_stats.get('model', {})
+        except Exception:
+            model_info = {'model_name': 'unknown', 'model_dimension': 0}
+        
+        # Build enhanced status
         status_data = {
             'status': 'operational',
+            'total_documents': system_status.get('total_documents', 0),
             'total_chunks': system_status.get('total_chunks', 0),
             'chunks_with_embeddings': system_status.get('chunks_with_embeddings', 0),
             'embedding_coverage': system_status.get('embedding_coverage', 0),
+            'documents_by_status': system_status.get('documents_by_status', {}),
             'chunking_settings': system_status.get('chunking_settings', {}),
             'search_settings': {
                 'default_top_k': 5,
-                'default_threshold': 0.6
+                'default_threshold': 0.6,
+                'max_top_k': MAX_TOP_K
             },
             'model_info': {
-                'name': 'sentence-transformers/paraphrase-multilingual-mpnet-base-v2',
-                'dimension': 768
+                'name': model_info.get('model_name', 'unknown'),
+                'dimension': model_info.get('model_dimension', 0),
+                'device': model_info.get('device', 'unknown')
             },
             'timestamp': system_status.get('timestamp')
         }
         
-        logger.info(f"✅ RAG status: {status_data['total_chunks']} chunks, {status_data['embedding_coverage']}% coverage")
+        logger.info(f"Status: {status_data['total_chunks']} chunks, {status_data['embedding_coverage']}% coverage")
         
         return create_success_response(
-            message="RAG system is operational",
+            message="RAG system operational",
             data=status_data
         )
         
     except Exception as e:
-        logger.error(f"❌ Failed to get RAG status: {str(e)}")
+        logger.error(f"Status check failed: {str(e)}")
         return create_error_response(
-            message=f"Failed to retrieve system status: {str(e)}",
+            message=f"Failed to retrieve status: {str(e)}",
             errors=[ErrorDetail(message=str(e))]
         )
 
@@ -407,55 +378,27 @@ async def get_embedding_status(
     db: AsyncSession = Depends(get_db)
 ) -> ApiResponse[Dict[str, Any]]:
     """
-    Get detailed embedding service status and statistics.
+    Get detailed embedding service status.
     
-    Returns information about:
-    - Embedding model configuration
-    - Cache performance and statistics
-    - Processing metrics
+    Returns:
+    - Model configuration
+    - Cache performance metrics
+    - Processing statistics
     - System health
-    
-    **Response Example**:
-    ```json
-    {
-      "success": true,
-      "message": "Embedding service is healthy",
-      "data": {
-        "status": "healthy",
-        "cache": {
-          "cache_size": 1245,
-          "cache_hits": 8920,
-          "cache_misses": 1560,
-          "cache_hit_rate": 0.85
-        },
-        "model": {
-          "model_name": "legal_optimized",
-          "model_dimension": 768,
-          "max_sequence_length": 512,
-          "device": "cuda"
-        },
-        "performance": {
-          "batch_size": 16,
-          "max_text_length": 2000
-        }
-      },
-      "errors": []
-    }
-    ```
     """
     try:
-        logger.info("🔧 Embedding status check requested")
+        logger.info("Embedding status check")
         
         rag_service = RAGService(db)
         embedding_stats = await rag_service.embedding_service.get_embedding_stats()
         
         return create_success_response(
-            message="Embedding service is healthy",
+            message="Embedding service healthy",
             data=embedding_stats
         )
         
     except Exception as e:
-        logger.error(f"❌ Failed to get embedding status: {str(e)}")
+        logger.error(f"Embedding status check failed: {str(e)}")
         return create_error_response(
             message=f"Failed to retrieve embedding status: {str(e)}",
             errors=[ErrorDetail(message=str(e))]
@@ -464,35 +407,26 @@ async def get_embedding_status(
 
 @router.post("/validate-embeddings", response_model=ApiResponse[Dict[str, Any]])
 async def validate_embeddings(
-    sample_texts: List[str] = Body(None, description="Optional sample texts for validation"),
+    sample_texts: List[str] = Body(None, description="Optional sample texts"),
     db: AsyncSession = Depends(get_db)
 ) -> ApiResponse[Dict[str, Any]]:
     """
-    Validate embedding quality and performance.
+    Validate embedding quality with sample texts.
     
-    This endpoint tests the embedding service with sample texts
-    to ensure proper functionality and quality.
-    
-    **Request Body Example**:
-    ```json
-    {
-      "sample_texts": [
-        "نص قانوني تجريبي للتحقق من جودة التضمين",
-        "تحليل النصوص القانونية العربية",
-        "بحث في التشريعات واللوائح"
-      ]
-    }
-    ```
+    Tests embedding service functionality and quality metrics.
+    Useful for system health checks and debugging.
     """
     try:
-        logger.info("🧪 Embedding validation requested")
+        logger.info("Embedding validation requested")
         
         rag_service = RAGService(db)
-        validation_result = await rag_service.embedding_service.validate_embedding_quality(sample_texts)
+        validation_result = await rag_service.embedding_service.validate_embedding_quality(
+            sample_texts
+        )
         
         if validation_result['success']:
             return create_success_response(
-                message="Embedding validation completed successfully",
+                message="Embedding validation successful",
                 data=validation_result
             )
         else:
@@ -503,9 +437,9 @@ async def validate_embeddings(
             )
         
     except Exception as e:
-        logger.error(f"❌ Embedding validation failed: {str(e)}")
+        logger.error(f"Embedding validation failed: {str(e)}")
         return create_error_response(
-            message=f"Embedding validation failed: {str(e)}",
+            message=f"Validation failed: {str(e)}",
             errors=[ErrorDetail(message=str(e))]
         )
 
@@ -515,38 +449,24 @@ async def clear_embedding_cache(
     db: AsyncSession = Depends(get_db)
 ) -> ApiResponse[Dict[str, Any]]:
     """
-    Clear the embedding cache.
+    Clear embedding cache.
     
-    This endpoint clears the in-memory embedding cache
-    and returns cache statistics before clearing.
-    
-    **Response Example**:
-    ```json
-    {
-      "success": true,
-      "message": "Embedding cache cleared successfully",
-      "data": {
-        "cleared_entries": 1245,
-        "previous_hits": 8920,
-        "previous_misses": 1560
-      },
-      "errors": []
-    }
-    ```
+    Clears in-memory embedding cache and returns statistics.
+    Useful for memory management and testing.
     """
     try:
-        logger.info("🧹 Embedding cache clearance requested")
+        logger.info("Cache clearance requested")
         
         rag_service = RAGService(db)
         cache_stats = rag_service.embedding_service.clear_cache()
         
         return create_success_response(
-            message="Embedding cache cleared successfully",
+            message="Cache cleared successfully",
             data=cache_stats
         )
         
     except Exception as e:
-        logger.error(f"❌ Failed to clear cache: {str(e)}")
+        logger.error(f"Cache clearance failed: {str(e)}")
         return create_error_response(
             message=f"Failed to clear cache: {str(e)}",
             errors=[ErrorDetail(message=str(e))]
