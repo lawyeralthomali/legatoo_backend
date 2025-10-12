@@ -2,12 +2,23 @@ import logging
 import json
 import re
 import numpy as np
+import asyncio
+import gc
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 from sentence_transformers import SentenceTransformer
 import torch
+from concurrent.futures import ThreadPoolExecutor
+
+# Memory monitoring
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    logging.warning("⚠️ psutil not available. Memory monitoring disabled.")
 
 logger = logging.getLogger(__name__)
 
@@ -24,18 +35,20 @@ class EmbeddingService:
     - Memory-efficient operations
     """
     
-    # Optimized model configurations for Arabic legal texts
+    # Memory-optimized model configurations for Arabic legal texts
     MODELS = {
         'default': 'sentence-transformers/paraphrase-multilingual-mpnet-base-v2',
         'large': 'intfloat/multilingual-e5-large',
         'small': 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
         'arabic': 'Ezzaldin-97/STS-Arabert',
-        'legal_optimized': 'sentence-transformers/paraphrase-multilingual-mpnet-base-v2'  # Best for legal texts
+        'legal_optimized': 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',  # ⚡ MEMORY OPTIMIZED
+        'ultra_small': 'sentence-transformers/all-MiniLM-L6-v2',  # 🚀 LOWEST MEMORY
+        'arabic_small': 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'  # 🎯 ARABIC + SMALL
     }
     
     def __init__(self, db: AsyncSession, model_name: str = 'legal_optimized'):
         """
-        Initialize the embedding service.
+        Initialize the embedding service with memory optimization.
         
         Args:
             db: Async database session
@@ -44,56 +57,115 @@ class EmbeddingService:
         self.db = db
         self.model_name = model_name
         self.model: Optional[SentenceTransformer] = None
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = 'cpu'  # 🔧 FORCE CPU to prevent CUDA memory issues
         
-        # Optimized performance settings
-        self.batch_size = 16  # Reduced for stability with large Arabic texts
-        self.max_seq_length = 512
+        # Thread pool for blocking operations - reduced workers for memory
+        self._executor = ThreadPoolExecutor(max_workers=1)
+        
+        # 🚀 MEMORY-OPTIMIZED settings
+        self.batch_size = 4  # Drastically reduced for memory safety
+        self.max_seq_length = 256  # Reduced sequence length
         self.normalize_embeddings = True
         
-        # Enhanced caching system
+        # 🧹 REDUCED caching for memory
         self._embedding_cache: Dict[str, List[float]] = {}
-        self._cache_max_size = 2000
+        self._cache_max_size = 100  # Reduced from 2000
         self._cache_hits = 0
         self._cache_misses = 0
         
-        # Text processing settings
-        self.max_text_length = 2000  # Characters for safety
+        # 📝 Text processing settings
+        self.max_text_length = 500  # Reduced from 2000
         self.min_text_length = 10
         
+        # 🧠 Memory monitoring
+        self._memory_usage_mb = 0
+        
         logger.info(f"🚀 EmbeddingService initialized with model: {model_name}")
-        logger.info(f"📱 Device: {self.device}, Batch size: {self.batch_size}")
+        logger.info(f"📱 Device: {self.device} (forced CPU for memory safety)")
+        logger.info(f"💾 Memory-optimized settings: batch_size={self.batch_size}, max_seq={self.max_seq_length}")
 
     def initialize_model(self) -> None:
         """
-        Initialize the embedding model with optimized settings for Arabic legal texts.
+        Initialize the embedding model with memory-optimized settings.
         """
         try:
-            model_path = self.MODELS.get(self.model_name, self.MODELS['legal_optimized'])
+            # Check available memory if psutil is available
+            if PSUTIL_AVAILABLE:
+                memory = psutil.virtual_memory()
+                available_gb = memory.available / (1024**3)
+            else:
+                available_gb = 4.0  # Assume 4GB if psutil unavailable
             
-            logger.info(f"🔧 Initializing embedding model: {model_path}")
+            logger.info(f"🧠 Available memory: {available_gb:.2f} GB")
             
-            # Load model with optimized settings
+            if available_gb < 2.0:
+                logger.warning(f"⚠️ Low memory ({available_gb:.2f} GB). Using ultra-small model.")
+                model_name = 'ultra_small'
+            else:
+                model_name = self.model_name
+            
+            model_path = self.MODELS.get(model_name, self.MODELS['ultra_small'])
+            
+            logger.info(f"🔧 Loading memory-optimized model: {model_path}")
+            
+            # Force garbage collection before loading
+            gc.collect()
+            
+            # Load model with memory-optimized settings
             self.model = SentenceTransformer(
                 model_path,
-                device=self.device
+                device=self.device,
+                cache_folder=None  # Don't cache on disk to save space
             )
             
-            # Configure model for Arabic text
+            # Configure model for memory efficiency
             self.model.max_seq_length = self.max_seq_length
             
-            # Warm up the model
-            if torch.cuda.is_available():
-                self.model.encode(["نص تجريبي"], convert_to_numpy=True)
-            
-            logger.info(f"✅ Model initialized successfully")
-            logger.info(f"   Dimension: {self.model.get_sentence_embedding_dimension()}")
-            logger.info(f"   Max sequence length: {self.model.max_seq_length}")
+            # Minimal warm-up (single word to save memory)
+            try:
+                test_embedding = self.model.encode(["test"], convert_to_numpy=True, show_progress_bar=False)
+                logger.info(f"✅ Model initialized successfully")
+                logger.info(f"   Dimension: {len(test_embedding[0])}")
+                logger.info(f"   Max sequence length: {self.model.max_seq_length}")
+                if PSUTIL_AVAILABLE:
+                    memory_used = psutil.Process().memory_info().rss / (1024**2)
+                    logger.info(f"   Memory used: ~{memory_used:.1f} MB")
+                
+                # Clear test embedding
+                del test_embedding
+                gc.collect()
+                
+            except Exception as warmup_error:
+                logger.warning(f"⚠️ Model warm-up failed: {warmup_error}")
+                logger.info("✅ Model loaded but warm-up skipped for memory")
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize embedding model: {str(e)}")
-            raise RuntimeError(f"Model initialization failed: {str(e)}")
+            # Try fallback to smallest model
+            try:
+                logger.info("🔄 Trying fallback to ultra-small model...")
+                self.model = SentenceTransformer(
+                    self.MODELS['ultra_small'],
+                    device='cpu'
+                )
+                self.model.max_seq_length = 256
+                logger.info("✅ Fallback model loaded successfully")
+            except Exception as fallback_error:
+                logger.error(f"❌ Fallback model also failed: {fallback_error}")
+                raise RuntimeError(f"All model loading attempts failed: {str(e)}")
 
+    async def initialize(self) -> None:
+        """
+        Async wrapper for model initialization to prevent blocking.
+        This is the method that should be called from async contexts.
+        """
+        if self.model is None:
+            logger.info("🔄 Loading embedding model asynchronously...")
+            # Run blocking model initialization in thread pool
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(self._executor, self.initialize_model)
+            logger.info("✅ Model loaded successfully in async context")
+    
     def _ensure_model_loaded(self) -> None:
         """Ensure model is loaded with thread safety."""
         if self.model is None:
@@ -173,8 +245,9 @@ class EmbeddingService:
         key = re.sub(r'\s+', ' ', normalized).strip()[:500]
         return key
 
-    def _encode_text(self, text: str) -> List[float]:
+    def _encode_text_sync(self, text: str) -> List[float]:
         """
+        Synchronous encoding - should be called from thread pool.
         Encode text to embedding vector with enhanced Arabic support.
         """
         self._ensure_model_loaded()
@@ -203,7 +276,7 @@ class EmbeddingService:
                 logger.warning("⚠️ Processed text too short")
                 return [0.0] * self.model.get_sentence_embedding_dimension()
             
-            # Generate embedding
+            # Generate embedding - THIS IS THE BLOCKING OPERATION
             embedding = self.model.encode(
                 processed_text,
                 convert_to_numpy=True,
@@ -228,12 +301,19 @@ class EmbeddingService:
     async def generate_embedding(self, text: str) -> List[float]:
         """
         Generate embedding for text (async wrapper).
+        Runs encoding in thread pool to prevent blocking.
         """
-        return self._encode_text(text)
+        if self.model is None:
+            await self.initialize()
+        
+        # Run blocking encoding in thread pool
+        loop = asyncio.get_event_loop()
+        embedding = await loop.run_in_executor(self._executor, self._encode_text_sync, text)
+        return embedding
 
-    async def generate_batch_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def _encode_batch_sync(self, texts: List[str]) -> List[List[float]]:
         """
-        Generate embeddings for a batch of texts with optimized processing.
+        Memory-optimized synchronous batch encoding.
         """
         if not texts:
             return []
@@ -241,13 +321,14 @@ class EmbeddingService:
         self._ensure_model_loaded()
         
         try:
-            # Preprocess all texts
+            
+            # Preprocess all texts with memory optimization
             processed_texts = []
             valid_indices = []
             
             for i, text in enumerate(texts):
                 processed = self._normalize_arabic_text(text)
-                processed = self._truncate_text_smart(processed)
+                processed = self._truncate_text_smart(processed, max_tokens=100)  # Reduced token limit
                 
                 if processed and len(processed.strip()) >= self.min_text_length:
                     processed_texts.append(processed)
@@ -257,27 +338,51 @@ class EmbeddingService:
                 logger.warning("⚠️ No valid texts for batch embedding")
                 return []
             
-            # Generate embeddings in batches
+            # 🚀 MEMORY-OPTIMIZED batch processing
             all_embeddings = []
-            for i in range(0, len(processed_texts), self.batch_size):
-                batch_texts = processed_texts[i:i + self.batch_size]
+            
+            # Process in very small batches to prevent OOM
+            mini_batch_size = min(2, self.batch_size)  # Maximum 2 texts at once
+            
+            for i in range(0, len(processed_texts), mini_batch_size):
+                batch_texts = processed_texts[i:i + mini_batch_size]
                 
-                batch_embeddings = self.model.encode(
-                    batch_texts,
-                    convert_to_numpy=True,
-                    normalize_embeddings=self.normalize_embeddings,
-                    show_progress_bar=False,
-                    batch_size=len(batch_texts)
-                )
-                
-                all_embeddings.extend(batch_embeddings.tolist())
+                try:
+                    # Generate embeddings with memory optimization
+                    batch_embeddings = self.model.encode(
+                        batch_texts,
+                        convert_to_numpy=True,
+                        normalize_embeddings=self.normalize_embeddings,
+                        show_progress_bar=False,
+                        batch_size=1  # Force batch size 1 for memory safety
+                    )
+                    
+                    # Convert to list and free numpy array immediately
+                    embeddings_list = batch_embeddings.tolist()
+                    del batch_embeddings
+                    
+                    all_embeddings.extend(embeddings_list)
+                    
+                    # Force garbage collection after each mini-batch
+                    gc.collect()
+                    
+                    logger.debug(f"📦 Processed mini-batch {i//mini_batch_size + 1}")
+                    
+                except Exception as batch_error:
+                    logger.error(f"❌ Mini-batch {i//mini_batch_size + 1} failed: {batch_error}")
+                    # Add empty embeddings for failed batch
+                    all_embeddings.extend([[] for _ in batch_texts])
             
             # Map back to original indices
             result = [[]] * len(texts)
             for idx, embedding in zip(valid_indices, all_embeddings):
                 result[idx] = embedding
             
-            logger.info(f"✅ Generated {len(valid_indices)} embeddings from {len(texts)} texts")
+            # Final cleanup
+            del all_embeddings, processed_texts
+            gc.collect()
+            
+            logger.info(f"✅ Generated {len(valid_indices)} embeddings from {len(texts)} texts (memory-optimized)")
             
             return result
             
@@ -285,6 +390,28 @@ class EmbeddingService:
             logger.error(f"❌ Batch embedding generation failed: {str(e)}")
             # Return empty embeddings for all texts
             return [[] for _ in texts]
+    
+    async def generate_batch_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """
+        Generate embeddings for a batch of texts with optimized processing.
+        Runs encoding in thread pool to prevent blocking.
+        """
+        if not texts:
+            return []
+        
+        if self.model is None:
+            await self.initialize()
+        
+        # Run blocking batch encoding in thread pool
+        loop = asyncio.get_event_loop()
+        embeddings = await loop.run_in_executor(self._executor, self._encode_batch_sync, texts)
+        return embeddings
+    
+    async def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
+        """
+        Alias for generate_batch_embeddings for backward compatibility.
+        """
+        return await self.generate_batch_embeddings(texts)
 
     async def generate_chunk_embeddings(self, chunks: List[Dict]) -> List[Dict]:
         """
@@ -346,6 +473,12 @@ class EmbeddingService:
         except Exception as e:
             logger.error(f"❌ Similarity calculation failed: {str(e)}")
             return 0.0
+    
+    def cosine_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
+        """
+        Alias for calculate_similarity for backward compatibility.
+        """
+        return self.calculate_similarity(embedding1, embedding2)
 
     def calculate_batch_similarities(self, query_embedding: List[float], 
                                    chunk_embeddings: List[List[float]]) -> np.ndarray:
@@ -463,7 +596,8 @@ class EmbeddingService:
         """
         Get embedding service statistics and health status.
         """
-        self._ensure_model_loaded()
+        if self.model is None:
+            await self.initialize()
         
         cache_info = {
             'cache_size': len(self._embedding_cache),
@@ -525,7 +659,9 @@ class EmbeddingService:
             ]
         
         try:
-            self._ensure_model_loaded()
+            # Ensure model is loaded asynchronously
+            if self.model is None:
+                await self.initialize()
             
             # Generate embeddings for sample texts
             embeddings = await self.generate_batch_embeddings(sample_texts)
