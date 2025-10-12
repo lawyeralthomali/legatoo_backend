@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, Path, UploadFile, 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
-from ..services.legal_laws_service import LegalLawsService
+from ..services.legal.knowledge.legal_laws_service import LegalLawsService
 from ..schemas.response import ApiResponse, create_success_response, create_error_response
 from ..utils.auth import get_current_user
 from ..models.user import User

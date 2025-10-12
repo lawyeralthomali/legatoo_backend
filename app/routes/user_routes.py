@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
 from ..schemas.response import ApiResponse, create_success_response, create_error_response
-from ..services.user_service import UserService
+from ..services.user_management.user_service import UserService
 from ..utils.exceptions import (
     NotFoundException, ValidationException, AppException
 )

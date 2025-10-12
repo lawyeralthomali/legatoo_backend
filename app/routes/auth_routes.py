@@ -13,7 +13,7 @@ import uuid
 from ..db.database import get_db
 from ..schemas.request import SignupRequest, LoginRequest, RefreshTokenRequest, ChangePasswordRequest, ResetPasswordRequest, ConfirmPasswordResetRequest
 from ..schemas.response import ApiResponse
-from ..services.auth_service import AuthService
+from ..services.auth.auth_service import AuthService
 from ..config.enhanced_logging import setup_logging, get_logger
 from ..utils.api_exceptions import ApiException
 

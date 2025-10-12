@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
-from ..services.arabic_legal_embedding_service import ArabicLegalEmbeddingService
+from ..services.legal.search.arabic_legal_embedding_service import ArabicLegalEmbeddingService
 from ..utils.auth import get_current_user
 from ..models.user import User
 from ..schemas.embedding import (

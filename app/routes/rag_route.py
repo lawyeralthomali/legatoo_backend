@@ -1,26 +1,24 @@
 """
-RAG Router - API endpoints for Retrieval-Augmented Generation on Legal Laws
+Enhanced RAG Router - API endpoints for Document-Based Legal RAG System
 
-This module provides REST API endpoints for RAG-based law ingestion and search:
-- /rag/upload: Ingest law data from JSON
+This module provides REST API endpoints for RAG-based law document ingestion and search:
+- /rag/upload-document: Ingest law documents directly from files
 - /rag/search: Semantic search for relevant law chunks
+- /rag/status: System status and statistics
 
-All endpoints follow the unified API response format defined in .cursorrules.
+All endpoints follow the unified API response format.
 """
 
 import logging
-from typing import Dict, Any
-from fastapi import APIRouter, Depends, Body, HTTPException, status
+import tempfile
+import os
+from typing import Dict, Any, List
+from fastapi import APIRouter, Depends, Body, File, UploadFile, Form, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
-from ..services.rag_service import RAGService
-from ..schemas.legal_knowledge import (
-    RAGLawUploadRequest,
-    RAGSearchRequest,
-    RAGUploadResponse,
-    RAGSearchResponse
-)
+from ..services.shared.rag_service import RAGService
+from ..schemas.legal_knowledge import RAGSearchRequest, RAGSearchResponse
 from ..schemas.response import (
     ApiResponse,
     create_success_response,
@@ -36,60 +34,40 @@ router = APIRouter(
 )
 
 
-@router.post("/upload", response_model=ApiResponse[RAGUploadResponse])
-async def upload_law_json(
-    request: RAGLawUploadRequest = Body(..., description="Law data in JSON format"),
+@router.post("/upload-document", response_model=ApiResponse[Dict])
+async def upload_law_document(
+    file: UploadFile = File(..., description="Law document file (PDF/DOCX/TXT)"),
+    law_name: str = Form(..., description="Name of the law"),
+    law_type: str = Form("law", description="Type of law"),
+    jurisdiction: str = Form("السعودية", description="Jurisdiction"),
+    description: str = Form(None, description="Optional description"),
     db: AsyncSession = Depends(get_db)
-) -> ApiResponse[RAGUploadResponse]:
+) -> ApiResponse[Dict]:
     """
-    Upload and ingest law data from JSON.
+    Upload and process law document directly from file.
     
-    This endpoint processes legal law documents by:
-    1. Validating the JSON structure
-    2. Creating LawSource and LawArticle entries
-    3. Splitting content into semantic chunks
+    This endpoint processes legal documents by:
+    1. Validating file type and size
+    2. Reading document content
+    3. Smart text chunking with context preservation
     4. Generating embeddings for each chunk
-    5. Storing chunks with proper hierarchical linkage
+    5. Storing chunks with document metadata
     
-    **Request Body Example**:
-    ```json
-    {
-      "law_name": "نظام العمل السعودي",
-      "law_type": "law",
-      "jurisdiction": "المملكة العربية السعودية",
-      "issuing_authority": "وزارة الموارد البشرية والتنمية الاجتماعية",
-      "issue_date": "2005-09-27",
-      "description": "نظام ينظم علاقات العمل في المملكة",
-      "source_url": "https://example.com/labor-law",
-      "articles": [
-        {
-          "article_number": "1",
-          "title": "التعريفات",
-          "content": "يقصد بالألفاظ والعبارات الآتية المعاني المبينة أمامها...",
-          "keywords": ["تعريفات", "مصطلحات"]
-        },
-        {
-          "article_number": "2",
-          "title": "نطاق التطبيق",
-          "content": "يطبق هذا النظام على...",
-          "keywords": ["نطاق", "تطبيق"]
-        }
-      ]
-    }
-    ```
+    **Supported Formats**: PDF, DOCX, TXT
+    **Max File Size**: 50MB
     
     **Response Example**:
     ```json
     {
       "success": true,
-      "message": "Law uploaded and processed successfully",
+      "message": "Law document processed successfully: 25 chunks created",
       "data": {
-        "law_source_id": 123,
         "law_name": "نظام العمل السعودي",
-        "articles_created": 2,
-        "chunks_created": 15,
-        "processing_time": 3.45,
-        "status": "processed"
+        "chunks_created": 25,
+        "chunks_stored": 25,
+        "processing_time": 12.45,
+        "file_type": "PDF",
+        "total_words": 8450
       },
       "errors": []
     }
@@ -99,83 +77,104 @@ async def upload_law_json(
     ```json
     {
       "success": false,
-      "message": "Failed to upload law: Invalid JSON structure",
+      "message": "Upload failed: Unsupported file format",
       "data": null,
       "errors": [
         {
-          "field": "articles",
-          "message": "Articles list cannot be empty"
+          "field": "file",
+          "message": "Only PDF, DOCX, and TXT files are supported"
         }
       ]
     }
-    ```
     """
+    # Validate file type
+    allowed_extensions = {'.pdf', '.docx', '.txt'}
+    file_extension = f".{file.filename.lower().split('.')[-1]}" if '.' in file.filename else ''
+    
+    if file_extension not in allowed_extensions:
+        return create_error_response(
+            message="Unsupported file format",
+            errors=[ErrorDetail(
+                field="file",
+                message=f"Supported formats: {', '.join([ext.upper() for ext in allowed_extensions])}"
+            )]
+        )
+    
+    # Validate file size (50MB max)
+    max_size = 50 * 1024 * 1024  # 50MB
+    file.file.seek(0, 2)  # Seek to end
+    file_size = file.file.tell()
+    file.file.seek(0)  # Reset to beginning
+    
+    if file_size > max_size:
+        return create_error_response(
+            message="File too large",
+            errors=[ErrorDetail(
+                field="file",
+                message=f"Maximum file size is 50MB. Your file is {file_size / (1024*1024):.1f}MB"
+            )]
+        )
+    
+    # Create temporary file
+    temp_file = None
     try:
-        logger.info(f"📥 RAG Upload request for law: {request.law_name}")
+        logger.info(f"📥 Document upload request: {file.filename} for law: {law_name}")
         
-        # Initialize RAG service
-        rag_service = RAGService(db)
+        # Create secure temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_path = temp_file.name
         
-        # Convert Pydantic model to dict for processing
-        json_data = {
-            'law_name': request.law_name,
-            'law_type': request.law_type.value,
-            'jurisdiction': request.jurisdiction,
-            'issuing_authority': request.issuing_authority,
-            'issue_date': request.issue_date,
-            'last_update': request.last_update,
-            'description': request.description,
-            'source_url': request.source_url,
-            'articles': [
-                {
-                    'article_number': article.article_number,
-                    'title': article.title,
-                    'content': article.content,
-                    'keywords': article.keywords
-                }
-                for article in request.articles
-            ]
+        # Prepare law metadata
+        law_metadata = {
+            'law_name': law_name,
+            'law_type': law_type,
+            'jurisdiction': jurisdiction,
+            'description': description,
+            'original_filename': file.filename,
+            'file_size': file_size
         }
         
-        # Process law ingestion
-        result = await rag_service.ingest_law_json(json_data)
+        # Process document
+        rag_service = RAGService(db)
+        result = await rag_service.ingest_law_document(temp_path, law_metadata)
         
-        if not result.get('success'):
-            return create_error_response(
-                message="Law upload failed",
-                errors=[ErrorDetail(message="Failed to process law data")]
+        # Clean up temporary file
+        try:
+            os.unlink(temp_path)
+        except Exception as cleanup_error:
+            logger.warning(f"⚠️ Failed to clean up temp file: {cleanup_error}")
+        
+        if result['success']:
+            return create_success_response(
+                message=f"✅ Law document processed successfully: {result['chunks_created']} chunks created",
+                data={
+                    'law_name': result['law_name'],
+                    'chunks_created': result['chunks_created'],
+                    'chunks_stored': result.get('chunks_stored', result['chunks_created']),
+                    'processing_time': result['processing_time'],
+                    'file_type': result.get('file_type', 'UNKNOWN'),
+                    'total_words': result.get('total_words', 0)
+                }
             )
-        
-        # Format response
-        response_data = RAGUploadResponse(
-            law_source_id=result['law_source_id'],
-            law_name=result['law_name'],
-            articles_created=result['articles_created'],
-            chunks_created=result['chunks_created'],
-            processing_time=result['processing_time'],
-            status=result['status']
-        )
-        
-        logger.info(f"✅ Law uploaded successfully: {result['law_source_id']}")
-        
-        return create_success_response(
-            message="Law uploaded and processed successfully",
-            data=response_data
-        )
-        
-    except ValueError as e:
-        # Validation errors
-        logger.error(f"❌ Validation error: {str(e)}")
-        return create_error_response(
-            message=f"Validation failed: {str(e)}",
-            errors=[ErrorDetail(field="validation", message=str(e))]
-        )
-        
+        else:
+            return create_error_response(
+                message=f"❌ Failed to process document: {result.get('error', 'Unknown error')}",
+                errors=[ErrorDetail(message=result.get('error', 'Processing failed'))]
+            )
+            
     except Exception as e:
-        # General errors
-        logger.error(f"❌ Law upload failed: {str(e)}", exc_info=True)
+        # Clean up temporary file in case of error
+        if temp_file and os.path.exists(temp_file.name):
+            try:
+                os.unlink(temp_file.name)
+            except:
+                pass
+        
+        logger.error(f"❌ Document upload failed: {str(e)}", exc_info=True)
         return create_error_response(
-            message=f"Failed to upload law: {str(e)}",
+            message=f"Upload failed: {str(e)}",
             errors=[ErrorDetail(message=str(e))]
         )
 
@@ -190,9 +189,10 @@ async def search_law_chunks(
     
     This endpoint performs RAG-based search by:
     1. Generating embedding for the query
-    2. Computing cosine similarity with all law chunks
-    3. Filtering by similarity threshold
-    4. Returning top-k most relevant chunks with metadata
+    2. Computing semantic similarity with all law chunks
+    3. Applying hybrid search (semantic + lexical)
+    4. Filtering by similarity threshold
+    5. Returning top-k most relevant chunks with metadata
     
     **Request Body Example**:
     ```json
@@ -225,19 +225,11 @@ async def search_law_chunks(
             "similarity_score": 0.8745,
             "law_source_id": 1,
             "law_source_name": "نظام العمل السعودي",
-            "article_id": 45,
-            "article_number": "84",
-            "article_title": "مكافأة نهاية الخدمة"
-          },
-          {
-            "chunk_id": 124,
-            "content": "لا يجوز لصاحب العمل إنهاء العقد دون مكافأة أو تعويض...",
-            "similarity_score": 0.8234,
-            "law_source_id": 1,
-            "law_source_name": "نظام العمل السعودي",
-            "article_id": 46,
-            "article_number": "77",
-            "article_title": "إنهاء عقد العمل"
+            "word_count": 45,
+            "metadata": {
+              "law_name": "نظام العمل السعودي",
+              "jurisdiction": "السعودية"
+            }
           }
         ],
         "processing_time": 0.45
@@ -245,36 +237,40 @@ async def search_law_chunks(
       "errors": []
     }
     ```
-    
-    **No Results Example**:
-    ```json
-    {
-      "success": true,
-      "message": "No relevant law chunks found",
-      "data": {
-        "query": "irrelevant query",
-        "total_results": 0,
-        "results": [],
-        "processing_time": 0.23
-      },
-      "errors": []
-    }
-    ```
-    
-    **Use Cases**:
-    - Legal research and document retrieval
-    - Question answering systems
-    - Legal chatbot context retrieval
-    - Similar law article discovery
-    - Compliance checking
     """
     try:
-        logger.info(f"🔍 RAG Search: '{request.query[:50]}...' (top_k={request.top_k})")
+        logger.info(f"🔍 RAG Search: '{request.query[:50]}...' (top_k={request.top_k}, threshold={request.threshold})")
         
-        # Initialize RAG service
+        # Validate parameters
+        if not request.query or len(request.query.strip()) < 2:
+            return create_error_response(
+                message="Invalid search query",
+                errors=[ErrorDetail(
+                    field="query", 
+                    message="Search query must be at least 2 characters long"
+                )]
+            )
+        
+        if request.top_k and (request.top_k < 1 or request.top_k > 50):
+            return create_error_response(
+                message="Invalid top_k parameter",
+                errors=[ErrorDetail(
+                    field="top_k",
+                    message="top_k must be between 1 and 50"
+                )]
+            )
+        
+        if request.threshold and (request.threshold < 0.0 or request.threshold > 1.0):
+            return create_error_response(
+                message="Invalid threshold parameter",
+                errors=[ErrorDetail(
+                    field="threshold",
+                    message="threshold must be between 0.0 and 1.0"
+                )]
+            )
+        
+        # Initialize RAG service and perform search
         rag_service = RAGService(db)
-        
-        # Perform search
         search_result = await rag_service.search(
             query=request.query,
             top_k=request.top_k,
@@ -284,8 +280,8 @@ async def search_law_chunks(
         
         if not search_result.get('success'):
             return create_error_response(
-                message="Search failed",
-                errors=[ErrorDetail(message="Failed to perform search")]
+                message="Search operation failed",
+                errors=[ErrorDetail(message=search_result.get('error', 'Search failed'))]
             )
         
         # Format response
@@ -296,7 +292,7 @@ async def search_law_chunks(
             processing_time=search_result['processing_time']
         )
         
-        # Determine message
+        # Generate appropriate message
         if search_result['total_results'] == 0:
             message = "No relevant law chunks found"
         elif search_result['total_results'] == 1:
@@ -304,7 +300,7 @@ async def search_law_chunks(
         else:
             message = f"Found {search_result['total_results']} relevant law chunks"
         
-        logger.info(f"✅ Search completed: {search_result['total_results']} results")
+        logger.info(f"✅ Search completed: {search_result['total_results']} results in {search_result['processing_time']}s")
         
         return create_success_response(
             message=message,
@@ -314,7 +310,7 @@ async def search_law_chunks(
     except Exception as e:
         logger.error(f"❌ Search failed: {str(e)}", exc_info=True)
         return create_error_response(
-            message=f"Failed to search: {str(e)}",
+            message=f"Search operation failed: {str(e)}",
             errors=[ErrorDetail(message=str(e))]
         )
 
@@ -326,11 +322,11 @@ async def get_rag_status(
     """
     Get RAG system status and statistics.
     
-    Returns information about:
-    - Total law sources
-    - Total articles
-    - Total chunks with embeddings
-    - Embedding model information
+    Returns comprehensive information about:
+    - System health and operational status
+    - Document and chunk statistics
+    - Embedding coverage and model information
+    - Performance metrics and settings
     
     **Response Example**:
     ```json
@@ -339,12 +335,22 @@ async def get_rag_status(
       "message": "RAG system is operational",
       "data": {
         "status": "operational",
-        "total_law_sources": 5,
-        "total_articles": 245,
         "total_chunks": 1532,
         "chunks_with_embeddings": 1532,
         "embedding_coverage": 100.0,
-        "model": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+        "chunking_settings": {
+          "max_chunk_words": 400,
+          "min_chunk_words": 50,
+          "chunk_overlap_words": 50
+        },
+        "search_settings": {
+          "default_top_k": 5,
+          "default_threshold": 0.6
+        },
+        "model_info": {
+          "name": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+          "dimension": 768
+        }
       },
       "errors": []
     }
@@ -353,46 +359,35 @@ async def get_rag_status(
     try:
         logger.info("📊 RAG status check requested")
         
-        from sqlalchemy import select, func
-        from ..models.legal_knowledge import LawSource, LawArticle, KnowledgeChunk
+        # Get system status from RAG service
+        rag_service = RAGService(db)
+        system_status = await rag_service.get_system_status()
         
-        # Get counts
-        law_sources_result = await db.execute(select(func.count(LawSource.id)))
-        total_law_sources = law_sources_result.scalar() or 0
-        
-        articles_result = await db.execute(select(func.count(LawArticle.id)))
-        total_articles = articles_result.scalar() or 0
-        
-        chunks_result = await db.execute(
-            select(func.count(KnowledgeChunk.id)).where(
-                KnowledgeChunk.law_source_id.isnot(None)
+        if system_status.get('status') == 'error':
+            return create_error_response(
+                message="Failed to retrieve system status",
+                errors=[ErrorDetail(message=system_status.get('error', 'Unknown error'))]
             )
-        )
-        total_chunks = chunks_result.scalar() or 0
         
-        chunks_with_embeddings_result = await db.execute(
-            select(func.count(KnowledgeChunk.id)).where(
-                KnowledgeChunk.law_source_id.isnot(None),
-                KnowledgeChunk.embedding_vector.isnot(None),
-                KnowledgeChunk.embedding_vector != ''
-            )
-        )
-        chunks_with_embeddings = chunks_with_embeddings_result.scalar() or 0
-        
-        # Calculate coverage
-        coverage = (chunks_with_embeddings / total_chunks * 100) if total_chunks > 0 else 0.0
-        
+        # Enhanced status data
         status_data = {
             'status': 'operational',
-            'total_law_sources': total_law_sources,
-            'total_articles': total_articles,
-            'total_chunks': total_chunks,
-            'chunks_with_embeddings': chunks_with_embeddings,
-            'embedding_coverage': round(coverage, 2),
-            'model': 'sentence-transformers/paraphrase-multilingual-mpnet-base-v2'
+            'total_chunks': system_status.get('total_chunks', 0),
+            'chunks_with_embeddings': system_status.get('chunks_with_embeddings', 0),
+            'embedding_coverage': system_status.get('embedding_coverage', 0),
+            'chunking_settings': system_status.get('chunking_settings', {}),
+            'search_settings': {
+                'default_top_k': 5,
+                'default_threshold': 0.6
+            },
+            'model_info': {
+                'name': 'sentence-transformers/paraphrase-multilingual-mpnet-base-v2',
+                'dimension': 768
+            },
+            'timestamp': system_status.get('timestamp')
         }
         
-        logger.info(f"✅ RAG status: {total_law_sources} sources, {total_articles} articles, {total_chunks} chunks")
+        logger.info(f"✅ RAG status: {status_data['total_chunks']} chunks, {status_data['embedding_coverage']}% coverage")
         
         return create_success_response(
             message="RAG system is operational",
@@ -402,7 +397,157 @@ async def get_rag_status(
     except Exception as e:
         logger.error(f"❌ Failed to get RAG status: {str(e)}")
         return create_error_response(
-            message=f"Failed to retrieve status: {str(e)}",
+            message=f"Failed to retrieve system status: {str(e)}",
             errors=[ErrorDetail(message=str(e))]
         )
 
+
+@router.get("/embedding-status", response_model=ApiResponse[Dict[str, Any]])
+async def get_embedding_status(
+    db: AsyncSession = Depends(get_db)
+) -> ApiResponse[Dict[str, Any]]:
+    """
+    Get detailed embedding service status and statistics.
+    
+    Returns information about:
+    - Embedding model configuration
+    - Cache performance and statistics
+    - Processing metrics
+    - System health
+    
+    **Response Example**:
+    ```json
+    {
+      "success": true,
+      "message": "Embedding service is healthy",
+      "data": {
+        "status": "healthy",
+        "cache": {
+          "cache_size": 1245,
+          "cache_hits": 8920,
+          "cache_misses": 1560,
+          "cache_hit_rate": 0.85
+        },
+        "model": {
+          "model_name": "legal_optimized",
+          "model_dimension": 768,
+          "max_sequence_length": 512,
+          "device": "cuda"
+        },
+        "performance": {
+          "batch_size": 16,
+          "max_text_length": 2000
+        }
+      },
+      "errors": []
+    }
+    ```
+    """
+    try:
+        logger.info("🔧 Embedding status check requested")
+        
+        rag_service = RAGService(db)
+        embedding_stats = await rag_service.embedding_service.get_embedding_stats()
+        
+        return create_success_response(
+            message="Embedding service is healthy",
+            data=embedding_stats
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to get embedding status: {str(e)}")
+        return create_error_response(
+            message=f"Failed to retrieve embedding status: {str(e)}",
+            errors=[ErrorDetail(message=str(e))]
+        )
+
+
+@router.post("/validate-embeddings", response_model=ApiResponse[Dict[str, Any]])
+async def validate_embeddings(
+    sample_texts: List[str] = Body(None, description="Optional sample texts for validation"),
+    db: AsyncSession = Depends(get_db)
+) -> ApiResponse[Dict[str, Any]]:
+    """
+    Validate embedding quality and performance.
+    
+    This endpoint tests the embedding service with sample texts
+    to ensure proper functionality and quality.
+    
+    **Request Body Example**:
+    ```json
+    {
+      "sample_texts": [
+        "نص قانوني تجريبي للتحقق من جودة التضمين",
+        "تحليل النصوص القانونية العربية",
+        "بحث في التشريعات واللوائح"
+      ]
+    }
+    ```
+    """
+    try:
+        logger.info("🧪 Embedding validation requested")
+        
+        rag_service = RAGService(db)
+        validation_result = await rag_service.embedding_service.validate_embedding_quality(sample_texts)
+        
+        if validation_result['success']:
+            return create_success_response(
+                message="Embedding validation completed successfully",
+                data=validation_result
+            )
+        else:
+            return create_error_response(
+                message="Embedding validation failed",
+                errors=[ErrorDetail(message=validation_result.get('error', 'Validation failed'))],
+                data=validation_result
+            )
+        
+    except Exception as e:
+        logger.error(f"❌ Embedding validation failed: {str(e)}")
+        return create_error_response(
+            message=f"Embedding validation failed: {str(e)}",
+            errors=[ErrorDetail(message=str(e))]
+        )
+
+
+@router.delete("/cache", response_model=ApiResponse[Dict[str, Any]])
+async def clear_embedding_cache(
+    db: AsyncSession = Depends(get_db)
+) -> ApiResponse[Dict[str, Any]]:
+    """
+    Clear the embedding cache.
+    
+    This endpoint clears the in-memory embedding cache
+    and returns cache statistics before clearing.
+    
+    **Response Example**:
+    ```json
+    {
+      "success": true,
+      "message": "Embedding cache cleared successfully",
+      "data": {
+        "cleared_entries": 1245,
+        "previous_hits": 8920,
+        "previous_misses": 1560
+      },
+      "errors": []
+    }
+    ```
+    """
+    try:
+        logger.info("🧹 Embedding cache clearance requested")
+        
+        rag_service = RAGService(db)
+        cache_stats = rag_service.embedding_service.clear_cache()
+        
+        return create_success_response(
+            message="Embedding cache cleared successfully",
+            data=cache_stats
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to clear cache: {str(e)}")
+        return create_error_response(
+            message=f"Failed to clear cache: {str(e)}",
+            errors=[ErrorDetail(message=str(e))]
+        )

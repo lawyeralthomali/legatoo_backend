@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, Dict, Any
 from uuid import UUID
 
-from ..services.profile_service import ProfileService
+from ..services.user_management.profile_service import ProfileService
 from ..models.profile import AccountType
 from ..schemas.profile_schemas import ProfileCreate, ProfileUpdate
 

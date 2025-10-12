@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Query, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
-from ..services.legal_knowledge_service import LegalKnowledgeService
+from ..services.legal.knowledge.legal_knowledge_service import LegalKnowledgeService
 from ..schemas.legal_knowledge import (
     TextExtractionRequest, ArticleExtractionRequest
 )

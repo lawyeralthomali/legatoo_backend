@@ -10,7 +10,7 @@ from ..schemas.response import (
     create_success_response, create_error_response, create_not_found_response,
     raise_error_response
 )
-from ..services.profile_service import ProfileService
+from ..services.user_management.profile_service import ProfileService
 from ..utils.auth import get_current_user_id, get_current_user, TokenData
 
 router = APIRouter(prefix="/profile", tags=["Profile"])

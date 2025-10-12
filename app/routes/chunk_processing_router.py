@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 import logging
 
-from ..services.chunk_processing_service import ChunkProcessingService
+from ..services.legal.processing.chunk_processing_service import ChunkProcessingService
 from ..db.database import get_db
 from ..utils.auth import get_current_user
 from ..models.user import User

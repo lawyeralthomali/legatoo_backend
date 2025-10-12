@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Union
 from uuid import UUID
 from ..db.database import get_db
-from ..services.contract_template_service import ContractTemplateService
+from ..services.contracts.contract_template_service import ContractTemplateService
 from ..schemas.template import TemplateCreate, TemplateUpdate, TemplateResponse
 from ..schemas.user_contract import ContractGenerationRequest, ContractGenerationResponse
 from ..schemas.response import (

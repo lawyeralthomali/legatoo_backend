@@ -19,8 +19,6 @@ from .models import (
     CaseSection, LegalTerm, KnowledgeDocument, KnowledgeChunk,
     AnalysisResult, KnowledgeLink, KnowledgeMetadata
 )
-# Import Legal AI Assistant models
-from .models.legal_document2 import LegalDocument, LegalDocumentChunk
 
 # Import routers
 from .routes.profile_router import router as profile_router
@@ -30,8 +28,6 @@ from .routes.emergency_admin_routes import router as emergency_admin_routes
 
 from .routes.subscription_router import router as subscription_router
 from .routes.premium_router import router as premium_router
-from .routes.legal_assistant_router import router as legal_assistant_router
-from .routes.legal_assistant_complete_router import router as legal_assistant_complete_router
 from .routes.categories_route import router as categories_router
 from .routes.templates_route import router as templates_router
 from .routes.user_contracts_router import router as user_contracts_router
@@ -185,8 +181,6 @@ app.include_router(user_routes, prefix="/api/v1")
 app.include_router(emergency_admin_routes)  # Emergency admin routes
 app.include_router(subscription_router, prefix="/api/v1")
 app.include_router(premium_router, prefix="/api/v1")
-app.include_router(legal_assistant_router)  # Legal AI Assistant (Admin)
-app.include_router(legal_assistant_complete_router)  # Legal AI Assistant (Complete)
 app.include_router(categories_router)
 app.include_router(templates_router)
 app.include_router(user_contracts_router)

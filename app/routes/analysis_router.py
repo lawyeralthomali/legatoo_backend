@@ -10,9 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
-from ..services.gemini_legal_analyzer import GeminiLegalAnalyzer
-from ..services.hybrid_analysis_service import HybridAnalysisService
-from ..services.legal_rag_service import LegalRAGService
+from ..services.legal.analysis.gemini_legal_analyzer import GeminiLegalAnalyzer
+from ..services.legal.analysis.hybrid_analysis_service import HybridAnalysisService
+from ..services.legal.analysis.legal_rag_service import LegalRAGService
 from ..utils.auth import get_current_user
 from ..schemas.profile_schemas import TokenData
 from ..schemas.analysis import (

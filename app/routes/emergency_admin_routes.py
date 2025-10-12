@@ -12,7 +12,7 @@ from typing import Optional
 import uuid
 
 from ..db.database import get_db
-from ..services.super_admin_service import SuperAdminService
+from ..services.user_management.super_admin_service import SuperAdminService
 from ..schemas.response import ApiResponse
 from ..config.enhanced_logging import get_logger, log_security_event
 

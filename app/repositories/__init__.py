@@ -12,7 +12,6 @@ from .contract_category_repository import ContractCategoryRepository
 from .contract_template_repository import ContractTemplateRepository
 from .user_contract_repository import UserContractRepository
 from .user_favorite_repository import UserFavoriteRepository
-from .legal_document_repository import LegalDocumentRepository
 from .refresh_token_repository import RefreshTokenRepository
 from .plan_repository import PlanRepository
 from .subscription_repository import SubscriptionRepository
@@ -27,7 +26,6 @@ __all__ = [
     "ContractTemplateRepository",
     "UserContractRepository",
     "UserFavoriteRepository",
-    "LegalDocumentRepository",
     "RefreshTokenRepository",
     "PlanRepository",
     "SubscriptionRepository",

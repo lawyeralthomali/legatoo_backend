@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from ..db.database import get_db
-from ..services.user_contract_service import UserContractService
+from ..services.contracts.user_contract_service import UserContractService
 from ..schemas.user_contract import (
     UserContractCreate, UserContractUpdate, UserContractResponse,
     ContractStatusUpdate, UserContractSummary

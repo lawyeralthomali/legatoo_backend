@@ -5,7 +5,7 @@ from uuid import UUID
 
 from ..db.database import get_db
 from ..utils.auth import get_current_user, TokenData
-from ..services.subscription_service import SubscriptionService
+from ..services.subscription.subscription_service import SubscriptionService
 
 
 async def verify_active_subscription(

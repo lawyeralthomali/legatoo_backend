@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 from ..db.database import get_db
 from ..utils.auth import get_current_user, TokenData
 # Subscription utilities are now handled by PremiumService
-from ..services.premium_service import PremiumService
+from ..services.subscription.premium_service import PremiumService
 
 router = APIRouter(prefix="/premium", tags=["premium"])
 

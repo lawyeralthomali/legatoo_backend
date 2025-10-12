@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
-from ..services.arabic_legal_search_service import ArabicLegalSearchService
+from ..services.legal.search.arabic_legal_search_service import ArabicLegalSearchService
 from ..utils.auth import get_current_user
 from ..schemas.profile_schemas import TokenData
 from ..schemas.search import (

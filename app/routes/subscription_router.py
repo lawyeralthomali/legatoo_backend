@@ -5,8 +5,8 @@ from uuid import UUID
 from ..db.database import get_db
 from ..utils.auth import get_current_user, TokenData
 from ..utils.subscription import get_subscription_status
-from ..services.subscription_service import SubscriptionService
-from ..services.plan_service import PlanService
+from ..services.subscription.subscription_service import SubscriptionService
+from ..services.subscription.plan_service import PlanService
 from fastapi import HTTPException, status
 from ..schemas.response import (
     ApiResponse, ErrorDetail,

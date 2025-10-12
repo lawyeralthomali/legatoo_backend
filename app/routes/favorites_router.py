@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from ..db.database import get_db
-from ..services.user_favorite_service import UserFavoriteService
+from ..services.contracts.user_favorite_service import UserFavoriteService
 from ..schemas.favorite import (
     FavoriteCreate, FavoriteResponse, FavoriteToggleResponse,
     FavoriteCountResponse, MostFavoritedTemplate

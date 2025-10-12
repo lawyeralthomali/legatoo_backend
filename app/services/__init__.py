@@ -3,51 +3,127 @@ Services package for business logic layer.
 
 This package contains service implementations following SOLID principles
 for clean separation of concerns and business logic encapsulation.
+
+NEW STRUCTURE (October 2025):
+- auth/: Authentication and email services
+- legal/: All legal-related services
+  - knowledge/: Legal knowledge management (laws, cases, hierarchy)
+  - processing/: Document processing and chunking
+  - search/: Search and embedding services
+  - analysis/: Legal analysis and RAG
+  - ingestion/: Data ingestion pipelines
+- user_management/: User and profile management
+- subscription/: Subscription and billing
+- contracts/: Contract management
+- shared/: Shared/deprecated services
 """
 
-from .auth_service import AuthService
-from .email_service import EmailService
-from .legal_assistant_service import LegalAssistantService
-from .document_processing_service import DocumentProcessingService
+# Auth Services
+from .auth.auth_service import AuthService
+from .auth.email_service import EmailService
 
-# NEW: Arabic-optimized services (RECOMMENDED)
-from .arabic_legal_embedding_service import ArabicLegalEmbeddingService
-from .arabic_legal_search_service import ArabicLegalSearchService
+# Legal Services
+from .legal.knowledge import (
+    LegalKnowledgeService,
+    LegalLawsService,
+    LegalHierarchyService,
+    LegalCaseService,
+)
+from .legal.processing import (
+    ChunkProcessingService,
+    DocumentProcessingService,
+    SemanticChunkingService,
+    ArabicLegalDocumentProcessor,
+)
+from .legal.search import (
+    ArabicLegalSearchService,
+    ArabicLegalEmbeddingService,
+)
+from .legal.analysis import (
+    GeminiLegalAnalyzer,
+    HybridAnalysisService,
+    LegalRAGService,
+)
+from .legal.ingestion import (
+    LegalCaseIngestionService,
+)
 
-# OLD: Generic services (DEPRECATED - kept for backward compatibility)
-from .embedding_service import EmbeddingService
-from .semantic_search_service import SemanticSearchService
+# User Management Services
+from .user_management import (
+    UserService,
+    ProfileService,
+    SuperAdminService,
+)
 
-from .plan_service import PlanService
-from .premium_service import PremiumService
-from .profile_service import ProfileService
-from .subscription_service import SubscriptionService
-from .super_admin_service import SuperAdminService
-from .user_service import UserService
-from .contract_category_service import ContractCategoryService
-from .contract_template_service import ContractTemplateService
-from .user_contract_service import UserContractService
-from .user_favorite_service import UserFavoriteService
+# Subscription Services
+from .subscription import (
+    PlanService,
+    SubscriptionService,
+    PremiumService,
+)
+
+# Contract Services
+from .contracts import (
+    ContractCategoryService,
+    ContractTemplateService,
+    UserContractService,
+    UserFavoriteService,
+)
+
+# Shared/Deprecated Services (for backward compatibility)
+from .shared import (
+    EmbeddingService,
+    RAGService,
+    SemanticSearchService,
+)
 
 __all__ = [
+    # Auth
     "AuthService",
     "EmailService",
-    "LegalAssistantService",
+    
+    # Legal - Knowledge
+    "LegalKnowledgeService",
+    "LegalLawsService",
+    "LegalHierarchyService",
+    "LegalCaseService",
+    
+    # Legal - Processing
+    "ChunkProcessingService",
     "DocumentProcessingService",
-    # New Arabic services (use these!)
-    "ArabicLegalEmbeddingService",
+    "SemanticChunkingService",
+    "ArabicLegalDocumentProcessor",
+    
+    # Legal - Search (⭐ RECOMMENDED)
     "ArabicLegalSearchService",
-    # Old services (deprecated)
-    "EmbeddingService",
-    "SemanticSearchService",
-    "PlanService",
-    "PremiumService",
-    "ProfileService",
-    "SubscriptionService",
-    "SuperAdminService",
+    "ArabicLegalEmbeddingService",
+    
+    # Legal - Analysis
+    "GeminiLegalAnalyzer",
+    "HybridAnalysisService",
+    "LegalRAGService",
+    
+    # Legal - Ingestion
+    "LegalCaseIngestionService",
+    
+    # User Management
     "UserService",
+    "ProfileService",
+    "SuperAdminService",
+    
+    # Subscription
+    "PlanService",
+    "SubscriptionService",
+    "PremiumService",
+    
+    # Contracts
     "ContractCategoryService",
     "ContractTemplateService",
     "UserContractService",
-    "UserFavoriteService"
+    "UserFavoriteService",
+    
+    # Shared (deprecated - use Arabic services instead)
+    "EmbeddingService",
+    "RAGService",
+    "SemanticSearchService",
 ]

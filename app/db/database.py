@@ -52,7 +52,7 @@ async def create_tables():
     """Create all database tables and initialize super admin user."""
     # Import all models to ensure they are registered with SQLAlchemy
     from ..models import (
-        User, Profile, RefreshToken, LegalDocument, LegalDocumentChunk,
+        User, Profile, RefreshToken,
         Subscription, Plan, Billing, UsageTracking, UserRole, Role,
         UserContract, UserFavorite, LawSource, LawArticle, LegalCase,
         CaseSection, LegalTerm, KnowledgeDocument, KnowledgeChunk,
@@ -69,7 +69,7 @@ async def create_tables():
 async def initialize_super_admin():
     """Initialize super admin user if it doesn't exist."""
     try:
-        from ..services.super_admin_service import SuperAdminService
+        from ..services.user_management.super_admin_service import SuperAdminService
         
         async with AsyncSessionLocal() as db:
             super_admin_service = SuperAdminService()

@@ -19,7 +19,7 @@ from ..schemas.legal_knowledge import (
     LawChapterCreate, LawChapterUpdate, LawChapterResponse,
     LawArticleCreate, LawArticleUpdate, LawArticleResponse
 )
-from ..services.legal_hierarchy_service import LegalHierarchyService
+from ..services.legal.knowledge.legal_hierarchy_service import LegalHierarchyService
 
 logger = logging.getLogger(__name__)
 
