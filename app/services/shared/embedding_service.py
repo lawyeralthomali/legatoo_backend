@@ -4,6 +4,7 @@ import re
 import numpy as np
 import asyncio
 import gc
+import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,9 @@ from sqlalchemy import select, and_, or_, func
 from sentence_transformers import SentenceTransformer
 import torch
 from concurrent.futures import ThreadPoolExecutor
+
+# Import global configuration
+from ...config.embedding_config import EmbeddingConfig
 
 # Memory monitoring
 try:
@@ -43,33 +47,42 @@ class EmbeddingService:
         'arabic': 'Ezzaldin-97/STS-Arabert',
         'legal_optimized': 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',  # ⚡ MEMORY OPTIMIZED
         'ultra_small': 'sentence-transformers/all-MiniLM-L6-v2',  # 🚀 LOWEST MEMORY
-        'arabic_small': 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'  # 🎯 ARABIC + SMALL
+        'arabic_small': 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',  # 🎯 ARABIC + SMALL
+        'no_ml': 'NO_ML_MODE'  # 🚫 NO ML - Hash-based fallback
     }
     
-    def __init__(self, db: AsyncSession, model_name: str = 'legal_optimized'):
+    def __init__(self, db: AsyncSession, model_name: Optional[str] = None):
         """
         Initialize the embedding service with memory optimization.
         
         Args:
             db: Async database session
-            model_name: Name of the model to use
+            model_name: Name of the model to use (None = use global config)
         """
         self.db = db
+        
+        # 🔧 Use global configuration if model_name not specified
+        if model_name is None:
+            model_name = EmbeddingConfig.get_default_model()
+        
         self.model_name = model_name
         self.model: Optional[SentenceTransformer] = None
         self.device = 'cpu'  # 🔧 FORCE CPU to prevent CUDA memory issues
         
+        # 🚫 NO-ML MODE: Check global configuration
+        self.no_ml_mode = (model_name == 'no_ml' or EmbeddingConfig.is_ml_disabled())
+        
         # Thread pool for blocking operations - reduced workers for memory
         self._executor = ThreadPoolExecutor(max_workers=1)
         
-        # 🚀 MEMORY-OPTIMIZED settings
-        self.batch_size = 4  # Drastically reduced for memory safety
-        self.max_seq_length = 256  # Reduced sequence length
+        # 🚀 MEMORY-OPTIMIZED settings from global config
+        self.batch_size = EmbeddingConfig.get_batch_size()
+        self.max_seq_length = EmbeddingConfig.get_max_seq_length()
         self.normalize_embeddings = True
         
-        # 🧹 REDUCED caching for memory
+        # 🧹 REDUCED caching for memory from global config
         self._embedding_cache: Dict[str, List[float]] = {}
-        self._cache_max_size = 100  # Reduced from 2000
+        self._cache_max_size = EmbeddingConfig.get_cache_size()
         self._cache_hits = 0
         self._cache_misses = 0
         
@@ -80,14 +93,23 @@ class EmbeddingService:
         # 🧠 Memory monitoring
         self._memory_usage_mb = 0
         
-        logger.info(f"🚀 EmbeddingService initialized with model: {model_name}")
-        logger.info(f"📱 Device: {self.device} (forced CPU for memory safety)")
-        logger.info(f"💾 Memory-optimized settings: batch_size={self.batch_size}, max_seq={self.max_seq_length}")
+        if self.no_ml_mode:
+            logger.info(f"🚫 EmbeddingService initialized in NO-ML MODE (no models will be loaded)")
+            logger.info(f"💡 Using hash-based embeddings for memory safety")
+        else:
+            logger.info(f"🚀 EmbeddingService initialized with model: {model_name}")
+            logger.info(f"📱 Device: {self.device} (forced CPU for memory safety)")
+            logger.info(f"💾 Memory-optimized settings: batch_size={self.batch_size}, max_seq={self.max_seq_length}")
 
     def initialize_model(self) -> None:
         """
         Initialize the embedding model with memory-optimized settings.
         """
+        if self.no_ml_mode:
+            logger.info("🚫 NO-ML MODE: Skipping model initialization")
+            self.model = None
+            return
+        
         try:
             # Check available memory if psutil is available
             if PSUTIL_AVAILABLE:
@@ -97,6 +119,13 @@ class EmbeddingService:
                 available_gb = 4.0  # Assume 4GB if psutil unavailable
             
             logger.info(f"🧠 Available memory: {available_gb:.2f} GB")
+            
+            # If memory is very low, force NO-ML mode
+            if available_gb < 1.5:
+                logger.warning(f"⚠️ Very low memory ({available_gb:.2f} GB). Switching to NO-ML mode.")
+                self.no_ml_mode = True
+                self.model = None
+                return
             
             if available_gb < 2.0:
                 logger.warning(f"⚠️ Low memory ({available_gb:.2f} GB). Using ultra-small model.")
@@ -141,18 +170,9 @@ class EmbeddingService:
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize embedding model: {str(e)}")
-            # Try fallback to smallest model
-            try:
-                logger.info("🔄 Trying fallback to ultra-small model...")
-                self.model = SentenceTransformer(
-                    self.MODELS['ultra_small'],
-                    device='cpu'
-                )
-                self.model.max_seq_length = 256
-                logger.info("✅ Fallback model loaded successfully")
-            except Exception as fallback_error:
-                logger.error(f"❌ Fallback model also failed: {fallback_error}")
-                raise RuntimeError(f"All model loading attempts failed: {str(e)}")
+            logger.warning("🚫 Switching to NO-ML mode due to model loading failure")
+            self.no_ml_mode = True
+            self.model = None
 
     async def initialize(self) -> None:
         """
@@ -245,16 +265,49 @@ class EmbeddingService:
         key = re.sub(r'\s+', ' ', normalized).strip()[:500]
         return key
 
+    def _generate_hash_embedding(self, text: str) -> List[float]:
+        """
+        Generate a deterministic hash-based embedding for NO-ML mode.
+        This creates a fixed-size vector from text hash for similarity calculations.
+        """
+        import hashlib
+        
+        if not text:
+            return [0.0] * 256  # Standard embedding dimension
+        
+        # Normalize text
+        processed_text = self._normalize_arabic_text(text)
+        processed_text = self._truncate_text_smart(processed_text, max_tokens=100)
+        
+        # Create hash-based embedding
+        text_hash = hashlib.sha256(processed_text.encode('utf-8')).hexdigest()
+        
+        # Convert hash to vector (deterministic)
+        embedding = []
+        for i in range(0, len(text_hash), 2):
+            hex_pair = text_hash[i:i+2]
+            value = int(hex_pair, 16) / 255.0  # Normalize to [0,1]
+            embedding.append(value)
+        
+        # Pad to 256 dimensions
+        while len(embedding) < 256:
+            embedding.append(0.0)
+        
+        return embedding[:256]
+    
     def _encode_text_sync(self, text: str) -> List[float]:
         """
         Synchronous encoding - should be called from thread pool.
         Encode text to embedding vector with enhanced Arabic support.
         """
+        if self.no_ml_mode:
+            return self._generate_hash_embedding(text)
+        
         self._ensure_model_loaded()
         
         if not text or len(text.strip()) < self.min_text_length:
             logger.warning("⚠️ Text too short for embedding")
-            return [0.0] * self.model.get_sentence_embedding_dimension()
+            return [0.0] * 256  # Standard dimension
         
         # Generate cache key
         cache_key = self._get_cache_key(text)
@@ -274,7 +327,7 @@ class EmbeddingService:
             
             if not processed_text or len(processed_text.strip()) < self.min_text_length:
                 logger.warning("⚠️ Processed text too short")
-                return [0.0] * self.model.get_sentence_embedding_dimension()
+                return [0.0] * 256
             
             # Generate embedding - THIS IS THE BLOCKING OPERATION
             embedding = self.model.encode(
@@ -295,8 +348,8 @@ class EmbeddingService:
             
         except Exception as e:
             logger.error(f"❌ Embedding generation failed: {str(e)}")
-            # Return zero vector as fallback
-            return [0.0] * self.model.get_sentence_embedding_dimension()
+            logger.warning("🚫 Falling back to hash-based embedding")
+            return self._generate_hash_embedding(text)
 
     async def generate_embedding(self, text: str) -> List[float]:
         """
@@ -317,6 +370,14 @@ class EmbeddingService:
         """
         if not texts:
             return []
+        
+        if self.no_ml_mode:
+            # Generate hash-based embeddings for all texts
+            embeddings = []
+            for text in texts:
+                embeddings.append(self._generate_hash_embedding(text))
+            logger.info(f"✅ Generated {len(embeddings)} hash-based embeddings (NO-ML mode)")
+            return embeddings
         
         self._ensure_model_loaded()
         
@@ -370,13 +431,19 @@ class EmbeddingService:
                     
                 except Exception as batch_error:
                     logger.error(f"❌ Mini-batch {i//mini_batch_size + 1} failed: {batch_error}")
-                    # Add empty embeddings for failed batch
-                    all_embeddings.extend([[] for _ in batch_texts])
+                    # Add hash-based embeddings for failed batch
+                    for text in batch_texts:
+                        all_embeddings.append(self._generate_hash_embedding(text))
             
             # Map back to original indices
             result = [[]] * len(texts)
             for idx, embedding in zip(valid_indices, all_embeddings):
                 result[idx] = embedding
+            
+            # Fill missing indices with hash-based embeddings
+            for i in range(len(result)):
+                if not result[i]:
+                    result[i] = self._generate_hash_embedding(texts[i])
             
             # Final cleanup
             del all_embeddings, processed_texts
@@ -388,8 +455,9 @@ class EmbeddingService:
             
         except Exception as e:
             logger.error(f"❌ Batch embedding generation failed: {str(e)}")
-            # Return empty embeddings for all texts
-            return [[] for _ in texts]
+            logger.warning("🚫 Falling back to hash-based embeddings for all texts")
+            # Return hash-based embeddings for all texts
+            return [self._generate_hash_embedding(text) for text in texts]
     
     async def generate_batch_embeddings(self, texts: List[str]) -> List[List[float]]:
         """

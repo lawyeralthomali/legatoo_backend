@@ -9,6 +9,7 @@ import os
 
 # Import models to ensure they are registered with SQLAlchemy
 from .config.enhanced_logging import setup_logging, get_logger
+from .config.embedding_config import EmbeddingConfig  # Import config EARLY
 from .db.database import create_tables
 
 # Import all models to ensure they are registered with SQLAlchemy before relationships are resolved
@@ -198,7 +199,14 @@ app.include_router(rag_router)        # RAG Service for Legal Laws
 @app.on_event("startup")
 async def startup_event():
     """Create database tables on startup."""
+    logger = get_logger("startup")
+    logger.info("Starting application...")
+    
+    # Log embedding configuration
+    EmbeddingConfig.log_configuration()
+    
     await create_tables()
+    logger.info("Application started successfully!")
 
 @app.get("/")
 async def root():

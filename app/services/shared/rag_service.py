@@ -20,6 +20,7 @@ from sqlalchemy.orm import selectinload
 
 from ...models.documnets import LawDocument, LawChunk
 from .embedding_service import EmbeddingService
+from ...config.embedding_config import EmbeddingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -31,15 +32,18 @@ class RAGService:
     Simplified to work with LawDocument and LawChunk models only.
     """
     
-    def __init__(self, db: AsyncSession, model_name: str = 'legal_optimized'):
+    def __init__(self, db: AsyncSession, model_name: Optional[str] = None):
         """
-        Initialize RAG Service.
+        Initialize RAG Service with global configuration.
         
         Args:
             db: Async database session
-            model_name: Embedding model to use
+            model_name: Embedding model to use (None = use global config, default: NO-ML mode)
         """
         self.db = db
+        # Use global configuration if model_name not specified
+        if model_name is None:
+            model_name = EmbeddingConfig.get_default_model()
         self.embedding_service = EmbeddingService(db, model_name=model_name)
         
         # Chunking settings
