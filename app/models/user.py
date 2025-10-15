@@ -46,8 +46,6 @@ class User(Base):
     
     # Relationships - using string references to avoid circular imports
     profile = relationship("Profile", back_populates="user", uselist=False, lazy="select")
-    user_contracts = relationship("UserContract", back_populates="user", lazy="select")
-    favorites = relationship("UserFavorite", back_populates="user", lazy="select")
     # Note: enjaz_accounts and cases_imported relationships removed to fix initialization
     # These can be added back later using a different approach
     

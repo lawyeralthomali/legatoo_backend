@@ -14,7 +14,7 @@ import logging
 import json
 
 from ..models.legal_knowledge import (
-    LawSource, LawBranch, LawChapter, LawArticle, LegalCase, CaseSection, LegalTerm,
+    LawSource, LawArticle, LegalCase, CaseSection, LegalTerm,
     KnowledgeDocument, KnowledgeChunk, AnalysisResult, KnowledgeLink, KnowledgeMetadata
 )
 from .base import BaseRepository
@@ -140,27 +140,6 @@ class LawSourceRepository:
         logger.info(f"Deleted law source {source_id}")
         return True
 
-    async def get_branches_by_source_id(self, source_id: int) -> List:
-        """Get all branches (chapters) for a law source."""
-        from ..models.legal_knowledge import LawBranch
-        
-        query = select(LawBranch).where(
-            LawBranch.law_source_id == source_id
-        ).order_by(LawBranch.order_index)
-        
-        result = await self.db.execute(query)
-        return result.scalars().all()
-
-    async def get_chapters_by_branch_id(self, branch_id: int) -> List:
-        """Get all chapters (sections) for a branch."""
-        from ..models.legal_knowledge import LawChapter
-        
-        query = select(LawChapter).where(
-            LawChapter.branch_id == branch_id
-        ).order_by(LawChapter.order_index)
-        
-        result = await self.db.execute(query)
-        return result.scalars().all()
 
 
 class LawArticleRepository:

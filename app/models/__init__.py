@@ -8,12 +8,8 @@ from .plan import Plan
 from .billing import Billing
 from .usage_tracking import UsageTracking
 from .role import UserRole, Role, ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER, DEFAULT_USER_ROLE, ROLE_HIERARCHY, get_role_level, has_permission
-from .contract_category import ContractCategory
-from .template import ContractTemplate
-from .user_contract import UserContract
-from .favorite import UserFavorite
 from .legal_knowledge import (
-    LawSource, LawBranch, LawChapter, LawArticle, LegalCase, CaseSection, LegalTerm,
+    LawSource, LawArticle, LegalCase, CaseSection, LegalTerm,
     KnowledgeDocument, KnowledgeChunk, AnalysisResult, KnowledgeLink, KnowledgeMetadata
 )
 
@@ -38,14 +34,8 @@ __all__ = [
     "ROLE_HIERARCHY", 
     "get_role_level", 
     "has_permission",
-    "ContractCategory",
-    "ContractTemplate", 
-    "UserContract",
-    "UserFavorite",
     # Legal Knowledge Models
     "LawSource",
-    "LawBranch",
-    "LawChapter",
     "LawArticle", 
     "LegalCase",
     "CaseSection",

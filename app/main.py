@@ -16,7 +16,7 @@ from .db.database import create_tables
 from .models import (
     User, Profile, RefreshToken,
     Subscription, Plan, Billing, UsageTracking, UserRole, Role,
-    UserContract, UserFavorite, LawSource, LawBranch, LawChapter, LawArticle, LegalCase,
+    LawSource, LawArticle, LegalCase,
     CaseSection, LegalTerm, KnowledgeDocument, KnowledgeChunk,
     AnalysisResult, KnowledgeLink, KnowledgeMetadata
 )
@@ -29,19 +29,8 @@ from .routes.emergency_admin_routes import router as emergency_admin_routes
 
 from .routes.subscription_router import router as subscription_router
 from .routes.premium_router import router as premium_router
-from .routes.categories_route import router as categories_router
-from .routes.templates_route import router as templates_router
-from .routes.user_contracts_router import router as user_contracts_router
-from .routes.favorites_router import router as favorites_router
-from .routes.legal_knowledge_router import router as legal_knowledge_router
 from .routes.legal_laws_router import router as legal_laws_router
-from .routes.legal_hierarchy_router import router as legal_hierarchy_router
 from .routes.legal_cases_router import router as legal_cases_router
-from .routes.chunk_processing_router import router as chunk_processing_router
-from .routes.embedding_router import router as embedding_router
-from .routes.search_router import router as search_router
-from .routes.analysis_router import router as analysis_router
-from .routes.rag_route import router as rag_router
 
 from pydantic import BaseModel
 from typing import List
@@ -182,19 +171,8 @@ app.include_router(user_routes, prefix="/api/v1")
 app.include_router(emergency_admin_routes)  # Emergency admin routes
 app.include_router(subscription_router, prefix="/api/v1")
 app.include_router(premium_router, prefix="/api/v1")
-app.include_router(categories_router)
-app.include_router(templates_router)
-app.include_router(user_contracts_router)
-app.include_router(favorites_router)
-app.include_router(legal_knowledge_router)  # Legal Knowledge Management
 app.include_router(legal_laws_router)  # Legal Laws Management (New API)
-app.include_router(legal_hierarchy_router)  # Legal Hierarchy CRUD (Branches, Chapters, Articles)
 app.include_router(legal_cases_router)  # Legal Cases Ingestion Pipeline
-app.include_router(chunk_processing_router)  # Chunk Processing with AI
-app.include_router(embedding_router)  # Embeddings Service
-app.include_router(search_router)     # Semantic Search Service
-app.include_router(analysis_router)   # AI Legal Analysis Service (Gemini + RAG)
-app.include_router(rag_router)        # RAG Service for Legal Laws
 
 @app.on_event("startup")
 async def startup_event():
@@ -239,25 +217,11 @@ async def root():
             "plans": "/api/v1/subscriptions/plans",
             "premium": "/api/v1/premium/status",
             "features": "/api/v1/premium/feature-limits",
-            "categories": "/api/contracts/categories",
-            "templates": "/api/contracts/templates",
-            "user_contracts": "/api/contracts/user-contracts",
-            "favorites": "/api/contracts/favorites",
             "legal_assistant": {
                 "upload": "/api/v1/legal-assistant/documents/upload",
                 "search": "/api/v1/legal-assistant/documents/search",
                 "documents": "/api/v1/legal-assistant/documents",
                 "statistics": "/api/v1/legal-assistant/statistics"
-            },
-            "legal_knowledge": {
-                "law_sources": "/api/v1/legal-knowledge/law-sources",
-                "law_articles": "/api/v1/legal-knowledge/law-articles",
-                "legal_cases": "/api/v1/legal-knowledge/legal-cases",
-                "legal_terms": "/api/v1/legal-knowledge/legal-terms",
-                "knowledge_documents": "/api/v1/legal-knowledge/knowledge-documents",
-                "analysis_results": "/api/v1/legal-knowledge/analysis-results",
-                "unified_search": "/api/v1/legal-knowledge/search",
-                "statistics": "/api/v1/legal-knowledge/stats"
             },
             "legal_laws": {
                 "upload": "/api/v1/laws/upload",
@@ -420,14 +384,6 @@ async def email_verification_page():
     else:
         raise HTTPException(status_code=404, detail="Email verification page not found")
 
-
-@app.get("/login.html")
-async def login_page():
-    """Serve login page."""
-    if os.path.exists("login.html"):
-        return FileResponse("login.html")
-    else:
-        raise HTTPException(status_code=404, detail="Login page not found")
 
 
 @app.get("/password-reset.html")

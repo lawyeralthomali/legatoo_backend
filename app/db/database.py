@@ -54,7 +54,7 @@ async def create_tables():
     from ..models import (
         User, Profile, RefreshToken,
         Subscription, Plan, Billing, UsageTracking, UserRole, Role,
-        UserContract, UserFavorite, LawSource, LawArticle, LegalCase,
+        LawSource, LawArticle, LegalCase,
         CaseSection, LegalTerm, KnowledgeDocument, KnowledgeChunk,
         AnalysisResult, KnowledgeLink, KnowledgeMetadata
     )

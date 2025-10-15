@@ -9,12 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
 
 from ....models.legal_knowledge import (
-    LawSource, LawBranch, LawChapter, LawArticle,
+    LawSource, LawArticle,
     KnowledgeDocument, KnowledgeChunk, AnalysisResult
 )
 from ....processors.hierarchical_document_processor import HierarchicalDocumentProcessor
 from ....parsers.parser_orchestrator import ParserOrchestrator
-from ..search.arabic_legal_embedding_service import ArabicLegalEmbeddingService
 
 logger = logging.getLogger(__name__)
 
@@ -81,15 +80,6 @@ class LegalLawsService:
         self.db = db
         self.hierarchical_processor = HierarchicalDocumentProcessor(db)
         self.parser = ParserOrchestrator(self.hierarchical_processor)
-        self.embedding_service = ArabicLegalEmbeddingService(db, model_name='sts-arabert', use_faiss=True)
-        self._model_initialized = False
-    
-    def _ensure_embedding_model_loaded(self):
-        """Ensure embedding model is loaded before use."""
-        if not self._model_initialized:
-            logger.info("🤖 Initializing embedding model for chunk generation...")
-            self.embedding_service.initialize_model()
-            self._model_initialized = True
 
     
 
@@ -240,14 +230,6 @@ class LegalLawsService:
                                     created_at=datetime.utcnow()
                                 )
                                 
-                                # Generate embedding automatically using unified service
-                                try:
-                                    self._ensure_embedding_model_loaded()
-                                    embedding_vector = self.embedding_service.encode_text(seg_content)
-                                    chunk.embedding_vector = json.dumps(embedding_vector.tolist())
-                                    logger.info(f"✅ Generated embedding for chunk ({self.embedding_service.embedding_dimension}-dim)")
-                                except Exception as e:
-                                    logger.warning(f"⚠️ Failed to generate embedding for chunk: {e}")
                                 
                                 self.db.add(chunk)
                                 chunk_index += 1
@@ -297,14 +279,6 @@ class LegalLawsService:
                             created_at=datetime.utcnow()
                         )
                         
-                        # Generate embedding automatically using unified service
-                        try:
-                            self._ensure_embedding_model_loaded()
-                            embedding_vector = self.embedding_service.encode_text(seg_content)
-                            chunk.embedding_vector = json.dumps(embedding_vector.tolist())
-                            logger.info(f"✅ Generated embedding for chunk ({self.embedding_service.embedding_dimension}-dim)")
-                        except Exception as e:
-                            logger.warning(f"⚠️ Failed to generate embedding for chunk: {e}")
                         
                         self.db.add(chunk)
                         chunk_index += 1
@@ -312,16 +286,6 @@ class LegalLawsService:
             # Commit all changes
             await self.db.commit()
             
-            # 🌟 Rebuild FAISS index after successful data commitment
-            logger.info("🔨 Rebuilding FAISS search index...")
-            try:
-                index_result = await self.embedding_service.build_faiss_index()
-                if index_result.get("success"):
-                    logger.info(f"✅ FAISS index rebuilt successfully: {index_result.get('total_vectors')} vectors indexed")
-                else:
-                    logger.warning(f"⚠️ FAISS index rebuild failed: {index_result.get('error')}")
-            except Exception as e:
-                logger.warning(f"⚠️ Failed to rebuild FAISS index: {e}")
             
             # Prepare response data
             response_data = {
@@ -490,54 +454,25 @@ class LegalLawsService:
                     "data": None,
                 }
             
-            # Step 5: Create hierarchy from parsed data
+            # Step 5: Create articles directly from parsed data
             chunk_index = 0
             
-            # Extract branches from hierarchy
+            # Extract branches from hierarchy and flatten to articles
             branches_data = hierarchy.get("branches", [])
+            total_articles = 0
             
             for branch_data in branches_data:
-                branch = LawBranch(
-                    law_source_id=law_source.id,
-                    branch_number=branch_data.get("branch_number"),
-                    branch_name=branch_data.get("branch_name"),
-                    description=branch_data.get("description"),
-                    order_index=branch_data.get("order_index", 0),
-                    source_document_id=knowledge_doc.id,
-                    created_at=datetime.utcnow()
-                )
-                self.db.add(branch)
-                await self.db.flush()
-                
-                logger.info(f"Created Branch {branch.id}: {branch.branch_name}")
-                
-                # Extract chapters
+                # Extract articles from chapters within branches
                 for chapter_data in branch_data.get("chapters", []):
-                    chapter = LawChapter(
-                        branch_id=branch.id,
-                        chapter_number=chapter_data.get("chapter_number"),
-                        chapter_name=chapter_data.get("chapter_name"),
-                        description=chapter_data.get("description"),
-                        order_index=chapter_data.get("order_index", 0),
-                        source_document_id=knowledge_doc.id,
-                        created_at=datetime.utcnow()
-                    )
-                    self.db.add(chapter)
-                    await self.db.flush()
-                    
-                    logger.info(f"Created Chapter {chapter.id}: {chapter.chapter_name}")
-                    
                     # Extract articles
                     for article_data in chapter_data.get("articles", []):
                         article = LawArticle(
                             law_source_id=law_source.id,
-                            branch_id=branch.id,
-                            chapter_id=chapter.id,
                             article_number=article_data.get("article_number"),
                             title=article_data.get("title"),
                             content=article_data.get("content"),
                             keywords=article_data.get("keywords", []),
-                            order_index=article_data.get("order_index", 0),
+                            order_index=article_data.get("order_index", total_articles),
                             source_document_id=knowledge_doc.id,
                             created_at=datetime.utcnow()
                         )
@@ -545,6 +480,7 @@ class LegalLawsService:
                         await self.db.flush()
                         
                         logger.info(f"Created Article {article.id}: {article.article_number}")
+                        total_articles += 1
                         
                         # Step 6: Create KnowledgeChunk for article with title included
                         chunk_content = _format_chunk_content(article.title, article.content)
@@ -554,21 +490,11 @@ class LegalLawsService:
                             content=chunk_content,
                             tokens_count=len(chunk_content.split()),
                             law_source_id=law_source.id,
-                            branch_id=branch.id,
-                            chapter_id=chapter.id,
                             article_id=article.id,
                             verified_by_admin=False,
                             created_at=datetime.utcnow()
                         )
                         
-                        # Generate embedding automatically using unified service
-                        try:
-                            self._ensure_embedding_model_loaded()
-                            embedding_vector = self.embedding_service.encode_text(chunk_content)
-                            chunk.embedding_vector = json.dumps(embedding_vector.tolist())
-                            logger.info(f"✅ Generated embedding for chunk {chunk_index} (256-dim)")
-                        except Exception as e:
-                            logger.warning(f"⚠️ Failed to generate embedding for chunk: {e}")
                         
                         self.db.add(chunk)
                         chunk_index += 1
@@ -587,7 +513,7 @@ class LegalLawsService:
             
             return {
                 "success": True,
-                "message": f"Law uploaded and parsed successfully. Created {len(branches_data)} branches, {chunk_index} articles.",
+                "message": f"Law uploaded and parsed successfully. Created {total_articles} articles.",
                 "data": {
                     **(tree_result.get("data") or {}),
                     "parser_used": parser_used
@@ -747,16 +673,12 @@ class LegalLawsService:
             }
 
     async def get_law_tree(self, law_id: int) -> Dict[str, Any]:
-        """Get full hierarchical tree of a law."""
+        """Get law with all its articles."""
         try:
-            # Load law with all relationships
+            # Load law with articles
             query = (
                 select(LawSource)
-                .options(
-                    selectinload(LawSource.branches)
-                    .selectinload(LawBranch.chapters)
-                    .selectinload(LawChapter.articles)
-                )
+                .options(selectinload(LawSource.articles))
                 .where(LawSource.id == law_id)
             )
             
@@ -770,43 +692,22 @@ class LegalLawsService:
                     "data": None
                 }
             
-            # Build tree structure
-            branches_data = []
-            for branch in law.branches:
-                chapters_data = []
-                for chapter in branch.chapters:
-                    articles_data = []
-                    for article in chapter.articles:
-                        articles_data.append({
-                            "id": article.id,
-                            "article_number": article.article_number,
-                            "title": article.title,
-                            "content": article.content,
-                            "keywords": article.keywords or [],
-                            "order_index": article.order_index,
-                            "ai_processed_at": article.ai_processed_at.isoformat() if article.ai_processed_at else None,
-                            "created_at": article.created_at.isoformat() if article.created_at else None
-                        })
-                    
-                    chapters_data.append({
-                        "id": chapter.id,
-                        "chapter_number": chapter.chapter_number,
-                        "chapter_name": chapter.chapter_name,
-                        "description": chapter.description,
-                        "order_index": chapter.order_index,
-                        "articles": articles_data,
-                        "articles_count": len(articles_data)
-                    })
-                
-                branches_data.append({
-                    "id": branch.id,
-                    "branch_number": branch.branch_number,
-                    "branch_name": branch.branch_name,
-                    "description": branch.description,
-                    "order_index": branch.order_index,
-                    "chapters": chapters_data,
-                    "chapters_count": len(chapters_data)
+            # Build articles list
+            articles_data = []
+            for article in law.articles:
+                articles_data.append({
+                    "id": article.id,
+                    "article_number": article.article_number,
+                    "title": article.title,
+                    "content": article.content,
+                    "keywords": article.keywords or [],
+                    "order_index": article.order_index,
+                    "ai_processed_at": article.ai_processed_at.isoformat() if article.ai_processed_at else None,
+                    "created_at": article.created_at.isoformat() if article.created_at else None
                 })
+            
+            # Sort articles by order_index
+            articles_data.sort(key=lambda x: x["order_index"])
             
             law_data = {
                 "id": law.id,
@@ -819,23 +720,23 @@ class LegalLawsService:
                 "description": law.description,
                 "source_url": law.source_url,
                 "status": law.status,
-                "branches": branches_data,
-                "branches_count": len(branches_data),
+                "articles": articles_data,
+                "articles_count": len(articles_data),
                 "created_at": law.created_at.isoformat() if law.created_at else None,
                 "updated_at": law.updated_at.isoformat() if law.updated_at else None
             }
             
             return {
                 "success": True,
-                "message": "Law tree retrieved successfully",
+                "message": "Law retrieved successfully",
                 "data": {"law_source": law_data}
             }
             
         except Exception as e:
-            logger.error(f"Failed to get law tree: {str(e)}")
+            logger.error(f"Failed to get law: {str(e)}")
             return {
                 "success": False,
-                "message": f"Failed to get law tree: {str(e)}",
+                "message": f"Failed to get law: {str(e)}",
                 "data": None
             }
 
@@ -1097,14 +998,6 @@ class LegalLawsService:
                                 created_at=datetime.utcnow()
                             )
                             
-                            # Generate embedding automatically using unified service
-                            try:
-                                self._ensure_embedding_model_loaded()
-                                embedding_vector = self.embedding_service.encode_text(chunk_content)
-                                chunk.embedding_vector = json.dumps(embedding_vector.tolist())
-                                logger.info(f"✅ Generated embedding for chunk {chunk_index} (256-dim)")
-                            except Exception as e:
-                                logger.warning(f"⚠️ Failed to generate embedding for chunk: {e}")
                             
                             self.db.add(chunk)
                             chunk_index += 1
@@ -1169,13 +1062,6 @@ class LegalLawsService:
                 if article.ai_processed_at and not update_existing:
                     continue
                 
-                # Generate embeddings using unified Arabic embedding service
-                if generate_embeddings and article.content:
-                    try:
-                        embedding = self.embedding_service.encode_text(article.content)
-                        article.embedding = json.dumps(embedding.tolist())
-                    except Exception as e:
-                        logger.warning(f"Failed to generate embedding for article {article.id}: {e}")
                 
                 # Extract keywords (placeholder - implement with actual AI service)
                 if extract_keywords and article.content:

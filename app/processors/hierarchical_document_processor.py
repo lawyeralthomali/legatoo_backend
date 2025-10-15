@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 
 from ..models.legal_knowledge import (
-    LawSource, LawBranch, LawChapter, LawArticle,
+    LawSource, LawArticle,
     KnowledgeDocument, KnowledgeChunk
 )
 from ..schemas.legal_knowledge import (
@@ -1113,81 +1113,55 @@ class HierarchicalDocumentProcessor:
                 await self.db.flush()  # Get the ID
                 logger.info(f"Created new LawSource {law_source.id}")
             
-            # Process chapters and their content
+            # Process chapters and their content - flatten to articles directly
+            article_order = 0
             for chapter_structure in structure.chapters:
-                # Create chapter (as branch in our schema)
-                branch = LawBranch(
-                    law_source_id=law_source.id,
-                    branch_number=chapter_structure.number,
-                    branch_name=chapter_structure.title,
-                    description=f"Chapter {chapter_structure.number}",
-                    order_index=chapter_structure.order_index
-                )
-                
-                self.db.add(branch)
-                await self.db.flush()
-                
                 # Process sections and articles within this chapter
                 for section_structure in chapter_structure.sections:
-                    # Create section (as chapter in our schema)
-                    chapter = LawChapter(
-                        branch_id=branch.id,
-                        chapter_number=section_structure.number,
-                        chapter_name=section_structure.title,
-                        description=f"Section {section_structure.number}",
-                        order_index=section_structure.order_index
-                    )
-                    
-                    self.db.add(chapter)
-                    await self.db.flush()
-                    
                     # Create articles in this section
                     for article_structure in section_structure.articles:
                         article = LawArticle(
                             law_source_id=law_source.id,
-                            branch_id=branch.id,
-                            chapter_id=chapter.id,
                             article_number=article_structure.number,
                             title=article_structure.title,
                             content=article_structure.content,
                             keywords=[],  # Could be extracted using NLP
                             embedding=None,  # Could be generated using embeddings
-                            order_index=article_structure.order_index
+                            order_index=article_order
                         )
                         
                         self.db.add(article)
+                        article_order += 1
                 
                 # Process direct articles in chapter (not in any section)
                 for article_structure in chapter_structure.articles:
                     article = LawArticle(
                         law_source_id=law_source.id,
-                        branch_id=branch.id,
-                        chapter_id=None,
                         article_number=article_structure.number,
                         title=article_structure.title,
                         content=article_structure.content,
                         keywords=[],
                         embedding=None,
-                        order_index=article_structure.order_index
+                        order_index=article_order
                     )
                     
                     self.db.add(article)
+                    article_order += 1
             
             # Process orphaned articles
             for article_structure in structure.orphaned_articles:
                 article = LawArticle(
                     law_source_id=law_source.id,
-                    branch_id=None,
-                    chapter_id=None,
                     article_number=article_structure.number,
                     title=article_structure.title,
                     content=article_structure.content,
                     keywords=[],
                     embedding=None,
-                    order_index=article_structure.order_index
+                    order_index=article_order
                 )
                 
                 self.db.add(article)
+                article_order += 1
             
             await self.db.commit()
             
@@ -1231,20 +1205,7 @@ class HierarchicalDocumentProcessor:
                     "data": None
                 }
             
-            # Query branches (chapters)
-            branches_query = select(LawBranch).where(LawBranch.law_source_id == law_source_id).order_by(LawBranch.order_index)
-            branches_result = await self.db.execute(branches_query)
-            branches = branches_result.scalars().all()
-            
-            # Query chapters (sections) for each branch
-            chapters = []
-            for branch in branches:
-                chapter_query = select(LawChapter).where(LawChapter.branch_id == branch.id).order_by(LawChapter.order_index)
-                chapter_result = await self.db.execute(chapter_query)
-                branch_chapters = chapter_result.scalars().all()
-                chapters.extend(branch_chapters)
-            
-            # Query articles
+            # Query articles directly
             articles_query = select(LawArticle).where(LawArticle.law_source_id == law_source_id).order_by(LawArticle.order_index)
             articles_result = await self.db.execute(articles_query)
             articles = articles_result.scalars().all()
@@ -1252,36 +1213,30 @@ class HierarchicalDocumentProcessor:
             # Perform validation
             issues = []
             statistics = {
-                "total_branches": len(branches),
-                "total_chapters": len(chapters),
-                "total_articles": len(articles),
-                "orphaned_articles": len([a for a in articles if not a.branch_id])
+                "total_articles": len(articles)
             }
             
             if validate_numbering:
-                # Check numbering continuity
-                for branch in branches:
-                    if branch.branch_number and not branch.branch_number.isdigit():
+                # Check numbering continuity for articles
+                for article in articles:
+                    if article.article_number and not article.article_number.replace('/', '').replace('-', '').isdigit():
                         issues.append({
                             "type": "numbering_issue",
-                            "level": "branch",
-                            "id": branch.id,
-                            "message": f"Branch {branch.branch_number} has non-numeric numbering"
+                            "level": "article",
+                            "id": article.id,
+                            "message": f"Article {article.article_number} has non-numeric numbering"
                         })
             
             if validate_hierarchy:
-                # Check parent-child relationships
+                # Check that all articles belong to the law source
                 for article in articles:
-                    if article.chapter_id:
-                        # Article should belong to a branch through its chapter
-                        chapter = next((c for c in chapters if c.id == article.chapter_id), None)
-                        if chapter and article.branch_id != chapter.branch_id:
-                            issues.append({
-                                "type": "hierarchy_issue",
-                                "level": "article",
-                                "id": article.id,
-                                "message": f"Article {article.article_number} has inconsistent branch/chapter relationship"
-                            })
+                    if article.law_source_id != law_source_id:
+                        issues.append({
+                            "type": "hierarchy_issue",
+                            "level": "article",
+                            "id": article.id,
+                            "message": f"Article {article.article_number} has inconsistent law source relationship"
+                        })
             
             if detect_gaps:
                 # Check for missing elements

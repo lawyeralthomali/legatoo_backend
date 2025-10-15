@@ -128,78 +128,6 @@ class LawSourceResponse(LawSourceBase):
 # LAW ARTICLES SCHEMAS
 # ===========================================
 
-# ===========================================
-# LAW BRANCHES SCHEMAS
-# ===========================================
-
-class LawBranchBase(BaseModel):
-    """Base law branch schema"""
-    branch_number: Optional[str] = Field(None, max_length=20)
-    branch_name: str = Field(..., min_length=1)
-    description: Optional[str] = None
-    order_index: Optional[int] = Field(default=0, ge=0)
-
-
-class LawBranchCreate(LawBranchBase):
-    """Schema for creating a law branch"""
-    law_source_id: int = Field(..., gt=0)
-
-
-class LawBranchUpdate(BaseModel):
-    """Schema for updating a law branch"""
-    branch_number: Optional[str] = Field(None, max_length=20)
-    branch_name: Optional[str] = Field(None, min_length=1)
-    description: Optional[str] = None
-    order_index: Optional[int] = Field(None, ge=0)
-
-
-class LawBranchResponse(LawBranchBase):
-    """Schema for law branch response"""
-    id: int
-    law_source_id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    chapters_count: Optional[int] = 0
-    
-    class Config:
-        from_attributes = True
-
-
-# ===========================================
-# LAW CHAPTERS SCHEMAS
-# ===========================================
-
-class LawChapterBase(BaseModel):
-    """Base law chapter schema"""
-    chapter_number: Optional[str] = Field(None, max_length=20)
-    chapter_name: str = Field(..., min_length=1)
-    description: Optional[str] = None
-    order_index: Optional[int] = Field(default=0, ge=0)
-
-
-class LawChapterCreate(LawChapterBase):
-    """Schema for creating a law chapter"""
-    branch_id: int = Field(..., gt=0)
-
-
-class LawChapterUpdate(BaseModel):
-    """Schema for updating a law chapter"""
-    chapter_number: Optional[str] = Field(None, max_length=20)
-    chapter_name: Optional[str] = Field(None, min_length=1)
-    description: Optional[str] = None
-    order_index: Optional[int] = Field(None, ge=0)
-
-
-class LawChapterResponse(LawChapterBase):
-    """Schema for law chapter response"""
-    id: int
-    branch_id: int
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    articles_count: Optional[int] = 0
-    
-    class Config:
-        from_attributes = True
 
 
 class LawArticleBase(BaseModel):
@@ -215,8 +143,6 @@ class LawArticleBase(BaseModel):
 class LawArticleCreate(LawArticleBase):
     """Schema for creating a law article"""
     law_source_id: int = Field(..., gt=0)
-    branch_id: Optional[int] = Field(None, gt=0)
-    chapter_id: Optional[int] = Field(None, gt=0)
 
 
 class LawArticleUpdate(BaseModel):
@@ -226,8 +152,6 @@ class LawArticleUpdate(BaseModel):
     content: Optional[str] = Field(None, min_length=1)
     keywords: Optional[List[str]] = None
     embedding: Optional[List[float]] = None
-    branch_id: Optional[int] = Field(None, gt=0)
-    chapter_id: Optional[int] = Field(None, gt=0)
     order_index: Optional[int] = Field(None, ge=0)
 
 
@@ -235,13 +159,9 @@ class LawArticleResponse(LawArticleBase):
     """Schema for law article response"""
     id: int
     law_source_id: int
-    branch_id: Optional[int] = None
-    chapter_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     law_source: Optional[LawSourceResponse] = None
-    branch: Optional[LawBranchResponse] = None
-    chapter: Optional[LawChapterResponse] = None
     
     class Config:
         from_attributes = True
@@ -449,25 +369,6 @@ class KnowledgeChunkResponse(KnowledgeChunkBase):
     
     class Config:
         from_attributes = True
-
-
-# ===========================================
-# TEXT EXTRACTION SCHEMAS
-# ===========================================
-
-class TextExtractionRequest(BaseModel):
-    """Schema for text extraction request"""
-    text: str = Field(..., min_length=100, description="Arabic legal text")
-    existing_details: Optional[Dict[str, Any]] = Field(
-        None, 
-        description="Optional existing law source details to merge"
-    )
-
-
-class ArticleExtractionRequest(BaseModel):
-    """Schema for article extraction request"""
-    text: str = Field(..., min_length=100, description="Arabic legal text")
-    law_source_id: Optional[int] = Field(None, description="Law source ID to associate articles with")
 
 
 # ===========================================

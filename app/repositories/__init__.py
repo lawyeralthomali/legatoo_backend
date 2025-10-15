@@ -8,10 +8,6 @@ for clean separation of concerns and testability.
 from .base import BaseRepository
 from .profile_repository import ProfileRepository
 from .user_repository import UserRepository
-from .contract_category_repository import ContractCategoryRepository
-from .contract_template_repository import ContractTemplateRepository
-from .user_contract_repository import UserContractRepository
-from .user_favorite_repository import UserFavoriteRepository
 from .refresh_token_repository import RefreshTokenRepository
 from .plan_repository import PlanRepository
 from .subscription_repository import SubscriptionRepository
@@ -22,10 +18,6 @@ __all__ = [
     "BaseRepository",
     "ProfileRepository",
     "UserRepository",
-    "ContractCategoryRepository",
-    "ContractTemplateRepository",
-    "UserContractRepository",
-    "UserFavoriteRepository",
     "RefreshTokenRepository",
     "PlanRepository",
     "SubscriptionRepository",

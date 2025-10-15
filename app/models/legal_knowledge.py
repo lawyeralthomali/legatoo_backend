@@ -32,78 +32,25 @@ class LawSource(Base):
     
     # Relationships
     knowledge_document = relationship("KnowledgeDocument", foreign_keys=[knowledge_document_id])
-    branches = relationship("LawBranch", back_populates="law_source", cascade="all, delete-orphan")
     articles = relationship("LawArticle", back_populates="law_source", cascade="all, delete-orphan")
     chunks = relationship("KnowledgeChunk", back_populates="law_source")
     
     def __repr__(self):
         return f"<LawSource(id={self.id}, name='{self.name}', type='{self.type}')>"
 
-
-class LawBranch(Base):
-    """الأبواب الرئيسية في التشريعات القانونية."""
-    
-    __tablename__ = "law_branches"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    law_source_id = Column(Integer, ForeignKey("law_sources.id", ondelete="CASCADE"), nullable=False, index=True)
-    branch_number = Column(String(20), index=True)  # مثال: "5"
-    branch_name = Column(Text, nullable=False)  # مثال: "علاقات العمل"
-    description = Column(Text)
-    order_index = Column(Integer, default=0)  # لترتيب الأبواب
-    source_document_id = Column(Integer, ForeignKey("knowledge_documents.id", ondelete="SET NULL"), nullable=True, index=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # Relationships
-    law_source = relationship("LawSource", back_populates="branches")
-    source_document = relationship("KnowledgeDocument", foreign_keys=[source_document_id])
-    chapters = relationship("LawChapter", back_populates="branch", cascade="all, delete-orphan")
-    
-    def __repr__(self):
-        return f"<LawBranch(id={self.id}, branch_number='{self.branch_number}', name='{self.branch_name}')>"
-
-
-class LawChapter(Base):
-    """الفصول داخل الأبواب القانونية."""
-    
-    __tablename__ = "law_chapters"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    branch_id = Column(Integer, ForeignKey("law_branches.id", ondelete="CASCADE"), nullable=False, index=True)
-    chapter_number = Column(String(20), index=True)  # مثال: "3"
-    chapter_name = Column(Text, nullable=False)  # مثال: "انتهاء عقد العمل"
-    description = Column(Text)
-    order_index = Column(Integer, default=0)  # لترتيب الفصول
-    source_document_id = Column(Integer, ForeignKey("knowledge_documents.id", ondelete="SET NULL"), nullable=True, index=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # Relationships
-    branch = relationship("LawBranch", back_populates="chapters")
-    source_document = relationship("KnowledgeDocument", foreign_keys=[source_document_id])
-    articles = relationship("LawArticle", back_populates="chapter", cascade="all, delete-orphan")
-    
-    def __repr__(self):
-        return f"<LawChapter(id={self.id}, chapter_number='{self.chapter_number}', name='{self.chapter_name}')>"
-
-
 class LawArticle(Base):
-    """المواد والفقرات القانونية مع الربط الهرمي الكامل."""
+    """المواد والفقرات القانونية مع الربط المباشر للمصدر القانوني."""
     
     __tablename__ = "law_articles"
     
     id = Column(Integer, primary_key=True, index=True)
-    law_source_id = Column(Integer, ForeignKey("law_sources.id", ondelete="CASCADE"), nullable=False, index=True)
-    branch_id = Column(Integer, ForeignKey("law_branches.id", ondelete="CASCADE"), nullable=True, index=True)
-    chapter_id = Column(Integer, ForeignKey("law_chapters.id", ondelete="CASCADE"), nullable=True, index=True)
-    
+    law_source_id = Column(Integer, ForeignKey("law_sources.id", ondelete="CASCADE"), nullable=False, index=True) 
     article_number = Column(String(50), index=True)  # مثال: "75" أو "75/1"
     title = Column(Text)
     content = Column(Text, nullable=False)
     keywords = Column(JSON)
     embedding = Column(Text)
-    order_index = Column(Integer, default=0)  # لترتيب المواد داخل الفصل
+    order_index = Column(Integer, default=0)  # لترتيب المواد داخل المصدر القانوني
     ai_processed_at = Column(DateTime(timezone=True), nullable=True)
     source_document_id = Column(Integer, ForeignKey("knowledge_documents.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -111,12 +58,10 @@ class LawArticle(Base):
     
     # Relationships - مع تحديد العلاقات بشكل صحيح
     law_source = relationship("LawSource", back_populates="articles")
-    branch = relationship("LawBranch")
-    chapter = relationship("LawChapter", back_populates="articles")
     source_document = relationship("KnowledgeDocument", foreign_keys=[source_document_id])
     
     def __repr__(self):
-        return f"<LawArticle(id={self.id}, article_number='{self.article_number}', chapter_id={self.chapter_id})>"
+        return f"<LawArticle(id={self.id}, article_number='{self.article_number}', law_source_id={self.law_source_id})>"
 
 
 # باقي النماذج تبقى كما هي مع بعض التحسينات البسيطة
@@ -228,8 +173,6 @@ class KnowledgeChunk(Base):
     
     # ✅ تحديث أسماء الحقول لتعكس الهيكل الجديد
     law_source_id = Column(Integer, ForeignKey("law_sources.id"), nullable=True)
-    branch_id = Column(Integer, ForeignKey("law_branches.id"), nullable=True)
-    chapter_id = Column(Integer, ForeignKey("law_chapters.id"), nullable=True)
     article_id = Column(Integer, ForeignKey("law_articles.id"), nullable=True)
     case_id = Column(Integer, ForeignKey("legal_cases.id"), nullable=True) 
     term_id = Column(Integer, ForeignKey("legal_terms.id"), nullable=True)
@@ -237,8 +180,6 @@ class KnowledgeChunk(Base):
     # ✅ تحديث العلاقات
     document = relationship("KnowledgeDocument", back_populates="chunks")
     law_source = relationship("LawSource", back_populates="chunks")
-    branch = relationship("LawBranch")
-    chapter = relationship("LawChapter")
     article = relationship("LawArticle")
     legal_case = relationship("LegalCase", back_populates="chunks")
     legal_term = relationship("LegalTerm", back_populates="chunks")
@@ -307,15 +248,12 @@ class KnowledgeMetadata(Base):
 
 # إنشاء فهارس إضافية للأداء
 Index('idx_law_sources_type_jurisdiction', LawSource.type, LawSource.jurisdiction)
-Index('idx_law_branches_source_number', LawBranch.law_source_id, LawBranch.branch_number)
-Index('idx_law_chapters_branch_number', LawChapter.branch_id, LawChapter.chapter_number)
-Index('idx_law_articles_hierarchy', LawArticle.law_source_id, LawArticle.branch_id, LawArticle.chapter_id)
-Index('idx_law_articles_chapter_order', LawArticle.chapter_id, LawArticle.order_index)
+Index('idx_law_articles_source_order', LawArticle.law_source_id, LawArticle.order_index)
 Index('idx_law_articles_keywords', LawArticle.keywords)
 Index('idx_legal_cases_jurisdiction_date', LegalCase.jurisdiction, LegalCase.decision_date)
 Index('idx_case_sections_type', CaseSection.section_type)
 Index('idx_knowledge_documents_category_status', KnowledgeDocument.category, KnowledgeDocument.status)
-Index('idx_knowledge_chunks_hierarchy', KnowledgeChunk.law_source_id, KnowledgeChunk.branch_id, KnowledgeChunk.chapter_id, KnowledgeChunk.article_id, KnowledgeChunk.case_id)
+Index('idx_knowledge_chunks_hierarchy', KnowledgeChunk.law_source_id, KnowledgeChunk.article_id, KnowledgeChunk.case_id)
 Index('idx_knowledge_chunks_tokens', KnowledgeChunk.tokens_count)
 Index('idx_analysis_results_type_confidence', AnalysisResult.analysis_type, AnalysisResult.confidence)
 Index('idx_knowledge_links_source_target', KnowledgeLink.source_type, KnowledgeLink.source_id, KnowledgeLink.target_type, KnowledgeLink.target_id)

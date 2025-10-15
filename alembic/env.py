@@ -12,7 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from app.db.database import Base
 # Import all models to ensure they're registered with Base.metadata
-from app.models import profile, user, plan, subscription, legal_document2, billing, usage_tracking
+from app.models import profile, user, plan, subscription, billing, usage_tracking
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
