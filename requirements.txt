@@ -46,6 +46,11 @@ python-docx==1.1.2
 openai==1.59.5
 google-genai>=0.3.0  # For File API (PDF/DOC extraction)
 google-generativeai>=0.3.0  # For Text Generation API
+
+# LangChain and AI/ML Libraries
+langchain>=0.1.0
+langchain-community>=0.0.20
+langchain-huggingface>=0.0.1
 # Phase 3 & 4: Document processing and embeddings
 pdfplumber==0.11.4
 PyMuPDF==1.26.4
