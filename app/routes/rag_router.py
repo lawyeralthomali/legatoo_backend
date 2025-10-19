@@ -1,11 +1,11 @@
 from fastapi import APIRouter, UploadFile, Form, HTTPException
 from typing import Dict, Any
 
-from app.services.nowledge.knowledge_service import process_upload as process_upload_nowledge
-from app.services.nowledge.knowledge_service import answer_query as answer_query_nowledge
+from app.services.knowledge.knowledge_service import process_upload 
+from app.services.knowledge.knowledge_service import answer_query 
 from app.schemas.response import ApiResponse, create_success_response, create_error_response
 
-router = APIRouter(prefix="/rag", tags=["rag"])
+router = APIRouter(prefix="/api/v1/rag", tags=["rag"])
 
 @router.post("/upload", response_model=ApiResponse)
 async def upload_file(file: UploadFile) -> ApiResponse[Dict[str, Any]]:
@@ -29,7 +29,7 @@ async def upload_file(file: UploadFile) -> ApiResponse[Dict[str, Any]]:
                 errors=[{"field": "file", "message": "File is required"}]
             )
         
-        chunks_count = await process_upload_nowledge(file)
+        chunks_count = await process_upload(file)
         
         response_data = {
             "filename": file.filename,
@@ -72,17 +72,11 @@ async def chat(query: str = Form(...)) -> ApiResponse[Dict[str, Any]]:
                 errors=[{"field": "query", "message": "Query must be at least 3 characters long"}]
             )
         
-        answer = await answer_query_nowledge(query.strip())
-        
-        response_data = {
-            "query": query.strip(),
-            "answer": answer,
-            "timestamp": "2025-01-16T17:00:00Z"  # You can add actual timestamp if needed
-        }
+        answer = await answer_query(query.strip())
         
         return create_success_response(
-            message="Query processed successfully",
-            data=response_data
+            message=answer,
+            data=answer
         )
         
     except Exception as e:

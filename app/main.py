@@ -70,17 +70,32 @@ cors_origins = os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGI
 
 # Default origins for development
 default_origins = [
-    "http://localhost:3000",      # React dev server
-    "http://localhost:8080",      # Vue dev server
-    "http://127.0.0.1:3000",     # Local React
-    "http://127.0.0.1:8080",     # Local Vue
-    "http://192.168.100.108:3000", # Network React
-    "http://192.168.100.108:8080", # Network Vue
-    "http://192.168.100.108:8000", # Self-reference
-    "http://192.168.100.109:3000", # Your frontend IP
-    "http://192.168.100.109:8080", # Your frontend IP (Vue)
+    # Next.js development ports
+    "http://localhost:3000",      # Next.js default dev server
+    "http://localhost:3001",      # Next.js alternative port
+    "http://localhost:3002",      # Next.js alternative port
+    "http://127.0.0.1:3000",     # Local Next.js
+    "http://127.0.0.1:3001",     # Local Next.js alternative
+    "http://127.0.0.1:3002",     # Local Next.js alternative
+    
+    # React development ports
+    "http://localhost:8080",      # React dev server
+    "http://127.0.0.1:8080",     # Local React
+    
+    # Network access - Your computer IP
+    "http://192.168.100.13:3000",  # Your Next.js frontend
+    "http://192.168.100.13:3001",  # Your Next.js alternative port
+    "http://192.168.100.13:3002",  # Your Next.js alternative port
+    "http://192.168.100.13:8080",  # Your React frontend
+    "http://192.168.100.13:8000",  # Your backend
+    "http://192.168.100.13:8001",  # Your backend alternative port
+    "http://192.168.100.13:8002",  # Your backend alternative port
+    
+    # Self-reference
     "http://localhost:8000",      # Self-reference local
     "http://127.0.0.1:8000",     # Self-reference local
+    
+    # Production domains
     "https://api.westlinktowing.com",
     "https://legatoo.westlinktowing.com",
 ]
@@ -93,10 +108,26 @@ if cors_origins and cors_origins[0]:
 else:
     # Production mode - allow common origins
     allow_origins = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000", 
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
+        # Development origins
+        "http://localhost:3000",      # Next.js default
+        "http://localhost:3001",      # Next.js alternative
+        "http://localhost:3002",      # Next.js alternative
+        "http://127.0.0.1:3000",     # Local Next.js
+        "http://127.0.0.1:3001",     # Local Next.js alternative
+        "http://127.0.0.1:3002",     # Local Next.js alternative
+        "http://localhost:8000",      # Backend local
+        "http://127.0.0.1:8000",     # Backend local
+        
+        # Your computer network IP
+        "http://192.168.100.13:3000",  # Your Next.js frontend
+        "http://192.168.100.13:3001",  # Your Next.js alternative
+        "http://192.168.100.13:3002",  # Your Next.js alternative
+        "http://192.168.100.13:8080",  # Your React frontend
+        "http://192.168.100.13:8000",  # Your backend
+        "http://192.168.100.13:8001",  # Your backend alternative
+        "http://192.168.100.13:8002",  # Your backend alternative
+        
+        # Production origins
         "http://srv1022733.hstgr.cloud:8000",
         "https://srv1022733.hstgr.cloud:8000",
         "http://srv1022733.hstgr.cloud",
@@ -107,13 +138,56 @@ else:
         "https://legatoo.westlinktowing.com"
     ]
 
+# Add CORS middleware with comprehensive settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allow_origins,
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
+    allow_headers=[
+        "Accept",
+        "Accept-Language", 
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "X-CSRF-Token",
+        "X-Correlation-ID",
+        "Origin",
+        "Access-Control-Request-Method",
+        "Access-Control-Request-Headers",
+        "*",  # Allow all headers
+    ],
+    expose_headers=["*"],
 )
+
+# Add explicit OPTIONS handler for all routes
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    """Handle OPTIONS requests for CORS preflight."""
+    return JSONResponse(
+        status_code=200,
+        content={"message": "CORS preflight handled"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD",
+            "Access-Control-Allow-Headers": "Accept, Accept-Language, Content-Language, Content-Type, Authorization, X-Requested-With, X-CSRF-Token, X-Correlation-ID, Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
+
+# Add a simple CORS test endpoint
+@app.get("/cors-test")
+async def cors_test():
+    """Simple endpoint to test CORS configuration."""
+    return {
+        "success": True,
+        "message": "CORS is working!",
+        "data": {
+            "timestamp": "2025-01-16T18:00:00Z",
+            "cors_origins": allow_origins
+        }
+    }
 
 # Mount static files for frontend pages
 # This allows serving HTML files directly from the backend for testing

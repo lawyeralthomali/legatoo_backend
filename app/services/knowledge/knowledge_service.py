@@ -16,7 +16,12 @@ os.makedirs(VECTORSTORE_PATH, exist_ok=True)
 EMBEDDING_MODEL = "Omartificial-Intelligence-Space/GATE-AraBert-v1"
 RERANKER_MODEL = "Omartificial-Intelligence-Space/ARA-Reranker-V1"
 
-client = genai.Client(api_key="AIzaSyDrNGFCsJvs2ek3ug0DpUyoL2j1oZSHD0Y")
+# Load Gemini API key from environment
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    raise ValueError("GEMINI_API_KEY environment variable is required")
+
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
 reranker_model = HuggingFaceCrossEncoder(model_name=RERANKER_MODEL)
