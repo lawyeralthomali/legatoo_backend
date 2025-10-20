@@ -1,5 +1,5 @@
 {
-    "law_sources": [
+    "law_sources": 
       {
         "name": "نظام الاستثمار",
         "type": "law",
@@ -236,11 +236,5 @@
           }
         ]
       }
-    ],
-    "processing_report": {
-      "structure_confidence": 0.99,
-      "total_branches": 5,
-      "total_chapters": 9,
-      "total_articles": 16
-    }
+  
   }

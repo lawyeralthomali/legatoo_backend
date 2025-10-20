@@ -1,5 +1,5 @@
 {
-    "law_sources": [
+    "law_sources": 
       {
         "name": "نظام الإيداع",
         "type": "law",
@@ -123,17 +123,5 @@
           }
         ]
       }
-    ],
-    "legal_cases": [],
-    "processing_report": {
-      "warnings": [
-        "No explicit LawBranch (أبواب) or LawChapter (فصول) were found in the source text; a single default Branch and Chapter ('1') were created."
-      ],
-      "errors": [],
-      "suggestions": [],
-      "structure_confidence": 0.99,
-      "total_branches": 1,
-      "total_chapters": 1,
-      "total_articles": 7
-    }
+   
   }

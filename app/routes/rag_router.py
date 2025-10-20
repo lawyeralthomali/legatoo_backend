@@ -56,13 +56,16 @@ async def chat(query: str = Form(...)) -> ApiResponse[Dict[str, Any]]:
     **RAG Chat**:
     - Queries the knowledge base for relevant information
     - Generates contextual responses based on uploaded documents
-    - Provides source citations when available
+    - Provides source citations and retrieved context
     
     **Parameters**:
     - query: The question or query to ask
     
     **Response**:
-    - Success: Answer with context and sources
+    - Success: Answer with retrieved context including:
+      - answer: The generated response
+      - query: The original query
+      - retrieved_context: Array of relevant legal articles with metadata
     - Error: Query processing error information
     """
     try:
@@ -72,11 +75,27 @@ async def chat(query: str = Form(...)) -> ApiResponse[Dict[str, Any]]:
                 errors=[{"field": "query", "message": "Query must be at least 3 characters long"}]
             )
         
-        answer = await answer_query(query.strip())
+        result = await answer_query(query.strip())
+        
+        # Handle both string and dictionary responses
+        if isinstance(result, str):
+            # Fallback for old format
+            answer = result
+            retrieved_context = []
+        elif isinstance(result, dict):
+            answer = result.get("answer", "❌ لم يتم العثور على إجابة مناسبة في قاعدة البيانات القانونية.")
+            retrieved_context = result.get("retrieved_context", [])
+        else:
+            answer = "❌ لم يتم العثور على إجابة مناسبة في قاعدة البيانات القانونية."
+            retrieved_context = []
         
         return create_success_response(
             message=answer,
-            data=answer
+            data={
+                "answer": answer,
+                "query": query.strip(),
+                "retrieved_context": retrieved_context
+            }
         )
         
     except Exception as e:

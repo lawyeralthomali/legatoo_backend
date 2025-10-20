@@ -1,5 +1,5 @@
 {
-  "law_sources": [
+  "law_sources": 
     {
       "name": "نظام الإفلاس",
       "type": "law",
@@ -221,11 +221,4 @@
         }
       ]
     }
-  ],
-  "processing_report": {
-    "structure_confidence": 0.97,
-    "total_branches": 5,
-    "total_chapters": 8,
-    "total_articles": 231
-  }
 }

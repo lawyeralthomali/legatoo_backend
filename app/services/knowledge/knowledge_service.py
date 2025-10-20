@@ -31,12 +31,10 @@ compressor = CrossEncoderReranker(model=reranker_model, top_n=5)
 # رفع الملف ومعالجته
 # ---------------------------------
 async def process_upload(file):
-    # حفظ الملف مؤقتاً
     with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
 
-    # قراءة وتحليل JSON
     with open(tmp_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
@@ -80,11 +78,7 @@ async def process_upload(file):
         raise ValueError("❌ لم يتم العثور على مقالات صالحة في الملف")
 
     # تقسيم النصوص إلى chunks
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=400, 
-        chunk_overlap=50,
-        separators=["\n\n", "\n", ". ", "! ", "? ", "؛ ", "، "]  # فواصل مناسبة للعربية
-    )
+    splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=50)
     chunks = splitter.split_documents(documents)
 
     # إنشاء أو تحديث التضمينات
@@ -105,9 +99,7 @@ async def process_upload(file):
         chunks_count = len(chunks)
 
     return chunks_count
-# ---------------------------------
-# معالجة الاستفسار / السؤال
-# ---------------------------------
+
 async def answer_query(query: str):
     if not os.path.exists(f"{VECTORSTORE_PATH}/index.faiss"):
         return "❌ لم يتم رفع الملفات أو إنشاء قاعدة التضمينات بعد."
@@ -121,34 +113,43 @@ async def answer_query(query: str):
     # إعادة ترتيب النتائج
     reranked_docs = compressor.compress_documents(base_docs, query)
 
-    # ✅ بناء السياق مع معلومات إضافية
+    # ✅ بناء السياق مع معلومات إضافية (تم تغيير طريقة بناء السياق لزيادة التركيز)
     context_parts = []
+    
+    # تخزين السياق المسترجع في قائمة منفصلة ليتم إرجاعها
+    retrieved_context = [] 
+    
     for doc in reranked_docs:
         metadata = doc.metadata
-        context_part = f"""
-📜 **{metadata.get('article', '')}** - {metadata.get('law_name', '')}
-📍 الجهة: {metadata.get('issuing_authority', '')}
-📅 تاريخ الإصدار: {metadata.get('issue_date', '')}
-
-المحتوى:
-{doc.page_content}
-
-🔑 الكلمات المفتاحية: {', '.join(metadata.get('keywords', []))}
+        
+        # جزء السياق للاستخدام الداخلي (للتوليد)
+        context_part_for_generation = f"""
+== **{metadata.get('law_name', '')}** ==
+**المادة:** {metadata.get('article', 'غير محدد')}
+**النص:** {doc.page_content}
+(المرجع: {metadata.get('issuing_authority', '')} - {metadata.get('issue_date', '')})
         """
-        context_parts.append(context_part.strip())
+        context_parts.append(context_part_for_generation.strip())
+        
+        # جزء السياق للإرجاع للمستخدم (لتسهيل القراءة)
+        retrieved_context.append({
+            "article": metadata.get('article', 'غير محدد'),
+            "law_name": metadata.get('law_name', ''),
+            "text": doc.page_content,
+            "source": f"{metadata.get('issuing_authority', '')} - {metadata.get('issue_date', '')}"
+        })
 
     context_text = "\n\n" + "="*50 + "\n\n".join(context_parts) + "\n" + "="*50
 
-    # ✅ تحسين الـ Prompt ليكون أكثر دقة
+    # ✅ تصحيح الـ Prompt ليتوافق مع أي قانون يتم رفعه
     prompt = f"""
-أنت مساعد قانوني سعودي متخصص في النظام الجزائي لجرائم التزوير.
+أنت مساعد قانوني سعودي متخصص في النظام القانوني المتعلق بالسياق المقدم لك.
 
 **التعليمات:**
-1. استخرج الإجابة من النصوص القانونية المقدمة فقط
-2. اذكر رقم المادة والنص القانوني بدقة
-3. أضف معلومات عن العقوبة والجهة المصدرة عندما تكون متوفرة
-4. أجب باللغة العربية الفصحى
-5. كن دقيقاً وواضحاً في الإجابة
+1. استخرج الإجابة من النصوص القانونية المقدمة **فقط** ولا تجب من معلوماتك العامة.
+2. اذكر رقم المادة والنص القانوني بدقة.
+3. أجب باللغة العربية الفصحى.
+4. كن دقيقاً وواضحاً في الإجابة.
 
 **النصوص القانونية المرجعية:**
 {context_text}
@@ -169,6 +170,21 @@ async def answer_query(query: str):
                 "top_p": 0.8
             }
         )
-        return response.text
+        
+        # التأكد من وجود استجابة صحيحة
+        if response and hasattr(response, 'text') and response.text:
+            return {
+                "answer": response.text, 
+                "retrieved_context": retrieved_context # إرجاع السياق المسترجع
+            }
+        else:
+            return {
+                "answer": "❌ لم يتم الحصول على إجابة مناسبة من النموذج.",
+                "retrieved_context": retrieved_context
+            }
+            
     except Exception as e:
-        return f"⚠️ حدث خطأ أثناء الاتصال بـ Gemini: {e}"
+        return {
+            "answer": f"⚠️ حدث خطأ أثناء الاتصال بـ Gemini: {e}",
+            "retrieved_context": retrieved_context
+        }
