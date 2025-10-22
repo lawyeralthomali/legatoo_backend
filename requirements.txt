@@ -53,6 +53,7 @@ langchain-community>=0.0.20
 langchain-huggingface>=0.0.1
 langchain-core>=0.1.0  # Core LangChain components
 langchain-text-splitters>=0.0.1  # Text splitting utilities
+chromadb>=0.5.3  # Persistent vector store backend for Chroma
 # Phase 3 & 4: Document processing and embeddings
 pdfplumber==0.11.4
 PyMuPDF==1.26.4
@@ -93,3 +94,7 @@ wheel==0.45.1
 # Additional packages found in codebase
 easyocr>=1.7.0  # OCR library for Arabic text extraction
 opencv-python>=4.8.0  # Computer vision library (cv2)
+
+# Performance optimization dependencies
+ijson>=3.2.3  # Incremental JSON parsing for large files
+aiofiles>=24.1.0  # Async file operations (already present)

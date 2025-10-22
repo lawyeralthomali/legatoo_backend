@@ -12,6 +12,7 @@ from .legal_knowledge import (
     LawSource, LawArticle, LegalCase, CaseSection, LegalTerm,
     KnowledgeDocument, KnowledgeChunk, AnalysisResult, KnowledgeLink, KnowledgeMetadata
 )
+from .query_log import QueryLog
 
 # Import all models to ensure they are registered with SQLAlchemy
 __all__ = [
@@ -44,7 +45,9 @@ __all__ = [
     "KnowledgeChunk",
     "AnalysisResult",
     "KnowledgeLink",
-    "KnowledgeMetadata"
+    "KnowledgeMetadata",
+    # Query logging
+    "QueryLog",
 ]
 
 

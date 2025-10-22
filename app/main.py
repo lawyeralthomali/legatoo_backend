@@ -141,7 +141,7 @@ else:
 # Add CORS middleware with comprehensive settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=allow_origins,  # Use the configured origins list
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=[
@@ -163,29 +163,46 @@ app.add_middleware(
 
 # Add explicit OPTIONS handler for all routes
 @app.options("/{path:path}")
-async def options_handler(path: str):
+async def options_handler(request: Request, path: str):
     """Handle OPTIONS requests for CORS preflight."""
-    return JSONResponse(
-        status_code=200,
-        content={"message": "CORS preflight handled"},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD",
-            "Access-Control-Allow-Headers": "Accept, Accept-Language, Content-Language, Content-Type, Authorization, X-Requested-With, X-CSRF-Token, X-Correlation-ID, Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
-            "Access-Control-Allow-Credentials": "true",
-        }
-    )
+    origin = request.headers.get("origin")
+    
+    # Check if origin is in allowed origins
+    if origin in allow_origins:
+        return JSONResponse(
+            status_code=200,
+            content={"message": "CORS preflight handled"},
+            headers={
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD",
+                "Access-Control-Allow-Headers": "Accept, Accept-Language, Content-Language, Content-Type, Authorization, X-Requested-With, X-CSRF-Token, X-Correlation-ID, Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+                "Access-Control-Allow-Credentials": "true",
+            }
+        )
+    else:
+        return JSONResponse(
+            status_code=403,
+            content={"message": "Origin not allowed"},
+            headers={
+                "Access-Control-Allow-Origin": "null",
+            }
+        )
 
 # Add a simple CORS test endpoint
 @app.get("/cors-test")
-async def cors_test():
+async def cors_test(request: Request):
     """Simple endpoint to test CORS configuration."""
+    origin = request.headers.get("origin", "No origin header")
+    
     return {
         "success": True,
         "message": "CORS is working!",
         "data": {
             "timestamp": "2025-01-16T18:00:00Z",
-            "cors_origins": allow_origins
+            "cors_origins": allow_origins,
+            "request_origin": origin,
+            "origin_allowed": origin in allow_origins if origin != "No origin header" else "N/A",
+            "credentials_enabled": True
         }
     }
 

@@ -1,16 +1,21 @@
 import os, tempfile, json, re
 from langchain_core.documents import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from google import genai
+from sqlalchemy.ext.asyncio import AsyncSession
+from langchain_community.vectorstores.utils import filter_complex_metadata
+
+from ...db.database import AsyncSessionLocal
+from ..query_log_service import QueryLogService
 
 # ---------------------------------
 # إعداد النماذج والمجلدات
 # ---------------------------------
-VECTORSTORE_PATH = "./vector_store"
+VECTORSTORE_PATH = "./chroma_store"
 os.makedirs(VECTORSTORE_PATH, exist_ok=True)
 
 EMBEDDING_MODEL = "Omartificial-Intelligence-Space/GATE-AraBert-v1"
@@ -77,35 +82,56 @@ async def process_upload(file):
     if not documents:
         raise ValueError("❌ لم يتم العثور على مقالات صالحة في الملف")
 
-    # تقسيم النصوص إلى chunks
+    # تقسيم النصوص إلى chunks بدون الاعتماد على كائنات Document
     splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=50)
-    chunks = splitter.split_documents(documents)
+    texts: list[str] = []
+    metadatas: list[dict] = []
+    for base_doc in documents:
+        base_text = base_doc.page_content if isinstance(base_doc, Document) else str(base_doc)
+        raw_md = base_doc.metadata if isinstance(base_doc, Document) and isinstance(base_doc.metadata, dict) else {}
+        # تصفية/تسطيح الميتاداتا لتتوافق مع Chroma (سلاسل/أرقام/منطقي فقط)
+        base_md: dict = {}
+        for key, value in raw_md.items():
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                base_md[key] = value
+            elif isinstance(value, list):
+                try:
+                    base_md[key] = ", ".join(map(str, value))
+                except Exception:
+                    base_md[key] = str(value)
+            else:
+                base_md[key] = str(value)
+        # تقسيم النص وإضافة كل جزء مع نفس الميتاداتا الأساسية
+        parts = splitter.split_text(base_text)
+        for part in parts:
+            texts.append(part)
+            metadatas.append(dict(base_md))
 
-    # إنشاء أو تحديث التضمينات
-    if os.path.exists(f"{VECTORSTORE_PATH}/index.faiss"):
-        # إذا كان هناك تخزين موجود، نحدثه
-        existing_vectorstore = FAISS.load_local(
-            VECTORSTORE_PATH, 
-            embeddings, 
-            allow_dangerous_deserialization=True
-        )
-        existing_vectorstore.add_documents(chunks)
-        existing_vectorstore.save_local(VECTORSTORE_PATH)
-        chunks_count = len(chunks)
-    else:
-        # إذا لم يكن موجود، ننشئ جديد
-        vectorstore = FAISS.from_documents(chunks, embeddings)
-        vectorstore.save_local(VECTORSTORE_PATH)
-        chunks_count = len(chunks)
+    # إنشاء أو تحديث التضمينات باستخدام Chroma مع مجلد دائم
+    # Chroma يقوم بالحفظ تلقائياً في مجلد persistance
+    vectorstore = Chroma(
+        collection_name="legal_knowledge",
+        embedding_function=embeddings,
+        persist_directory=VECTORSTORE_PATH,
+    )
+    # إذا كان هناك مستندات جديدة، أضفها إلى المجموعة الحالية
+    if texts:
+        vectorstore.add_texts(texts=texts, metadatas=metadatas)
+        # persist للتأكد من التخزين
+        vectorstore.persist()
+    chunks_count = len(texts)
 
     return chunks_count
 
-async def answer_query(query: str):
-    if not os.path.exists(f"{VECTORSTORE_PATH}/index.faiss"):
-        return "❌ لم يتم رفع الملفات أو إنشاء قاعدة التضمينات بعد."
-
-    # تحميل قاعدة التضمينات
-    vectorstore = FAISS.load_local(VECTORSTORE_PATH, embeddings, allow_dangerous_deserialization=True)
+async def answer_query(query: str, user_id: int | None = None):
+    # تهيئة متجر Chroma الدائم
+    vectorstore = Chroma(
+        collection_name="legal_knowledge",
+        embedding_function=embeddings,
+        persist_directory=VECTORSTORE_PATH,
+    )
+    # التحقق من وجود أي بيانات قبل البحث
+    # Chroma لا يوفر فحص ملف مثل FAISS، سنحاول البحث وإن لم توجد بيانات سيعيد نتيجة فارغة
 
     # البحث الدلالي
     base_docs = vectorstore.similarity_search(query, k=20)
@@ -173,18 +199,41 @@ async def answer_query(query: str):
         
         # التأكد من وجود استجابة صحيحة
         if response and hasattr(response, 'text') and response.text:
-            return {
+            result_payload = {
                 "answer": response.text, 
                 "retrieved_context": retrieved_context # إرجاع السياق المسترجع
             }
         else:
-            return {
+            result_payload = {
                 "answer": "❌ لم يتم الحصول على إجابة مناسبة من النموذج.",
                 "retrieved_context": retrieved_context
             }
+        # Log query and answer asynchronously using a DB session
+        async with AsyncSessionLocal() as db:
+            service = QueryLogService(db)
+            await service.log_query_answer(
+                user_id=user_id,
+                query=query,
+                retrieved_articles=retrieved_context,
+                generated_answer=result_payload.get("answer"),
+            )
+        return result_payload
             
     except Exception as e:
-        return {
+        error_payload = {
             "answer": f"⚠️ حدث خطأ أثناء الاتصال بـ Gemini: {e}",
             "retrieved_context": retrieved_context
         }
+        # Best-effort logging even on errors
+        try:
+            async with AsyncSessionLocal() as db:
+                service = QueryLogService(db)
+                await service.log_query_answer(
+                    user_id=user_id,
+                    query=query,
+                    retrieved_articles=retrieved_context,
+                    generated_answer=error_payload.get("answer"),
+                )
+        except Exception:
+            pass
+        return error_payload

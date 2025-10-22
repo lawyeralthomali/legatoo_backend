@@ -56,7 +56,8 @@ async def create_tables():
         Subscription, Plan, Billing, UsageTracking, UserRole, Role,
         LawSource, LawArticle, LegalCase,
         CaseSection, LegalTerm, KnowledgeDocument, KnowledgeChunk,
-        AnalysisResult, KnowledgeLink, KnowledgeMetadata
+        AnalysisResult, KnowledgeLink, KnowledgeMetadata,
+        QueryLog,
     )
     
     async with engine.begin() as conn:
