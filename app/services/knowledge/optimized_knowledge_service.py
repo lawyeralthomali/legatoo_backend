@@ -52,15 +52,15 @@ from ...config.enhanced_logging import get_logger
 VECTORSTORE_PATH = "./chroma_store"
 os.makedirs(VECTORSTORE_PATH, exist_ok=True)
 
+
+# Performance optimization settings
 EMBEDDING_MODEL = "Omartificial-Intelligence-Space/GATE-AraBert-v1"
 RERANKER_MODEL = "Omartificial-Intelligence-Space/ARA-Reranker-V1"
 
-# Performance optimization settings
-BATCH_SIZE = 100  # Process embeddings in batches of 100
-CHUNK_SIZE = 800  # Increased from 400 for better context
-CHUNK_OVERLAP = 20  # Reduced from 50 for efficiency
-STREAM_CHUNK_SIZE = 8192  # 8KB chunks for file streaming
-
+BATCH_SIZE = 20
+CHUNK_SIZE = 400
+CHUNK_OVERLAP = 50
+STREAM_CHUNK_SIZE = 8192
 # ---------------------------------
 # Global Model Initialization (Singleton Pattern)
 # ---------------------------------

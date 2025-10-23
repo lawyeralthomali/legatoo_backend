@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload, joinedload
 
 from ....models.legal_knowledge import (
     LawSource, LawArticle,
-    KnowledgeDocument, KnowledgeChunk, AnalysisResult
+    KnowledgeDocument, KnowledgeChunk
 )
 from ....processors.hierarchical_document_processor import HierarchicalDocumentProcessor
 from ....parsers.parser_orchestrator import ParserOrchestrator

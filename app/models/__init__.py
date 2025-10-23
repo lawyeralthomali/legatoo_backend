@@ -10,7 +10,7 @@ from .usage_tracking import UsageTracking
 from .role import UserRole, Role, ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER, DEFAULT_USER_ROLE, ROLE_HIERARCHY, get_role_level, has_permission
 from .legal_knowledge import (
     LawSource, LawArticle, LegalCase, CaseSection, LegalTerm,
-    KnowledgeDocument, KnowledgeChunk, AnalysisResult, KnowledgeLink, KnowledgeMetadata
+    KnowledgeDocument, KnowledgeChunk
 )
 from .query_log import QueryLog
 
@@ -43,9 +43,6 @@ __all__ = [
     "LegalTerm",
     "KnowledgeDocument",
     "KnowledgeChunk",
-    "AnalysisResult",
-    "KnowledgeLink",
-    "KnowledgeMetadata",
     # Query logging
     "QueryLog",
 ]
