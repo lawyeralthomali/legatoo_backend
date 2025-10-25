@@ -18,7 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
 from ..services.legal.knowledge.legal_laws_service import LegalLawsService
+from ..services.legal.knowledge.document_parser_service import DocumentUploadService
 from ..schemas.response import ApiResponse, create_success_response, create_error_response
+from ..schemas.document_upload import DocumentUploadResponse
 from ..utils.auth import get_current_user
 from ..models.user import User
 
@@ -325,70 +327,330 @@ async def upload_and_parse_law_gemini_only(
         )
 
 
-@router.post("/upload-json", response_model=ApiResponse)
+@router.post("/upload-document", response_model=ApiResponse[DocumentUploadResponse])
+async def upload_legal_document(
+    file: UploadFile = File(..., description="Legal document file (JSON, PDF, DOCX, TXT)"),
+    title: str = Form(..., description="Document title"),
+    category: str = Form(..., description="Document category: law, article, manual, policy, contract"),
+    uploaded_by: Optional[int] = Form(None, description="User ID who uploaded the document"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> ApiResponse[DocumentUploadResponse]:
+    """
+    Upload a legal document for processing and knowledge extraction with dual database support.
+    
+    **Supported File Types:**
+    - JSON: Structured legal documents with law sources and articles
+    - PDF: Legal documents (placeholder for future implementation)
+    - DOCX: Word documents (placeholder for future implementation)
+    - TXT: Plain text documents (placeholder for future implementation)
+    
+    **JSON Document Structure:**
+    ```json
+    {
+        "law_sources": [
+            {
+                "name": "Law Name",
+                "type": "law",
+                "jurisdiction": "Saudi Arabia",
+                "issuing_authority": "Ministry",
+                "issue_date": "2023-01-01",
+                "last_update": "2023-12-01",
+                "description": "Description",
+                "source_url": "URL",
+                "articles": [
+                    {
+                        "article": "1",
+                        "title": "Article Title",
+                        "text": "Article content...",
+                        "keywords": ["keyword1", "keyword2"],
+                        "order_index": 1
+                    }
+                ]
+            }
+        ]
+    }
+    ```
+    
+    **Processing Features:**
+    - Automatic duplicate detection using SHA-256 hash
+    - Hierarchical content parsing (Law Sources → Articles → Chunks)
+    - Bulk database operations for optimal performance
+    - Comprehensive error handling and logging
+    - Real-time processing statistics
+    - Dual database support (SQL + Chroma)
+    
+    **Response Includes:**
+    - Document metadata and processing status
+    - Count of created law sources, articles, and chunks
+    - Detailed summaries of all created entities
+    - Processing time and file size information
+    - Duplicate detection status
+    
+    **Error Handling:**
+    - File validation (type, size, format)
+    - JSON structure validation
+    - Database constraint violations
+    - Processing failures with detailed error messages
+    """
+    logger.info(f"🚀 Starting document upload: {file.filename}")
+    
+    try:
+        # Validate file
+        if not file.filename:
+            return create_error_response(
+                message="No file provided",
+                errors=[{"field": "file", "message": "File is required"}]
+            )
+        
+        # Validate file type
+        allowed_extensions = ['.json', '.pdf', '.docx', '.doc', '.txt']
+        file_extension = os.path.splitext(file.filename)[1].lower()
+        
+        if file_extension not in allowed_extensions:
+            return create_error_response(
+                message="Unsupported file type",
+                errors=[{
+                    "field": "file", 
+                    "message": f"File type '{file_extension}' not supported. Allowed types: {', '.join(allowed_extensions)}"
+                }]
+            )
+        
+        # Validate category
+        allowed_categories = ['law', 'article', 'manual', 'policy', 'contract']
+        if category not in allowed_categories:
+            return create_error_response(
+                message="Invalid category",
+                errors=[{
+                    "field": "category",
+                    "message": f"Category must be one of: {', '.join(allowed_categories)}"
+                }]
+            )
+        
+        # Validate title
+        if not title or len(title.strip()) < 1:
+            return create_error_response(
+                message="Invalid title",
+                errors=[{"field": "title", "message": "Title is required and cannot be empty"}]
+            )
+        
+        # Use current user ID if not provided
+        user_id = uploaded_by or (current_user.sub if current_user else None)
+        
+        # Read file content
+        file_content = await file.read()
+        
+        if len(file_content) == 0:
+            return create_error_response(
+                message="Empty file",
+                errors=[{"field": "file", "message": "File is empty"}]
+            )
+        
+        # Check file size (limit to 50MB)
+        max_size = 50 * 1024 * 1024  # 50MB
+        if len(file_content) > max_size:
+            return create_error_response(
+                message="File too large",
+                errors=[{
+                    "field": "file",
+                    "message": f"File size ({len(file_content)} bytes) exceeds maximum allowed size ({max_size} bytes)"
+                }]
+            )
+        
+        logger.info(f"📁 File validation passed: {file.filename} ({len(file_content)} bytes)")
+        
+        # Initialize upload service
+        upload_service = DocumentUploadService(db)
+        
+        # Process document upload
+        result = await upload_service.upload_document(
+            file_content=file_content,
+            filename=file.filename,
+            title=title.strip(),
+            category=category,
+            uploaded_by=user_id
+        )
+        
+        # Convert result to response model
+        response_data = DocumentUploadResponse(**result)
+        
+        logger.info(f"✅ Document upload completed successfully: {response_data.document_id}")
+        
+        return create_success_response(
+            message=f"Document '{title}' uploaded and processed successfully",
+            data=response_data
+        )
+        
+    except ValueError as e:
+        logger.error(f"❌ Validation error: {e}")
+        return create_error_response(
+            message="Document validation failed",
+            errors=[{"field": "file", "message": str(e)}]
+        )
+    
+    except NotImplementedError as e:
+        logger.error(f"❌ Feature not implemented: {e}")
+        return create_error_response(
+            message="File type processing not yet implemented",
+            errors=[{"field": "file", "message": str(e)}]
+        )
+    
+    except Exception as e:
+        logger.error(f"❌ Document upload failed: {e}")
+        return create_error_response(
+            message=f"Failed to upload document: {str(e)}"
+        )
+
+
+@router.post("/upload-json", response_model=ApiResponse[DocumentUploadResponse])
 async def upload_law_json(
-    json_file: UploadFile = File(..., description="JSON file containing law structure"),
+    file: UploadFile = File(..., description="JSON file containing law structure with articles"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-   
+    """
+    Upload a legal law JSON document for processing with dual database support (SQL + Chroma).
+    
+    **Supported JSON Structure:**
+    ```json
+    {
+        "law_sources": [
+            {
+                "name": "Law Name",
+                "type": "law",
+                "jurisdiction": "Saudi Arabia",
+                "issuing_authority": "Ministry",
+                "issue_date": "2023-01-01",
+                "last_update": "2023-12-01",
+                "description": "Description",
+                "source_url": "URL",
+                "articles": [
+                    {
+                        "article": "1",
+                        "title": "Article Title",
+                        "text": "Article content...",
+                        "keywords": ["keyword1", "keyword2"],
+                        "order_index": 1
+                    }
+                ]
+            }
+        ]
+    }
+    ```
+    
+    **Processing Features:**
+    - Automatic duplicate detection using SHA-256 hash
+    - Hierarchical content parsing (Law Sources → Articles → Chunks)
+    - Dual database support (SQL + Chroma)
+    - Bulk database operations for optimal performance
+    - Comprehensive error handling with rollback
+    - Real-time processing statistics
+    
+    **Response Includes:**
+    - Document metadata and processing status
+    - Count of created law sources, articles, and chunks
+    - Detailed summaries of all created entities
+    - Processing time and file size information
+    - Duplicate detection status
+    """
+    logger.info(f"🚀 Starting JSON law upload: {file.filename}")
+    
     try:
-        # Validate file type
-        if not json_file.filename:
-            return create_error_response(message="No file provided")
-        
-        if not json_file.filename.lower().endswith('.json'):
+        # Validate file
+        if not file.filename:
             return create_error_response(
-                message="Invalid file type. Only JSON files are supported"
+                message="No file provided",
+                errors=[{"field": "file", "message": "File is required"}]
             )
         
-        # Read and parse JSON content
+        # Validate file type
+        if not file.filename.lower().endswith('.json'):
+            return create_error_response(
+                message="Invalid file type",
+                errors=[{
+                    "field": "file", 
+                    "message": "Only JSON files are supported"
+                }]
+            )
+        
+        # Read file content
+        file_content = await file.read()
+        
+        if len(file_content) == 0:
+            return create_error_response(
+                message="Empty file",
+                errors=[{"field": "file", "message": "File is empty"}]
+            )
+        
+        # Check file size (limit to 50MB)
+        max_size = 50 * 1024 * 1024  # 50MB
+        if len(file_content) > max_size:
+            return create_error_response(
+                message="File too large",
+                errors=[{
+                    "field": "file",
+                    "message": f"File size ({len(file_content)} bytes) exceeds maximum allowed size ({max_size} bytes)"
+                }]
+            )
+        
+        # Parse JSON to get title
         try:
-            content = await json_file.read()
-            json_data = json.loads(content.decode('utf-8'))
+            json_data = json.loads(file_content.decode('utf-8'))
+            # Extract law name as title
+            if "law_sources" in json_data and len(json_data["law_sources"]) > 0:
+                title = json_data["law_sources"][0].get("name", "Law Document")
+                category = json_data["law_sources"][0].get("type", "law")
+            else:
+                title = "Law Document"
+                category = "law"
         except json.JSONDecodeError as e:
             return create_error_response(
-                message=f"Invalid JSON format: {str(e)}"
-            )
-        except Exception as e:
-            return create_error_response(
-                message=f"Failed to read JSON file: {str(e)}"
+                message="Invalid JSON format",
+                errors=[{"field": "file", "message": f"Invalid JSON: {str(e)}"}]
             )
         
-        # Validate JSON structure
-        if "law_sources" not in json_data or not json_data["law_sources"]:
-            return create_error_response(
-                message="Invalid JSON structure. Missing 'law_sources' array"
-            )
+        logger.info(f"📁 File validation passed: {file.filename} ({len(file_content)} bytes)")
         
-        law_source_data = json_data["law_sources"][0]
-        if "branches" not in law_source_data:
-            return create_error_response(
-                message="Invalid JSON structure. Missing 'branches' in law_source"
-            )
+        # Initialize upload service with dual database support
+        upload_service = DocumentUploadService(db)
         
-        # Process the JSON data using LegalLawsService
-        service = LegalLawsService(db)
-        result = await service.upload_json_law_structure(
-            json_data=json_data,
-            uploaded_by=1  # Use hardcoded user ID 1
+        # Process document upload (same logic as document_upload_router.py)
+        result = await upload_service.upload_document(
+            file_content=file_content,
+            filename=file.filename,
+            title=title.strip(),
+            category=category,
+            uploaded_by=current_user.sub
         )
         
-        if result["success"]:
-            return create_success_response(
-                message=f"✅ Successfully processed JSON law structure: {result['message']}",
-                data=result["data"]
-            )
-        else:
-            return create_error_response(
-                message=f"❌ Failed to process JSON law structure: {result['message']}",
-                errors=result.get("errors", [])
-            )
-            
-    except Exception as e:
-        logger.error(f"Failed to upload JSON law structure: {str(e)}")
+        # Convert result to response model
+        response_data = DocumentUploadResponse(**result)
+        
+        logger.info(f"✅ JSON law upload completed successfully: {response_data.document_id}")
+        
+        return create_success_response(
+            message=f"JSON law document '{title}' uploaded and processed successfully",
+            data=response_data
+        )
+        
+    except ValueError as e:
+        logger.error(f"❌ Validation error: {e}")
         return create_error_response(
-            message=f"Failed to upload JSON law structure: {str(e)}"
+            message="JSON validation failed",
+            errors=[{"field": "file", "message": str(e)}]
+        )
+    
+    except NotImplementedError as e:
+        logger.error(f"❌ Feature not implemented: {e}")
+        return create_error_response(
+            message="File type processing not yet implemented",
+            errors=[{"field": "file", "message": str(e)}]
+        )
+    
+    except Exception as e:
+        logger.error(f"❌ JSON law upload failed: {e}")
+        return create_error_response(
+            message=f"Failed to upload JSON law: {str(e)}"
         )
 
 

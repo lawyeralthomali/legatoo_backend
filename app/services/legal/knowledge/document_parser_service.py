@@ -32,11 +32,11 @@ except ImportError:
     from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 
-from ..models.legal_knowledge import (
+from ....models.legal_knowledge import (
     KnowledgeDocument, LawSource, LawArticle, KnowledgeChunk,
     LegalCase, CaseSection, LegalTerm
 )
-from ..schemas.document_upload import (
+from ....schemas.document_upload import (
     LawSourceSummary, LawArticleSummary, KnowledgeChunkSummary,
     BulkOperationResult, DocumentProcessingStats
 )
@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------
 # Global Configuration and Constants
 # ---------------------------------
-VECTORSTORE_PATH = "./chroma_store_new"
+VECTORSTORE_PATH = "./chroma_store"
 os.makedirs(VECTORSTORE_PATH, exist_ok=True)
 
 # Performance optimization settings
