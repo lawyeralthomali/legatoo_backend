@@ -443,25 +443,24 @@ async def list_laws(
         return create_error_response(message=f"Failed to list laws: {str(e)}")
 
 
-@router.get("/{law_id}/tree", response_model=ApiResponse)
-async def get_law_tree(
+@router.get("/{law_id}/articles", response_model=ApiResponse)
+async def get_law_articles(
     law_id: int = Path(..., gt=0, description="Law source ID"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Retrieve full hierarchical tree of a law.
+    Retrieve all articles of a specific law.
     
     **Returns:**
-    Complete law structure:
-    ```
-    LawSource
-      └── LawBranch[]
-            └── LawChapter[]
-                  └── LawArticle[]
-    ```
+    Law metadata with all articles containing:
+    - Article ID, number, title, and content
+    - Keywords (if available)
+    - Order index for sorting
+    - AI processing status
+    - Creation timestamps
     
-    Includes all metadata, content, and keywords.
+    **Note:** Articles are sorted by their order_index.
     """
     try:
         service = LegalLawsService(db)
@@ -476,8 +475,8 @@ async def get_law_tree(
             return create_error_response(message=result["message"])
             
     except Exception as e:
-        logger.error(f"Failed to get law tree: {str(e)}")
-        return create_error_response(message=f"Failed to get law tree: {str(e)}")
+        logger.error(f"Failed to get law articles: {str(e)}")
+        return create_error_response(message=f"Failed to get law articles: {str(e)}")
 
 
 @router.get("/{law_id}", response_model=ApiResponse)
