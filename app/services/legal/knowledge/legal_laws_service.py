@@ -2,6 +2,7 @@
 import logging
 import json
 import hashlib
+import os
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from sqlalchemy import select, func, or_, and_, delete
@@ -80,6 +81,12 @@ class LegalLawsService:
         self.db = db
         self.hierarchical_processor = HierarchicalDocumentProcessor(db)
         self.parser = ParserOrchestrator(self.hierarchical_processor)
+    
+    def _get_file_extension(self, filename_or_path: str) -> str:
+        """Extract file extension from filename or path."""
+        if not filename_or_path:
+            return ""
+        return os.path.splitext(filename_or_path)[1].lower() if '.' in filename_or_path else ""
 
     
 
@@ -89,27 +96,86 @@ class LegalLawsService:
         json_data: Dict[str, Any],
         uploaded_by: int = 1  # Default to user ID 1
     ) -> Dict[str, Any]:
-       
+        """
+        Upload JSON law structure (legacy method for backwards compatibility).
+        
+        This method is kept for compatibility with existing upload-json endpoint.
+        It creates the KnowledgeDocument and LawSource first, then processes the JSON.
+        """
         try:
-            logger.info("Starting JSON law structure upload")
+            logger.info("Starting JSON law structure upload (legacy method)")
             
-            # Extract law source data
+            # Extract law source data - handle both dict and list formats
             law_sources = json_data.get("law_sources", [])
             if not law_sources:
                 return {"success": False, "message": "No law sources found in JSON", "data": None}
             
-            law_source_data = law_sources[0]
+            # Handle both formats: dict (single law source) or list (multiple law sources)
+            if isinstance(law_sources, dict):
+                logger.info("📋 Detected single law source (dict format)")
+                law_source_data = law_sources
+            elif isinstance(law_sources, list):
+                if len(law_sources) == 0:
+                    return {"success": False, "message": "No law sources found in JSON", "data": None}
+                logger.info(f"📋 Detected multiple law sources (list format, count: {len(law_sources)})")
+                law_source_data = law_sources[0]
+            else:
+                return {"success": False, "message": f"Invalid law_sources format: {type(law_sources)}", "data": None}
             processing_report = json_data.get("processing_report", {})
             
             # Generate unique hash for JSON upload based on content
             json_content = json.dumps(json_data, sort_keys=True, ensure_ascii=False)
             unique_hash = hashlib.sha256(json_content.encode('utf-8')).hexdigest()
             
+            # Check for duplicate before creating document
+            duplicate_check = await self.db.execute(
+                select(KnowledgeDocument).where(KnowledgeDocument.file_hash == unique_hash)
+            )
+            existing_doc = duplicate_check.scalar_one_or_none()
+            
+            if existing_doc:
+                logger.warning(f"⚠️ Duplicate file detected: hash {unique_hash[:16]}...")
+                
+                # Get the related law source if it exists
+                law_source_result = await self.db.execute(
+                    select(LawSource).where(LawSource.knowledge_document_id == existing_doc.id)
+                )
+                existing_law_source = law_source_result.scalar_one_or_none()
+                
+                # Build detailed error message
+                error_message = (
+                    f"❌ Duplicate file detected: This document has already been uploaded. "
+                    f"File hash: {unique_hash[:16]}... "
+                    f"Original document ID: {existing_doc.id}, "
+                    f"Title: '{existing_doc.title}', "
+                    f"Uploaded at: {existing_doc.uploaded_at}"
+                )
+                
+                if existing_law_source:
+                    error_message += f", Law Source: '{existing_law_source.name}' (ID: {existing_law_source.id})"
+                
+                return {
+                    "success": False,
+                    "message": error_message,
+                    "data": {
+                        "document_id": existing_doc.id,
+                        "document_title": existing_doc.title,
+                        "uploaded_at": existing_doc.uploaded_at.isoformat() if existing_doc.uploaded_at else None,
+                        "law_source_id": existing_law_source.id if existing_law_source else None,
+                        "law_source_name": existing_law_source.name if existing_law_source else None
+                    },
+                    "errors": [{
+                        "field": "file",
+                        "message": "This file has already been uploaded. Upload a different file or use the existing document."
+                    }]
+                }
+            
             # Create KnowledgeDocument (no file, just metadata)
             knowledge_doc = KnowledgeDocument(
                 title=f"JSON Upload: {law_source_data.get('name', 'Unknown Law')}",
                 category="law",
                 file_path=f"json_upload_{unique_hash[:8]}.json",  # Unique path for JSON uploads
+                file_extension=".json",  # Store file extension
                 file_hash=unique_hash,  # Unique hash for JSON uploads
                 source_type="uploaded",
                 uploaded_by=uploaded_by,
@@ -141,145 +207,66 @@ class LegalLawsService:
             await self.db.flush()
             logger.info(f"Created LawSource {law_source.id}")
             
-            # Process law structure - handle both hierarchical and direct article structures
-            total_branches = 0
-            total_chapters = 0
+            # Process law structure - simplify to only process articles directly
             total_articles = 0
-            chunk_index = 0  # Initialize incremental chunk counter
+            chunk_index = 0
             
             # Check if it has branches structure (hierarchical)
             branches_data = law_source_data.get("branches", [])
-            if branches_data:
-                # Process hierarchical structure: branches -> chapters -> articles
-                for branch_data in branches_data:
-                    # Create LawBranch
-                    law_branch = LawBranch(
-                        law_source_id=law_source.id,
-                        branch_number=branch_data.get("branch_number", ""),
-                        branch_name=branch_data.get("branch_name", ""),
-                        description=branch_data.get("description"),
-                        order_index=branch_data.get("order_index", 0),
-                        source_document_id=knowledge_doc.id,
-                        created_at=datetime.utcnow()
-                    )
-                    
-                    self.db.add(law_branch)
-                    await self.db.flush()
-                    total_branches += 1
-                    
-                    # Process chapters
-                    chapters_data = branch_data.get("chapters", [])
-                    for chapter_data in chapters_data:
-                        # Create LawChapter
-                        law_chapter = LawChapter(
-                            branch_id=law_branch.id,
-                            chapter_number=chapter_data.get("chapter_number", ""),
-                            chapter_name=chapter_data.get("chapter_name", ""),
-                            description=chapter_data.get("description"),
-                            order_index=chapter_data.get("order_index", 0),
-                            source_document_id=knowledge_doc.id,
-                            created_at=datetime.utcnow()
-                        )
-                        
-                        self.db.add(law_chapter)
-                        await self.db.flush()
-                        total_chapters += 1
-                        
-                        # Process articles
-                        articles_data = chapter_data.get("articles", [])
-                        for article_data in articles_data:
-                            # Create LawArticle
-                            law_article = LawArticle(
-                                law_source_id=law_source.id,
-                                branch_id=law_branch.id,
-                                chapter_id=law_chapter.id,
-                                article_number=article_data.get("article_number", ""),
-                                title=article_data.get("title"),
-                                content=article_data.get("content", ""),
-                                keywords=article_data.get("keywords", []),
-                                order_index=article_data.get("order_index", 0),
-                                source_document_id=knowledge_doc.id,
-                                created_at=datetime.utcnow()
-                            )
-                            
-                            self.db.add(law_article)
-                            await self.db.flush()
-                            total_articles += 1
-                            
-                            # Split article content into segments for better RAG retrieval
-                            segments = _split_to_segments(law_article.content)
-                            
-                            for s_idx, seg in enumerate(segments):
-                                # Format chunk with article number and title
-                                seg_content = _format_chunk_content(
-                                    article_title=law_article.title,
-                                    article_content=seg,
-                                    article_number=law_article.article_number
-                                )
-                                
-                                chunk = KnowledgeChunk(
-                                    document_id=knowledge_doc.id,
-                                    chunk_index=chunk_index,
-                                    content=seg_content,
-                                    tokens_count=len(seg_content.split()),
-                                    law_source_id=law_source.id,
-                                    branch_id=law_branch.id,
-                                    chapter_id=law_chapter.id,
-                                    article_id=law_article.id,
-                                    verified_by_admin=False,
-                                    created_at=datetime.utcnow()
-                                )
-                                
-                                
-                                self.db.add(chunk)
-                                chunk_index += 1
-            
-            # Check if it has direct articles structure (like 1.json)
-            elif law_source_data.get("articles"):
-                # Process direct articles structure (no branches/chapters)
+        
+            # Check if it has direct articles structure
+            if law_source_data.get("articles"):
+                logger.info(f"📄 Processing direct articles structure")
                 articles_data = law_source_data.get("articles", [])
                 for article_data in articles_data:
-                    # Create LawArticle directly under law source
-                    law_article = LawArticle(
+                    # Extract article content - handle both 'text' and 'content' field names
+                    article_content = article_data.get("text") or article_data.get("content", "")
+                    
+                    # Extract article number
+                    article_number = article_data.get("article") or article_data.get("article_number", "")
+                    
+                    # Extract title (default to empty string if not present)
+                    article_title = article_data.get("title", "")
+                    
+                    # Extract order_index - try to extract from article number if not provided
+                    order_index = article_data.get("order_index")
+                    if order_index is None:
+                        # Try to extract number from article number for ordering
+                        import re
+                        match = re.search(r'\d+', article_number)
+                        if match:
+                            order_index = int(match.group())
+                        else:
+                            order_index = total_articles
+                    
+                    # Create article directly under law source
+                    article = LawArticle(
                         law_source_id=law_source.id,
-                        branch_id=None,  # No branch
-                        chapter_id=None,  # No chapter
-                        article_number=article_data.get("article_number", ""),
-                        title=article_data.get("title"),
-                        content=article_data.get("content", ""),
-                        keywords=article_data.get("keywords", []),
-                        order_index=article_data.get("order_index", 0),
+                        article_number=article_number,
+                        title=article_title,
+                        content=article_content,
+                        order_index=order_index,
                         source_document_id=knowledge_doc.id,
                         created_at=datetime.utcnow()
                     )
-                    
-                    self.db.add(law_article)
+                    self.db.add(article)
                     await self.db.flush()
                     total_articles += 1
                     
-                    # Split article content into segments for better RAG retrieval
-                    segments = _split_to_segments(law_article.content)
-                    
-                    for s_idx, seg in enumerate(segments):
-                        # Format chunk with article number and title
-                        seg_content = _format_chunk_content(
-                            article_title=law_article.title,
-                            article_content=seg,
-                            article_number=law_article.article_number
-                        )
-                        
+                    # Split article content into segments
+                    segments = _split_to_segments(article.content)
+                    for seg in segments:
+                        seg_content = _format_chunk_content(article.title, seg, article.article_number)
                         chunk = KnowledgeChunk(
                             document_id=knowledge_doc.id,
                             chunk_index=chunk_index,
                             content=seg_content,
                             tokens_count=len(seg_content.split()),
                             law_source_id=law_source.id,
-                            article_id=law_article.id,
+                            article_id=article.id,
                             verified_by_admin=False,
                             created_at=datetime.utcnow()
                         )
-                        
-                        
                         self.db.add(chunk)
                         chunk_index += 1
             
@@ -297,24 +284,25 @@ class LegalLawsService:
                     "issuing_authority": law_source.issuing_authority
                 },
                 "statistics": {
-                    "total_branches": total_branches,
-                    "total_chapters": total_chapters,
                     "total_articles": total_articles,
+                    "total_chunks": chunk_index,
                     "processing_report": processing_report
                 }
             }
             
-            logger.info(f"Successfully processed JSON law structure with index rebuild: {total_branches} branches, {total_chapters} chapters, {total_articles} articles")
+            logger.info(f"✅ Successfully processed JSON law structure: {total_articles} articles, {chunk_index} chunks")
             
             return {
                 "success": True,
-                "message": f"Successfully processed JSON law structure with index rebuild: {total_branches} branches, {total_chapters} chapters, {total_articles} articles",
+                "message": f"Successfully processed JSON law structure: {total_articles} articles, {chunk_index} chunks",
                 "data": response_data
             }
             
         except Exception as e:
             await self.db.rollback()
-            logger.error(f"Failed to upload JSON law structure: {str(e)}")
+            logger.error(f"Failed to upload JSON law structure: {str(e)}", exc_info=True)
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return {"success": False, "message": f"Failed to upload JSON law structure: {str(e)}", "data": None}
 
     def _parse_date(self, date_str: Optional[str]) -> Optional[datetime]:
@@ -360,48 +348,98 @@ class LegalLawsService:
         use_ai: bool = True,
         fallback_on_failure: bool = True
     ) -> Dict[str, Any]:
-       
+        """
+        Upload and parse a legal law document supporting multiple file types.
+        
+        Supported file types:
+        - .json: Fully processed with article extraction
+        - .pdf, .docx, .txt: Metadata-only upload (parsing pending)
+        
+        Args:
+            file_path: Path to the uploaded file
+            file_hash: SHA-256 hash of the file
+            original_filename: Original filename of the uploaded file
+            law_source_details: Details for creating the law source
+            uploaded_by: User ID who uploaded the document
+            use_ai: Whether to use AI parser for supported file types
+            fallback_on_failure: Whether to fallback to local parser on AI failure
+            
+        Returns:
+            Dict with success status, message, and data or errors
+        """
         try:
-            # Step 1: Check for duplicate
+            # Step 1: Detect file type
+            file_extension = self._get_file_extension(original_filename or file_path)
+            logger.info(f"📄 Detected file type: {file_extension}")
+            
+            # Step 2: Check for duplicate
             duplicate_check = await self.db.execute(
                 select(KnowledgeDocument).where(KnowledgeDocument.file_hash == file_hash)
             )
             existing_doc = duplicate_check.scalar_one_or_none()
             
             if existing_doc:
+                logger.warning(f"⚠️ Duplicate file detected: hash {file_hash[:16]}...")
+                
+                # Get the related law source if it exists
+                law_source_result = await self.db.execute(
+                    select(LawSource).where(LawSource.knowledge_document_id == existing_doc.id)
+                )
+                existing_law_source = law_source_result.scalar_one_or_none()
+                
+                # Build detailed error message
+                error_message = (
+                    f"❌ Duplicate file detected: This document has already been uploaded. "
+                    f"File hash: {file_hash[:16]}... "
+                    f"Original document ID: {existing_doc.id}, "
+                    f"Title: '{existing_doc.title}', "
+                    f"Uploaded at: {existing_doc.uploaded_at}"
+                )
+                
+                if existing_law_source:
+                    error_message += f", Law Source: '{existing_law_source.name}' (ID: {existing_law_source.id})"
+                
                 return {
                     "success": False,
-                    "message": f"Duplicate file detected. Document already exists: {existing_doc.title}",
-                    "data": None,
+                    "message": error_message,
+                    "data": {
+                        "document_id": existing_doc.id,
+                        "document_title": existing_doc.title,
+                        "uploaded_at": existing_doc.uploaded_at.isoformat() if existing_doc.uploaded_at else None,
+                        "law_source_id": existing_law_source.id if existing_law_source else None,
+                        "law_source_name": existing_law_source.name if existing_law_source else None
+                    },
                     "errors": [{
-                        "field": "file_hash",
-                        "message": f"File already uploaded as document ID {existing_doc.id}"
+                        "field": "file",
+                        "message": "This file has already been uploaded. Upload a different file or use the existing document."
                     }]
                 }
             
-            logger.info(f"Starting law upload and parsing: {law_source_details.get('name')}")
+            logger.info(f"🚀 Starting law upload and parsing: {law_source_details.get('name')} (Type: {file_extension})")
             
-            # Step 2: Create KnowledgeDocument
+            # Step 3: Create KnowledgeDocument with file extension
             knowledge_doc = KnowledgeDocument(
                 title=law_source_details["name"],
                 category='law',
                 file_path=file_path,
+                file_extension=file_extension,  # Store file extension
                 file_hash=file_hash,
                 source_type='uploaded',
-                status='raw',
+                status='raw',  # Will be updated based on file type
                 uploaded_by=uploaded_by,
                 uploaded_at=datetime.utcnow(),
                 document_metadata={
                     "original_filename": original_filename,
-                    "uploaded_by": uploaded_by
+                    "uploaded_by": uploaded_by,
+                    "file_type": file_extension
                 }
             )
             self.db.add(knowledge_doc)
             await self.db.flush()  # Get the ID
             
-            logger.info(f"Created KnowledgeDocument {knowledge_doc.id}")
+            logger.info(f"📄 Created KnowledgeDocument {knowledge_doc.id}")
             
-            # Step 3: Create LawSource
+            # Step 4: Create LawSource
             law_source = LawSource(
                 name=law_source_details["name"],
                 type=law_source_details["type"],
@@ -418,107 +456,30 @@ class LegalLawsService:
             self.db.add(law_source)
             await self.db.flush()  # Get the ID
             
-            logger.info(f"Created LawSource {law_source.id}")
+            logger.info(f"📚 Created LawSource {law_source.id}")
             
-            # Step 4: Parse using AI (Gemini) if enabled; otherwise use local
-            parser_used = "local"
-            try:
-                parsed = await self.parser.parse(
-                    file_path=file_path,
-                    law_source_details=law_source_details,
-                    uploaded_by=uploaded_by,
-                    law_source_id=law_source.id,
-                    use_ai=use_ai,
-                    fallback_on_failure=fallback_on_failure,
-                )
-                parser_used = parsed.get("parser_used", "local")
-                if parsed.get("success"):
-                    if parser_used == "gemini":
-                        hierarchy = parsed.get("data", {}).get("hierarchy", {})
-                    else:
-                        structure = parsed.get("data", {}).get("structure")
-                        hierarchy = await self._convert_structure_to_hierarchy_dict(structure)
-                else:
-                    await self.db.rollback()
-                    return {
-                        "success": False,
-                        "message": f"Failed to parse document: {parsed.get('message')}",
-                        "data": None,
-                    }
-            except Exception as parse_error:
-                logger.error(f"Document parsing failed: {str(parse_error)}")
+            # Step 5: Route to appropriate parser based on file type
+            if file_extension == '.json':
+                # Process JSON file - call the JSON upload logic
+                logger.info("🔧 Processing JSON file - using JSON law structure parser")
+                return await self._process_json_file(file_path, knowledge_doc, law_source, uploaded_by)
+            elif file_extension in ['.pdf', '.docx', '.doc', '.txt']:
+                # Create placeholder records for non-JSON files
+                logger.info(f"⏳ Processing {file_extension} file - creating metadata records (parsing deferred)")
+                return await self._process_non_json_file(file_path, knowledge_doc, law_source, file_extension, uploaded_by, use_ai, fallback_on_failure)
+            else:
+                # Unsupported file type
+                logger.error(f"❌ Unsupported file type: {file_extension}")
                 await self.db.rollback()
                 return {
                     "success": False,
-                    "message": f"Failed to parse document: {str(parse_error)}",
+                    "message": f"Unsupported file type: {file_extension}. Supported types: .json, .pdf, .docx, .doc, .txt",
                     "data": None,
+                    "errors": [{
+                        "field": "file",
+                        "message": f"File type {file_extension} is not yet supported for detailed parsing"
+                    }]
                 }
-            
-            # Step 5: Create articles directly from parsed data
-            chunk_index = 0
-            
-            # Extract branches from hierarchy and flatten to articles
-            branches_data = hierarchy.get("branches", [])
-            total_articles = 0
-            
-            for branch_data in branches_data:
-                # Extract articles from chapters within branches
-                for chapter_data in branch_data.get("chapters", []):
-                    # Extract articles
-                    for article_data in chapter_data.get("articles", []):
-                        article = LawArticle(
-                            law_source_id=law_source.id,
-                            article_number=article_data.get("article_number"),
-                            title=article_data.get("title"),
-                            content=article_data.get("content"),
-                            keywords=article_data.get("keywords", []),
-                            order_index=article_data.get("order_index", total_articles),
-                            source_document_id=knowledge_doc.id,
-                            created_at=datetime.utcnow()
-                        )
-                        self.db.add(article)
-                        await self.db.flush()
-                        
-                        logger.info(f"Created Article {article.id}: {article.article_number}")
-                        total_articles += 1
-                        
-                        # Step 6: Create KnowledgeChunk for article with title included
-                        chunk_content = _format_chunk_content(article.title, article.content)
-                        chunk = KnowledgeChunk(
-                            document_id=knowledge_doc.id,
-                            chunk_index=chunk_index,
-                            content=chunk_content,
-                            tokens_count=len(chunk_content.split()),
-                            law_source_id=law_source.id,
-                            article_id=article.id,
-                            verified_by_admin=False,
-                            created_at=datetime.utcnow()
-                        )
-                        
-                        
-                        self.db.add(chunk)
-                        chunk_index += 1
-            
-            # Step 7: Update statuses
-            law_source.status = 'processed'
-            knowledge_doc.status = 'processed'
-            knowledge_doc.processed_at = datetime.utcnow()
-            
-            await self.db.commit()
-            
-            logger.info(f"✅ Successfully uploaded and parsed law {law_source.id}")
-            
-            # Return full hierarchy tree plus parser used
-            tree_result = await self.get_law_tree(law_source.id)
-            
-            return {
-                "success": True,
-                "message": f"Law uploaded and parsed successfully. Created {total_articles} articles.",
-                "data": {
-                    **(tree_result.get("data") or {}),
-                    "parser_used": parser_used
-                }
-            }
             
         except Exception as e:
             logger.error(f"Failed to upload and parse law: {str(e)}")
@@ -526,6 +487,121 @@ class LegalLawsService:
             return {
                 "success": False,
                 "message": f"Failed to upload and parse law: {str(e)}",
+                "data": None
+            }
+    
+    async def _process_json_file(
+        self,
+        file_path: str,
+        knowledge_doc: KnowledgeDocument,
+        law_source: LawSource,
+        uploaded_by: int
+    ) -> Dict[str, Any]:
+        """Process JSON file using DocumentUploadService for dual-database support."""
+        try:
+            logger.info("📋 Processing JSON file with dual-database support...")
+            
+            # Import DocumentUploadService to use its dual-database logic
+            from ....services.legal.knowledge.document_parser_service import DocumentUploadService
+            
+            # Create DocumentUploadService instance with the same database session
+            upload_service = DocumentUploadService(self.db)
+            
+            # Read the file content
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
+            
+            # Extract title and category from law_source
+            title = law_source.name
+            category = 'law'  # Default category for laws
+            
+            # Use DocumentUploadService to process the JSON file
+            # This will create entries in both SQL and Chroma
+            result = await upload_service.upload_document(
+                file_content=file_content,
+                filename=os.path.basename(file_path),
+                title=title,
+                category=category,
+                uploaded_by=uploaded_by
+            )
+            
+            # Update law_source status
+            law_source.status = 'processed'
+            knowledge_doc.status = 'processed'
+            knowledge_doc.processed_at = datetime.utcnow()
+            await self.db.commit()
+            
+            # Return the result
+            return {
+                "success": True,
+                "message": f"JSON file processed successfully with dual-database support. Created {result.get('chunks_created', 0)} chunks.",
+                "data": {
+                    "law_source_id": law_source.id,
+                    "document_id": knowledge_doc.id,
+                    "total_articles": result.get('articles_processed', 0),
+                    "total_chunks": result.get('chunks_created', 0),
+                    "parser_used": "document_upload_service",
+                    "dual_database": True
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to process JSON file: {str(e)}")
+            await self.db.rollback()
+            return {
+                "success": False,
+                "message": f"Failed to process JSON file: {str(e)}",
+                "data": None
+            }
+    
+    async def _process_non_json_file(
+        self,
+        file_path: str,
+        knowledge_doc: KnowledgeDocument,
+        law_source: LawSource,
+        file_extension: str,
+        uploaded_by: int,
+        use_ai: bool = True,
+        fallback_on_failure: bool = True
+    ) -> Dict[str, Any]:
+        """Process non-JSON files by creating metadata records and marking for deferred parsing."""
+        try:
+            logger.info(f"⏳ Processing {file_extension} file (parsing deferred)")
+            
+            # Mark as pending parsing
+            knowledge_doc.status = 'pending_parsing'
+            law_source.status = 'pending_parsing'
+            
+            # Update metadata
+            knowledge_doc.document_metadata = {
+                **knowledge_doc.document_metadata,
+                "parsing_deferred": True,
+                "file_extension": file_extension,
+                "parser_type": "to_be_implemented"
+            }
+            
+            await self.db.commit()
+            
+            logger.info(f"✅ Created metadata records for {file_extension} file (Document ID: {knowledge_doc.id}, Law Source ID: {law_source.id})")
+            
+            return {
+                "success": True,
+                "message": f"{file_extension.upper()} file uploaded successfully. Metadata records created. Detailed parsing is pending implementation.",
+                "data": {
+                    "law_source_id": law_source.id,
+                    "document_id": knowledge_doc.id,
+                    "status": "pending_parsing",
+                    "file_type": file_extension,
+                    "note": "Detailed article extraction for this file type is not yet implemented"
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to process {file_extension} file: {str(e)}")
+            await self.db.rollback()
+            return {
+                "success": False,
+                "message": f"Failed to process {file_extension} file: {str(e)}",
                 "data": None
             }
 
@@ -891,10 +967,7 @@ class LegalLawsService:
             
             file_path = law.knowledge_document.file_path
             
-            # Delete existing hierarchy (use delete() correctly)
-            await self.db.execute(
-                delete(LawBranch).where(LawBranch.law_source_id == law_id)
-            )
+            # Delete existing hierarchy (delete articles and chunks)
             await self.db.execute(
                 delete(LawArticle).where(LawArticle.law_source_id == law_id)
             )
@@ -937,41 +1010,15 @@ class LegalLawsService:
                 
                 hierarchy = parsing_result.get("data", {}).get("hierarchy", {})
                 
-                # Recreate hierarchy (same logic as upload_and_parse_law)
+                # Recreate hierarchy (extract articles directly from structure)
                 chunk_index = 0
                 branches_data = hierarchy.get("branches", [])
                 
                 for branch_data in branches_data:
-                    branch = LawBranch(
-                        law_source_id=law.id,
-                        branch_number=branch_data.get("branch_number"),
-                        branch_name=branch_data.get("branch_name"),
-                        description=branch_data.get("description"),
-                        order_index=branch_data.get("order_index", 0),
-                        source_document_id=law.knowledge_document_id,
-                        created_at=datetime.utcnow()
-                    )
-                    self.db.add(branch)
-                    await self.db.flush()
-                    
                     for chapter_data in branch_data.get("chapters", []):
-                        chapter = LawChapter(
-                            branch_id=branch.id,
-                            chapter_number=chapter_data.get("chapter_number"),
-                            chapter_name=chapter_data.get("chapter_name"),
-                            description=chapter_data.get("description"),
-                            order_index=chapter_data.get("order_index", 0),
-                            source_document_id=law.knowledge_document_id,
-                            created_at=datetime.utcnow()
-                        )
-                        self.db.add(chapter)
-                        await self.db.flush()
-                        
                         for article_data in chapter_data.get("articles", []):
                             article = LawArticle(
                                 law_source_id=law.id,
-                                branch_id=branch.id,
-                                chapter_id=chapter.id,
                                 article_number=article_data.get("article_number"),
                                 title=article_data.get("title"),
                                 content=article_data.get("content"),
@@ -991,14 +1038,10 @@ class LegalLawsService:
                                 content=chunk_content,
                                 tokens_count=len(chunk_content.split()),
                                 law_source_id=law.id,
-                                branch_id=branch.id,
-                                chapter_id=chapter.id,
                                 article_id=article.id,
                                 verified_by_admin=False,
                                 created_at=datetime.utcnow()
                             )
-                            
-                            
                             self.db.add(chunk)
                             chunk_index += 1
                 
@@ -1104,17 +1147,6 @@ class LegalLawsService:
         """Get comprehensive statistics for a law."""
         try:
             # Get counts
-            branches_count = await self.db.scalar(
-                select(func.count()).select_from(LawBranch).where(LawBranch.law_source_id == law_id)
-            )
-            
-            chapters_count = await self.db.scalar(
-                select(func.count())
-                .select_from(LawChapter)
-                .join(LawBranch)
-                .where(LawBranch.law_source_id == law_id)
-            )
-            
             articles_count = await self.db.scalar(
                 select(func.count()).select_from(LawArticle).where(LawArticle.law_source_id == law_id)
             )
@@ -1142,8 +1174,6 @@ class LegalLawsService:
             )
             
             stats_data = {
-                "branches_count": branches_count or 0,
-                "chapters_count": chapters_count or 0,
                 "articles_count": articles_count or 0,
                 "chunks_count": chunks_count or 0,
                 "verified_chunks": verified_chunks or 0,

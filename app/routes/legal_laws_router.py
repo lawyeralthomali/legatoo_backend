@@ -13,16 +13,15 @@ import uuid
 import json
 from typing import Optional, List
 from datetime import datetime, date
-from fastapi import APIRouter, Depends, Query, HTTPException, Path, UploadFile, File, Form
+from fastapi import APIRouter, Depends, Query, HTTPException, Path, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
 from ..services.legal.knowledge.legal_laws_service import LegalLawsService
-from ..services.legal.knowledge.document_parser_service import DocumentUploadService
 from ..schemas.response import ApiResponse, create_success_response, create_error_response
-from ..schemas.document_upload import DocumentUploadResponse
 from ..utils.auth import get_current_user
 from ..models.user import User
+from ..schemas.profile_schemas import TokenData
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +42,283 @@ def calculate_file_hash(file_path: str) -> str:
 # ===========================================
 
 @router.post("/upload", response_model=ApiResponse)
+async def upload_legal_file(
+    file: UploadFile = File(..., description="Legal document file (JSON, PDF, DOCX, TXT)"),
+    law_name: Optional[str] = Form(None, description="Name of the law"),
+    law_type: Optional[str] = Form(None, description="Type: law, regulation, code, directive, decree"),
+    jurisdiction: Optional[str] = Form(None, description="Jurisdiction (e.g., المملكة العربية السعودية)"),
+    issuing_authority: Optional[str] = Form(None, description="Issuing authority (e.g., وزارة العمل)"),
+    issue_date: Optional[str] = Form(None, description="Issue date (YYYY-MM-DD format)"),
+    last_update: Optional[str] = Form(None, description="Last update date (YYYY-MM-DD)"),
+    description: Optional[str] = Form(None, description="Law description"),
+    source_url: Optional[str] = Form(None, description="Source URL"),
+    use_ai: bool = Query(True, description="Use AI extractor when available"),
+    fallback_on_failure: bool = Query(True, description="Fallback to local parser if AI fails"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    🎯 Unified Upload Endpoint - Smart Legal Document Processor
+    
+    Automatically detects and handles different file types:
+    - **JSON**: Extracts law sources and articles directly from structured JSON
+    - **PDF/DOCX/TXT**: Saves file and prepares for AI or manual parsing
+    - **Status Management**: Automatically updates law status (unhandled → processing → processed)
+    
+    **Supported File Types:**
+    - `.json` - Structured legal documents with law sources and articles
+    - `.pdf` - Legal documents (requires AI parsing)
+    - `.docx`, `.doc` - Word documents (requires AI parsing)
+    - `.txt` - Plain text documents
+    
+    **Processing Workflow:**
+    1. File upload → Status: `raw` (unhandled)
+    2. File validation → SHA-256 duplicate detection
+    3. File type detection → Route to appropriate handler
+    4. Document creation → Store metadata
+    5. Law source creation → Link to document
+    6. For JSON: Extract articles immediately → Status: `processed`
+    7. For others: Status remains `raw` until parsing
+    
+    **JSON Structure Example:**
+    ```json
+    {
+        "law_sources": [{
+            "name": "نظام العمل",
+            "type": "law",
+            "jurisdiction": "المملكة العربية السعودية",
+            "articles": [{
+                "article": "1",
+                "title": "Article Title",
+                "text": "Article content...",
+                "keywords": ["keyword1", "keyword2"]
+            }]
+        }]
+    }
+    ```
+    
+    **Returns:**
+    - Document metadata and processing status
+    - Count of created law sources, articles, and chunks
+    - Processing time and file size information
+    - Duplicate detection status
+    """
+    file_path = None
+    try:
+        # Step 1: Validate file
+        if not file.filename:
+            return create_error_response(
+                message="No file provided",
+                errors=[{"field": "file", "message": "File is required"}]
+            )
+        
+        # Step 2: Detect file type
+        file_extension = os.path.splitext(file.filename)[1].lower()
+        allowed_extensions = ['.json', '.pdf', '.docx', '.doc', '.txt']
+        
+        if file_extension not in allowed_extensions:
+            return create_error_response(
+                message="Unsupported file type",
+                errors=[{
+                    "field": "file",
+                    "message": f"File type '{file_extension}' not supported. Allowed: {', '.join(allowed_extensions)}"
+                }]
+            )
+        
+        logger.info(f"📄 Detected file type: {file_extension} for {file.filename}")
+        
+        # Step 3: Validate law_type if provided
+        if law_type:
+            valid_types = ['law', 'regulation', 'code', 'directive', 'decree']
+            if law_type not in valid_types:
+                return create_error_response(
+                    message=f"Invalid law_type. Must be one of: {', '.join(valid_types)}"
+                )
+        
+        # Step 4: Create upload directory
+        upload_dir = "uploads/legal_documents"
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Step 5: Save file with unique name
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = os.path.join(upload_dir, unique_filename)
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        logger.info(f"💾 Saved file: {file_path}")
+        
+        # Step 6: Calculate file hash for duplicate detection
+        file_hash = calculate_file_hash(file_path)
+        logger.info(f"🔐 File hash: {file_hash[:16]}...")
+        
+        # Step 7: Parse dates if provided
+        parsed_issue_date = None
+        parsed_last_update = None
+        
+        if issue_date:
+            try:
+                parsed_issue_date = datetime.strptime(issue_date, "%Y-%m-%d").date()
+            except ValueError:
+                return create_error_response(message="Invalid issue_date format. Use YYYY-MM-DD")
+        
+        if last_update:
+            try:
+                parsed_last_update = datetime.strptime(last_update, "%Y-%m-%d").date()
+            except ValueError:
+                return create_error_response(message="Invalid last_update format. Use YYYY-MM-DD")
+        
+        # Step 8: Route to appropriate handler based on file type
+        service = LegalLawsService(db)
+        
+        if file_extension == '.json':
+            # Handle JSON files
+            logger.info("🔧 Processing JSON file")
+            
+            # Read JSON content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                json_data = json.load(f)
+            
+            # Extract title from JSON if not provided
+            json_title = "Law Document"
+            if "law_sources" in json_data:
+                law_sources = json_data["law_sources"]
+                if isinstance(law_sources, dict):
+                    json_title = law_sources.get("name", "Law Document")
+                    law_type = law_type or law_sources.get("type", "law")
+                elif isinstance(law_sources, list) and len(law_sources) > 0:
+                    json_title = law_sources[0].get("name", "Law Document")
+                    law_type = law_type or law_sources[0].get("type", "law")
+            
+            # Process JSON using upload_json_law_structure
+            result = await service.upload_json_law_structure(
+                json_data=json_data,
+                uploaded_by=current_user.sub if current_user else 1
+            )
+            
+            if result["success"]:
+                return create_success_response(
+                    message=f"✅ Successfully processed JSON law: {result['message']}",
+                    data=result["data"]
+                )
+            else:
+                # Clean up file on failure
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                
+                # Return error with proper HTTP status code
+                from fastapi.responses import JSONResponse
+                error_response = create_error_response(
+                    message=result["message"],
+                    errors=result.get("errors", [])
+                )
+                return JSONResponse(
+                    status_code=400,
+                    content=error_response.model_dump()
+                )
+        
+        else:
+            # Handle PDF, DOCX, TXT files
+            logger.info(f"🔧 Processing {file_extension.upper()} file")
+            
+            # Validate required metadata for non-JSON files
+            if not law_name:
+                return create_error_response(
+                    message="law_name is required for non-JSON files",
+                    errors=[{"field": "law_name", "message": "Law name is required"}]
+                )
+            
+            if not law_type:
+                law_type = "law"  # Default
+            
+            # Prepare law source details
+            law_source_details = {
+                "name": law_name,
+                "type": law_type,
+                "jurisdiction": jurisdiction,
+                "issuing_authority": issuing_authority,
+                "issue_date": parsed_issue_date,
+                "last_update": parsed_last_update,
+                "description": description,
+                "source_url": source_url
+            }
+            
+            # Process using upload_and_parse_law
+            result = await service.upload_and_parse_law(
+                file_path=file_path,
+                file_hash=file_hash,
+                original_filename=file.filename,
+                law_source_details=law_source_details,
+                uploaded_by=current_user.sub if current_user else 1,
+                use_ai=use_ai,
+                fallback_on_failure=fallback_on_failure
+            )
+            
+            if result["success"]:
+                return create_success_response(
+                    message=result["message"],
+                    data=result["data"]
+                )
+            else:
+                # Clean up file on failure
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                return create_error_response(
+                    message=result["message"],
+                    errors=result.get("errors", [])
+                )
+    
+    except ValueError as e:
+        logger.error(f"❌ Validation error: {e}")
+        
+        # Clean up file on validation error
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except:
+                pass
+        
+        return create_error_response(
+            message="Document validation failed",
+            errors=[{"field": "file", "message": str(e)}]
+        )
+    
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ JSON parsing error: {e}")
+        
+        # Clean up file on JSON error
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except:
+                pass
+        
+        return create_error_response(
+            message="Invalid JSON format",
+            errors=[{"field": "file", "message": f"Invalid JSON: {str(e)}"}]
+        )
+    
+    except Exception as e:
+        logger.error(f"❌ Upload failed: {e}", exc_info=True)
+        
+        # Clean up file on error
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except:
+                pass
+        
+        return create_error_response(
+            message=f"Failed to upload document: {str(e)}"
+        )
+
+
+# ===========================================
+# DEPRECATED ENDPOINTS (Keeping for backwards compatibility)
+# Use the unified /upload endpoint instead
+# ===========================================
+
+@router.post("/upload-legacy-pdf", deprecated=True, response_model=ApiResponse)
 async def upload_and_parse_law(
     law_name: str = Form(..., description="Name of the law"),
     law_type: str = Form(..., description="Type: law, regulation, code, directive, decree"),
@@ -59,6 +335,8 @@ async def upload_and_parse_law(
     current_user: User = Depends(get_current_user)
 ):
     """
+    ⚠️ DEPRECATED: Use /upload instead. This endpoint will be removed in a future version.
+    
     Upload and automatically parse a legal law PDF.
     
     **Workflow:**
@@ -180,7 +458,7 @@ async def upload_and_parse_law(
         )
 
 
-@router.post("/upload-gemini-only", response_model=ApiResponse)
+@router.post("/upload-gemini-only", deprecated=True, response_model=ApiResponse)
 async def upload_and_parse_law_gemini_only(
     law_name: str = Form(..., description="Name of the law"),
     law_type: str = Form(..., description="Type: law, regulation, code, directive, decree"),
@@ -195,6 +473,9 @@ async def upload_and_parse_law_gemini_only(
     current_user: User = Depends(get_current_user)
 ):
     """
+    ⚠️ DEPRECATED: Use /upload with use_ai=True and fallback_on_failure=False.
+    This endpoint will be removed in a future version.
+    
     Upload and parse a legal law PDF using ONLY Gemini AI extractor.
     
     **Key Differences from /upload:**
@@ -327,7 +608,7 @@ async def upload_and_parse_law_gemini_only(
         )
 
 
-@router.post("/upload-document", response_model=ApiResponse[DocumentUploadResponse])
+@router.post("/upload-document", deprecated=True, response_model=ApiResponse)
 async def upload_legal_document(
     file: UploadFile = File(..., description="Legal document file (JSON, PDF, DOCX, TXT)"),
     title: str = Form(..., description="Document title"),
@@ -335,8 +616,10 @@ async def upload_legal_document(
     uploaded_by: Optional[int] = Form(None, description="User ID who uploaded the document"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-) -> ApiResponse[DocumentUploadResponse]:
+) -> ApiResponse:
     """
+    ⚠️ DEPRECATED: Use /upload instead. This endpoint will be removed in a future version.
+    
     Upload a legal document for processing and knowledge extraction with dual database support.
     
     **Supported File Types:**
@@ -460,21 +743,18 @@ async def upload_legal_document(
         logger.info(f"📁 File validation passed: {file.filename} ({len(file_content)} bytes)")
         
         # Initialize upload service
-        upload_service = DocumentUploadService(db)
+        service = LegalLawsService(db)
         
-        # Process document upload
-        result = await upload_service.upload_document(
-            file_content=file_content,
-            filename=file.filename,
-            title=title.strip(),
-            category=category,
-            uploaded_by=user_id
+        # Process JSON upload using LegalLawsService
+        result = await service.upload_json_law_structure(
+            json_data=json.loads(file_content.decode('utf-8')),
+            uploaded_by=user_id or current_user.sub
         )
         
-        # Convert result to response model
-        response_data = DocumentUploadResponse(**result)
+        # Convert result to response format
+        response_data = result.get("data", {})
         
-        logger.info(f"✅ Document upload completed successfully: {response_data.document_id}")
+        logger.info(f"✅ Document upload completed successfully")
         
         return create_success_response(
             message=f"Document '{title}' uploaded and processed successfully",
@@ -502,13 +782,15 @@ async def upload_legal_document(
         )
 
 
-@router.post("/upload-json", response_model=ApiResponse[DocumentUploadResponse])
+@router.post("/upload-json", deprecated=True, response_model=ApiResponse)
 async def upload_law_json(
     file: UploadFile = File(..., description="JSON file containing law structure with articles"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: TokenData = Depends(get_current_user)
+) -> ApiResponse:
     """
+    ⚠️ DEPRECATED: Use /upload instead. This endpoint will be removed in a future version.
+    
     Upload a legal law JSON document for processing with dual database support (SQL + Chroma).
     
     **Supported JSON Structure:**
@@ -516,21 +798,18 @@ async def upload_law_json(
     {
         "law_sources": [
             {
-                "name": "Law Name",
-                "type": "law",
-                "jurisdiction": "Saudi Arabia",
-                "issuing_authority": "Ministry",
-                "issue_date": "2023-01-01",
-                "last_update": "2023-12-01",
-                "description": "Description",
-                "source_url": "URL",
+                    "name": "نظام العمل",
+                    "type": "law",
+                    "jurisdiction": "المملكة العربية السعودية",
+                    "issuing_authority": "ملك المملكة العربية السعودية (مرسوم ملكي رقم م/11 بتاريخ 18 / 2 / 1435)",
+                    "issue_date": "1435/02/18هـ",
+                    "description": "نظام جزائي يهدف إلى مكافحة جرائم التزوير بمختلف صورها المتعلقة بالأختام والعلامات والطوابع والمحررات، ويحدد العقوبات المقررة لكل جريمة والأحكام العامة المتعلقة بالشروع والاشتراك والانقضاء.",
+                    "status": "processed",
                 "articles": [
                     {
-                        "article": "1",
-                        "title": "Article Title",
-                        "text": "Article content...",
-                        "keywords": ["keyword1", "keyword2"],
-                        "order_index": 1
+                        "article": "1 المادة ",
+                        "text": "Article Title",
+                       
                     }
                 ]
             }
@@ -565,68 +844,102 @@ async def upload_law_json(
         
         # Validate file type
         if not file.filename.lower().endswith('.json'):
-            return create_error_response(
+            from fastapi.responses import JSONResponse
+            error_response = create_error_response(
                 message="Invalid file type",
                 errors=[{
                     "field": "file", 
                     "message": "Only JSON files are supported"
                 }]
             )
+            return JSONResponse(status_code=400, content=error_response.model_dump())
         
         # Read file content
         file_content = await file.read()
         
         if len(file_content) == 0:
-            return create_error_response(
+            from fastapi.responses import JSONResponse
+            error_response = create_error_response(
                 message="Empty file",
                 errors=[{"field": "file", "message": "File is empty"}]
             )
+            return JSONResponse(status_code=400, content=error_response.model_dump())
         
         # Check file size (limit to 50MB)
         max_size = 50 * 1024 * 1024  # 50MB
         if len(file_content) > max_size:
-            return create_error_response(
+            from fastapi.responses import JSONResponse
+            error_response = create_error_response(
                 message="File too large",
                 errors=[{
                     "field": "file",
                     "message": f"File size ({len(file_content)} bytes) exceeds maximum allowed size ({max_size} bytes)"
                 }]
             )
+            return JSONResponse(status_code=400, content=error_response.model_dump())
         
         # Parse JSON to get title
         try:
             json_data = json.loads(file_content.decode('utf-8'))
-            # Extract law name as title
-            if "law_sources" in json_data and len(json_data["law_sources"]) > 0:
-                title = json_data["law_sources"][0].get("name", "Law Document")
-                category = json_data["law_sources"][0].get("type", "law")
+            # Extract law name as title - handle both dict and list formats
+            if "law_sources" in json_data:
+                law_sources = json_data["law_sources"]
+                # Handle both dict (single law source) and list (multiple law sources)
+                if isinstance(law_sources, dict):
+                    title = law_sources.get("name", "Law Document")
+                    category = law_sources.get("type", "law")
+                elif isinstance(law_sources, list) and len(law_sources) > 0:
+                    title = law_sources[0].get("name", "Law Document")
+                    category = law_sources[0].get("type", "law")
+                else:
+                    title = "Law Document"
+                    category = "law"
             else:
                 title = "Law Document"
                 category = "law"
         except json.JSONDecodeError as e:
-            return create_error_response(
+            from fastapi.responses import JSONResponse
+            error_response = create_error_response(
                 message="Invalid JSON format",
                 errors=[{"field": "file", "message": f"Invalid JSON: {str(e)}"}]
             )
+            return JSONResponse(status_code=400, content=error_response.model_dump())
         
         logger.info(f"📁 File validation passed: {file.filename} ({len(file_content)} bytes)")
         
-        # Initialize upload service with dual database support
-        upload_service = DocumentUploadService(db)
+        # Debug logging
+        logger.info(f"🔍 Current user: {current_user}")
+        logger.info(f"🔍 User sub (ID): {current_user.sub}")
+        logger.info(f"🔍 User email: {current_user.email if hasattr(current_user, 'email') else 'N/A'}")
         
-        # Process document upload (same logic as document_upload_router.py)
-        result = await upload_service.upload_document(
-            file_content=file_content,
-            filename=file.filename,
-            title=title.strip(),
-            category=category,
-            uploaded_by=current_user.sub
+        # Initialize upload service
+        service = LegalLawsService(db)
+        
+        # Process JSON upload using LegalLawsService
+        user_id = current_user.sub if hasattr(current_user, 'sub') else 1
+        logger.info(f"🔍 Using user_id: {user_id}")
+        
+        result = await service.upload_json_law_structure(
+            json_data=json_data,
+            uploaded_by=user_id
         )
         
-        # Convert result to response model
-        response_data = DocumentUploadResponse(**result)
+        # Convert result to response format
+        if result.get("success"):
+            response_data = result.get("data", {})
+        else:
+            # Return error response with 400 status code
+            from fastapi.responses import JSONResponse
+            error_response = create_error_response(
+                message=result.get("message", "Failed to upload JSON law"),
+                errors=result.get("errors", [])
+            )
+            return JSONResponse(
+                status_code=400,
+                content=error_response.model_dump()
+            )
         
-        logger.info(f"✅ JSON law upload completed successfully: {response_data.document_id}")
+        logger.info(f"✅ JSON law upload completed successfully")
         
         return create_success_response(
             message=f"JSON law document '{title}' uploaded and processed successfully",
@@ -635,23 +948,156 @@ async def upload_law_json(
         
     except ValueError as e:
         logger.error(f"❌ Validation error: {e}")
-        return create_error_response(
+        from fastapi.responses import JSONResponse
+        error_response = create_error_response(
             message="JSON validation failed",
             errors=[{"field": "file", "message": str(e)}]
         )
+        return JSONResponse(status_code=400, content=error_response.model_dump())
     
     except NotImplementedError as e:
         logger.error(f"❌ Feature not implemented: {e}")
-        return create_error_response(
+        from fastapi.responses import JSONResponse
+        error_response = create_error_response(
             message="File type processing not yet implemented",
             errors=[{"field": "file", "message": str(e)}]
         )
+        return JSONResponse(status_code=501, content=error_response.model_dump())
     
     except Exception as e:
-        logger.error(f"❌ JSON law upload failed: {e}")
-        return create_error_response(
+        logger.error(f"❌ JSON law upload failed: {e}", exc_info=True)
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        from fastapi.responses import JSONResponse
+        error_response = create_error_response(
             message=f"Failed to upload JSON law: {str(e)}"
         )
+        return JSONResponse(status_code=500, content=error_response.model_dump())
+
+
+# ===========================================
+# CHROMA EMBEDDINGS AND QUERY
+# ===========================================
+
+@router.post("/{document_id}/generate-embeddings", response_model=ApiResponse)
+async def generate_embeddings_for_document(
+    document_id: int = Path(..., gt=0, description="Document ID to generate embeddings for"),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    db: AsyncSession = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Generate Chroma embeddings for all chunks of a specific document (runs in background).
+    
+    **What it does:**
+    - Retrieves all chunks from SQL database for the specified document
+    - Creates embeddings for each chunk using the embedding model
+    - Stores embeddings in Chroma vectorstore for similarity search
+    - Returns statistics about the operation
+    
+    **Important:** This operation runs in the background to prevent server timeouts.
+    
+    **Use this when:**
+    - You've uploaded a document and want to make it searchable
+    - You want to regenerate embeddings for an existing document
+    - The document has chunks in SQL but no embeddings in Chroma
+    
+    **Returns:**
+    - Success status (operation started in background)
+    - Document ID
+    - Processing message
+    """
+    try:
+        from ..services.legal.knowledge.document_parser_service import DocumentUploadService
+        
+        # Initialize the service
+        service = DocumentUploadService(db)
+        
+        # Run embedding generation in background to prevent server hang
+        background_tasks.add_task(service.generate_embeddings_for_document, document_id)
+        
+        logger.info(f"🚀 Started background embedding generation for document {document_id}")
+        
+        return create_success_response(
+            message=f"Embedding generation started in background for document {document_id}",
+            data={
+                "document_id": document_id,
+                "status": "processing",
+                "message": "Embeddings are being generated in the background. Check logs for progress."
+            }
+        )
+            
+    except Exception as e:
+        logger.error(f"❌ Failed to start embedding generation: {e}", exc_info=True)
+        from fastapi.responses import JSONResponse
+        error_response = create_error_response(
+            message=f"Failed to start embedding generation: {str(e)}"
+        )
+        return JSONResponse(status_code=500, content=error_response.model_dump())
+
+
+@router.post("/query", response_model=ApiResponse)
+async def answer_query(
+    query: str = Query(..., description="Search query or question"),
+    document_id: Optional[int] = Query(None, description="Optional document ID to filter results"),
+    top_k: int = Query(5, ge=1, le=20, description="Number of results to return (1-20)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Answer a query using Chroma similarity search.
+    
+    **How it works:**
+    - Searches the Chroma vectorstore for chunks similar to your query
+    - Returns the most relevant chunks ranked by similarity score
+    - Can filter results to a specific document (if document_id provided)
+    - Returns full context including law name, article number, and source
+    
+    **Use this to:**
+    - Search across all uploaded documents
+    - Find specific articles or content
+    - Get legal information related to your query
+    
+    **Returns:**
+    - Query results with content and metadata
+    - Similarity scores for each result
+    - Law and article information for each result
+    """
+    try:
+        from ..services.legal.knowledge.document_parser_service import DocumentUploadService
+        
+        # Initialize the service
+        service = DocumentUploadService(db)
+        
+        # Perform the query
+        result = await service.answer_query(
+            query=query,
+            document_id=document_id,
+            top_k=top_k
+        )
+        
+        if result.get("success"):
+            return create_success_response(
+                message=result.get("message", "Query completed successfully"),
+                data=result
+            )
+        else:
+            from fastapi.responses import JSONResponse
+            error_response = create_error_response(
+                message=result.get("message", "Query failed")
+            )
+            return JSONResponse(
+                status_code=400,
+                content=error_response.model_dump()
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ Query failed: {e}", exc_info=True)
+        from fastapi.responses import JSONResponse
+        error_response = create_error_response(
+            message=f"Query failed: {str(e)}"
+        )
+        return JSONResponse(status_code=500, content=error_response.model_dump())
 
 
 # ===========================================

@@ -90,6 +90,15 @@ default_origins = [
     "http://192.168.100.13:8001",  # Your backend alternative port
     "http://192.168.100.13:8002",  # Your backend alternative port
     
+    # Additional network IPs (for multiple devices)
+    "http://192.168.100.17:3000",  # Another Next.js frontend
+    "http://192.168.100.17:3001",  # Another Next.js alternative port
+    "http://192.168.100.17:3002",  # Another Next.js alternative port
+    "http://192.168.100.17:8080",  # Another React frontend
+    "http://192.168.100.17:8000",  # Another backend
+    "http://192.168.100.17:8001",  # Another backend alternative port
+    "http://192.168.100.17:8002",  # Another backend alternative port
+    
     # Self-reference
     "http://localhost:8000",      # Self-reference local
     "http://127.0.0.1:8000",     # Self-reference local
@@ -126,6 +135,15 @@ else:
         "http://192.168.100.13:8001",  # Your backend alternative
         "http://192.168.100.13:8002",  # Your backend alternative
         
+        # Additional network IPs (for multiple devices)
+        "http://192.168.100.17:3000",  # Another Next.js frontend
+        "http://192.168.100.17:3001",  # Another Next.js alternative
+        "http://192.168.100.17:3002",  # Another Next.js alternative
+        "http://192.168.100.17:8080",  # Another React frontend
+        "http://192.168.100.17:8000",  # Another backend
+        "http://192.168.100.17:8001",  # Another backend alternative
+        "http://192.168.100.17:8002",  # Another backend alternative
+        
         # Production origins
         "http://srv1022733.hstgr.cloud:8000",
         "https://srv1022733.hstgr.cloud:8000",
@@ -137,10 +155,23 @@ else:
         "https://legatoo.westlinktowing.com"
     ]
 
+# Custom CORS origin validator for development
+def is_origin_allowed(origin: str) -> bool:
+    """Check if an origin is allowed (supports wildcards for development)."""
+    # In development, allow any localhost or local network origin
+    if origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1"):
+        return True
+    # Allow any origin from 192.168.100.x network in development
+    if "192.168.100." in origin:
+        return True
+    # Check against explicit list
+    return origin in allow_origins
+
 # Add CORS middleware with comprehensive settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allow_origins,  # Use the configured origins list
+    allow_origin_regex=r"^(http://192\.168\.100\.\d+:\d+|http://localhost:\d+|http://127\.0\.0\.1:\d+)$",  # Allow local network IPs
+    allow_origins=allow_origins,  # Fallback to configured origins list
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=[
@@ -160,32 +191,7 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# Add explicit OPTIONS handler for all routes
-@app.options("/{path:path}")
-async def options_handler(request: Request, path: str):
-    """Handle OPTIONS requests for CORS preflight."""
-    origin = request.headers.get("origin")
-    
-    # Check if origin is in allowed origins
-    if origin in allow_origins:
-        return JSONResponse(
-            status_code=200,
-            content={"message": "CORS preflight handled"},
-            headers={
-                "Access-Control-Allow-Origin": origin,
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD",
-                "Access-Control-Allow-Headers": "Accept, Accept-Language, Content-Language, Content-Type, Authorization, X-Requested-With, X-CSRF-Token, X-Correlation-ID, Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
-                "Access-Control-Allow-Credentials": "true",
-            }
-        )
-    else:
-        return JSONResponse(
-            status_code=403,
-            content={"message": "Origin not allowed"},
-            headers={
-                "Access-Control-Allow-Origin": "null",
-            }
-        )
+# CORS middleware handles OPTIONS requests automatically, no need for explicit handler
 
 # Add a simple CORS test endpoint
 @app.get("/cors-test")

@@ -56,6 +56,7 @@ class LawArticle(Base):
     article_number = Column(String(50), index=True)
     title = Column(Text)
     content = Column(Text, nullable=False)
+    keywords = Column(JSON, nullable=True)  # Store keywords as JSON array
     order_index = Column(Integer, default=0)  # ترتيب المواد داخل المصدر القانوني
     source_document_id = Column(Integer, ForeignKey("knowledge_documents.id", ondelete="SET NULL"), nullable=True, index=True)
     ai_processed_at = Column(DateTime(timezone=True), nullable=True)
@@ -157,9 +158,10 @@ class KnowledgeDocument(Base):
     title = Column(Text, nullable=False)
     category = Column(String(50), CheckConstraint("category IN ('law', 'case', 'contract', 'article', 'policy', 'manual')"))
     file_path = Column(Text)
+    file_extension = Column(String(20), nullable=True)  # Store file extension (.json, .pdf, .docx, etc.)
     file_hash = Column(String(64), unique=True, index=True, nullable=True)
     source_type = Column(String(50), CheckConstraint("source_type IN ('uploaded', 'web_scraped', 'api_import')"))
-    status = Column(String(50), CheckConstraint("status IN ('raw', 'processed', 'indexed')"), default="raw")
+    status = Column(String(50), CheckConstraint("status IN ('raw', 'processed', 'indexed', 'pending_parsing')"), default="raw")
     uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     processed_at = Column(DateTime(timezone=True))

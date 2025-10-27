@@ -51,8 +51,8 @@ os.makedirs(VECTORSTORE_PATH, exist_ok=True)
 
 # Performance optimization settings
 EMBEDDING_MODEL = "Omartificial-Intelligence-Space/GATE-AraBert-v1"
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 100
+CHUNK_SIZE = 400
+CHUNK_OVERLAP = 50
 BATCH_SIZE = 50
 
 # ---------------------------------
@@ -577,8 +577,11 @@ class LegalDocumentParser:
         if not isinstance(article_data, dict):
             raise ValueError(f"Article data must be a dictionary, got {type(article_data)}")
         
-        if 'text' not in article_data:
-            raise ValueError("Article data must contain 'text' field")
+        # Handle both 'text' and 'content' field names for article content
+        article_content = article_data.get('text') or article_data.get('content', '')
+        if not article_content:
+            logger.warning(f"Article {article_data.get('article', 'unknown')} has no text/content")
+            article_content = ''
         
         # Check if article already exists
         existing_article = await self.db.execute(
@@ -589,11 +592,28 @@ class LegalDocumentParser:
         )
         existing_article = existing_article.scalar_one_or_none()
         
+        # Extract article number - handle 'article' or 'article_number' field names
+        article_number = article_data.get('article') or article_data.get('article_number', '')
+        
+        # Extract title - handle 'title' field (default to empty string if not present)
+        article_title = article_data.get('title', '')
+        
+        # Extract order_index - try to extract from article number if not provided
+        order_index = article_data.get('order_index')
+        if order_index is None:
+            # Try to extract number from article number for ordering
+            import re
+            match = re.search(r'\d+', article_number)
+            if match:
+                order_index = int(match.group())
+            else:
+                order_index = 0
+        
         if existing_article:
             # Update existing article
-            existing_article.title = article_data.get('title')
-            existing_article.content = article_data['text']
-            existing_article.order_index = article_data.get('order_index', 0)
+            existing_article.title = article_title
+            existing_article.content = article_content
+            existing_article.order_index = order_index
             existing_article.source_document_id = document.id
             existing_article.updated_at = datetime.utcnow()
             
@@ -606,10 +626,10 @@ class LegalDocumentParser:
             # Create new article
             new_article = LawArticle(
                 law_source_id=law_source.id,
-                article_number=article_data.get('article'),
-                title=article_data.get('title'),
-                content=article_data['text'],
-                order_index=article_data.get('order_index', 0),
+                article_number=article_number,
+                title=article_title,
+                content=article_content,
+                order_index=order_index,
                 source_document_id=document.id,
                 ai_processed_at=datetime.utcnow()
             )
@@ -1155,4 +1175,298 @@ class DocumentUploadService:
                 "sql_database": {},
                 "chroma_database": {},
                 "synchronization": {}
+            }
+    
+    async def generate_embeddings_for_document(self, document_id: int) -> Dict[str, Any]:
+        """
+        Generate embeddings for all chunks of a document and store in Chroma.
+        
+        This method retrieves all chunks from SQL database for a given document
+        and creates embeddings in Chroma vectorstore.
+        
+        Args:
+            document_id: ID of the document to generate embeddings for
+            
+        Returns:
+            Dictionary with operation result and statistics
+        """
+        logger.info(f"🚀 Starting embedding generation for document {document_id}")
+        
+        try:
+            law_source = None  # Initialize outside try block for access in finally
+            # Get the document
+            document = await self.db.get(KnowledgeDocument, document_id)
+            if not document:
+                return {
+                    "success": False,
+                    "message": f"Document {document_id} not found",
+                    "chunks_processed": 0
+                }
+            
+            # Update law source status to 'processing' if it exists
+            law_source_result = await self.db.execute(
+                select(LawSource).where(LawSource.knowledge_document_id == document_id)
+            )
+            law_source = law_source_result.scalar_one_or_none()
+            if law_source:
+                law_source.status = 'processing'
+                await self.db.commit()
+                logger.info(f"📝 Updated law source {law_source.id} status to 'processing'")
+            
+            # Get all chunks for this document from SQL
+            chunks_result = await self.db.execute(
+                select(KnowledgeChunk)
+                .where(KnowledgeChunk.document_id == document_id)
+                .order_by(KnowledgeChunk.chunk_index)
+            )
+            sql_chunks = chunks_result.scalars().all()
+            
+            if not sql_chunks:
+                logger.warning(f"⚠️ No chunks found for document {document_id}")
+                return {
+                    "success": False,
+                    "message": f"No chunks found for document {document_id}",
+                    "chunks_processed": 0
+                }
+            
+            logger.info(f"📦 Found {len(sql_chunks)} chunks for document {document_id}")
+            
+            # Get related law sources and articles for metadata
+            law_sources_dict = {}
+            articles_dict = {}
+            
+            for chunk in sql_chunks:
+                if chunk.law_source_id and chunk.law_source_id not in law_sources_dict:
+                    chunk_law_source = await self.db.get(LawSource, chunk.law_source_id)
+                    if chunk_law_source:
+                        law_sources_dict[chunk.law_source_id] = chunk_law_source
+                
+                if chunk.article_id and chunk.article_id not in articles_dict:
+                    article = await self.db.get(LawArticle, chunk.article_id)
+                    if article:
+                        articles_dict[chunk.article_id] = article
+            
+            # Prepare texts and metadatas for batch processing
+            texts = []
+            metadatas = []
+            chunk_ids = []
+            
+            for chunk in sql_chunks:
+                chunk_text = chunk.content or ""
+                if not chunk_text.strip():
+                    continue
+                
+                # Get law source and article info
+                chunk_law_source = law_sources_dict.get(chunk.law_source_id) if chunk.law_source_id else None
+                article = articles_dict.get(chunk.article_id) if chunk.article_id else None
+                
+                # Prepare metadata for Chroma
+                chunk_metadata = {
+                    "document_id": chunk.document_id,
+                    "chunk_id": chunk.id,
+                    "chunk_index": chunk.chunk_index,
+                    "tokens_count": chunk.tokens_count or 0,
+                    "document_title": document.title,
+                    "document_category": document.category,
+                }
+                
+                # Add law source metadata if available
+                if chunk_law_source:
+                    chunk_metadata.update({
+                        "law_source_id": chunk_law_source.id,
+                        "law_name": chunk_law_source.name,
+                        "law_type": chunk_law_source.type,
+                        "jurisdiction": chunk_law_source.jurisdiction or "",
+                        "issuing_authority": chunk_law_source.issuing_authority or "",
+                    })
+                
+                # Add article metadata if available
+                if article:
+                    chunk_metadata.update({
+                        "article_id": article.id,
+                        "article_number": article.article_number or "",
+                        "article_title": article.title or "",
+                    })
+                
+                texts.append(chunk_text)
+                metadatas.append(chunk_metadata)
+                chunk_ids.append(str(chunk.id))
+            
+            if not texts:
+                logger.warning(f"⚠️ No valid chunks to process for document {document_id}")
+                return {
+                    "success": False,
+                    "message": f"No valid chunks to process for document {document_id}",
+                    "chunks_processed": 0
+                }
+            
+            # Add all chunks to Chroma in one batch
+            logger.info(f"📤 Adding {len(texts)} chunks to Chroma vectorstore...")
+            self.dual_db_manager.vectorstore.add_texts(
+                texts=texts,
+                metadatas=metadatas,
+                ids=chunk_ids
+            )
+            
+            # Persist Chroma changes
+            self.dual_db_manager.vectorstore.persist()
+            
+            logger.info(f"✅ Successfully generated embeddings for {len(texts)} chunks")
+            
+            # Update law source status to 'processed' if it exists
+            if law_source:
+                law_source.status = 'processed'
+                await self.db.commit()
+                logger.info(f"📝 Updated law source {law_source.id} status to 'processed'")
+            
+            return {
+                "success": True,
+                "message": f"Embeddings generated for {len(texts)} chunks",
+                "document_id": document_id,
+                "chunks_processed": len(texts),
+                "document_title": document.title
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to generate embeddings for document {document_id}: {e}", exc_info=True)
+            
+            # Update law source status to 'raw' on failure if it exists
+            try:
+                law_source_result = await self.db.execute(
+                    select(LawSource).where(LawSource.knowledge_document_id == document_id)
+                )
+                law_source = law_source_result.scalar_one_or_none()
+                if law_source:
+                    law_source.status = 'raw'
+                    await self.db.commit()
+                    logger.info(f"📝 Reverted law source {law_source.id} status to 'raw'")
+            except:
+                pass
+            
+            return {
+                "success": False,
+                "message": f"Failed to generate embeddings: {str(e)}",
+                "chunks_processed": 0
+            }
+    
+    async def answer_query(self, query: str, document_id: Optional[int] = None, top_k: int = 5) -> Dict[str, Any]:
+        """
+        Answer a query using Chroma vectorstore search.
+        
+        This method searches the Chroma vectorstore for relevant chunks
+        and returns them as potential answers.
+        
+        Args:
+            query: The search query/question
+            document_id: Optional document ID to filter results by specific document
+            top_k: Number of top results to return (default: 5)
+            
+        Returns:
+            Dictionary with query results and relevant chunks
+        """
+        logger.info(f"🔍 Searching for query: '{query[:100]}...'")
+        
+        try:
+            # Check if dual_db_manager is initialized
+            if not hasattr(self, 'dual_db_manager') or self.dual_db_manager is None:
+                logger.error("❌ dual_db_manager not initialized")
+                return {
+                    "success": False,
+                    "query": query,
+                    "message": "Database manager not initialized",
+                    "results_count": 0,
+                    "chunks": []
+                }
+            
+            # Check if Chroma collection has any data
+            logger.info("📊 Accessing Chroma collection...")
+            chroma_collection = self.dual_db_manager.vectorstore._collection
+            
+            # Try to peek at collection to check if it's empty
+            try:
+                logger.info("📊 Checking if Chroma collection has data...")
+                peek_result = chroma_collection.peek(limit=1)
+                if peek_result and 'ids' in peek_result and len(peek_result['ids']) == 0:
+                    logger.warning("⚠️ Chroma collection is empty")
+                    return {
+                        "success": True,
+                        "query": query,
+                        "results_count": 0,
+                        "chunks": [],
+                        "message": "No documents in Chroma database. Please generate embeddings first using /generate-embeddings endpoint."
+                    }
+                logger.info(f"📊 Chroma collection has data")
+            except Exception as peek_error:
+                logger.warning(f"⚠️ Could not check Chroma collection: {peek_error}")
+                # Continue anyway
+            
+            # Prepare search filters if document_id is specified
+            where_filter = {"document_id": document_id} if document_id else None
+            
+            # Perform similarity search in Chroma
+            logger.info("🔍 Performing similarity search...")
+            try:
+                search_results = self.dual_db_manager.vectorstore.similarity_search_with_score(
+                    query=query,
+                    k=top_k,
+                    filter=where_filter
+                )
+                logger.info(f"✅ Search completed, found {len(search_results)} results")
+            except Exception as search_error:
+                logger.error(f"❌ Similarity search failed: {search_error}")
+                return {
+                    "success": False,
+                    "query": query,
+                    "results_count": 0,
+                    "chunks": [],
+                    "message": f"Search failed: {str(search_error)}"
+                }
+            
+            if not search_results:
+                return {
+                    "success": True,
+                    "query": query,
+                    "results_count": 0,
+                    "chunks": [],
+                    "message": "No relevant results found"
+                }
+            
+            # Process search results
+            results = []
+            for doc, score in search_results:
+                # Extract metadata from the document
+                metadata = doc.metadata
+                
+                result = {
+                    "content": doc.page_content,
+                    "score": float(score),
+                    "document_id": metadata.get("document_id"),
+                    "chunk_id": metadata.get("chunk_id"),
+                    "chunk_index": metadata.get("chunk_index"),
+                    "law_name": metadata.get("law_name", ""),
+                    "article_number": metadata.get("article_number", ""),
+                    "article_title": metadata.get("article_title", ""),
+                    "jurisdiction": metadata.get("jurisdiction", ""),
+                }
+                
+                results.append(result)
+            
+            logger.info(f"✅ Found {len(results)} relevant chunks")
+            
+            return {
+                "success": True,
+                "query": query,
+                "results_count": len(results),
+                "chunks": results,
+                "message": f"Found {len(results)} relevant results"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to search for query: {e}", exc_info=True)
+            return {
+                "success": False,
+                "query": query,
+                "message": f"Search failed: {str(e)}",
+                "results_count": 0,
+                "chunks": []
             }
