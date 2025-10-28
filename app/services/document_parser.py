@@ -82,10 +82,14 @@ class VectorstoreManager:
         logger.info("🚀 Initializing VectorstoreManager...")
         
         try:
-            # استخدام embeddings بسيط للاختبار (أسرع وأكثر استقراراً)
-            logger.warning("⚠️ Using simple embeddings for testing...")
-            from langchain_community.embeddings import FakeEmbeddings
-            self.embeddings = FakeEmbeddings(size=768)  # استخدام البعد الصحيح
+            # Initialize Arabic embeddings for semantic search
+            logger.info(f"📦 Loading Arabic embeddings model: {EMBEDDING_MODEL}")
+            self.embeddings = HuggingFaceEmbeddings(
+                model_name=EMBEDDING_MODEL,
+                model_kwargs={'device': 'cpu'},
+                encode_kwargs={'normalize_embeddings': True}
+            )
+            logger.info("✅ Arabic embeddings model loaded successfully")
             
             # Initialize Chroma vectorstore
             self.vectorstore = Chroma(
@@ -100,7 +104,7 @@ class VectorstoreManager:
                 chunk_overlap=CHUNK_OVERLAP
             )
             
-            logger.info("✅ VectorstoreManager initialized with simple embeddings!")
+            logger.info("✅ VectorstoreManager initialized with Arabic embeddings!")
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize VectorstoreManager: {e}")
@@ -110,7 +114,7 @@ class VectorstoreManager:
         """Get Chroma vectorstore instance."""
         return self.vectorstore
     
-    def get_embeddings(self) -> HuggingFaceEmbeddings:
+    def get_embeddings(self):
         """Get embeddings instance."""
         return self.embeddings
     
