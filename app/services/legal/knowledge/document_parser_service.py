@@ -31,6 +31,7 @@ try:
 except ImportError:
     from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
+from google import genai
 
 from ....models.legal_knowledge import (
     KnowledgeDocument, LawSource, LawArticle, KnowledgeChunk,
@@ -78,10 +79,20 @@ class VectorstoreManager:
             self._initialized = True
     
     def _initialize_vectorstore(self):
-        """Initialize Chroma vectorstore and embeddings."""
+        """Initialize Chroma vectorstore, embeddings, and Gemini client."""
         logger.info("🚀 Initializing VectorstoreManager...")
         
         try:
+            # Initialize Gemini client
+            logger.info("🤖 Initializing Gemini client...")
+            self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+            if not self.gemini_api_key:
+                logger.warning("⚠️ GEMINI_API_KEY not found in environment variables")
+                self.gemini_client = None
+            else:
+                self.gemini_client = genai.Client(api_key=self.gemini_api_key)
+                logger.info("✅ Gemini client initialized successfully")
+            
             # Initialize Arabic embeddings for semantic search
             logger.info(f"📦 Loading Arabic embeddings model: {EMBEDDING_MODEL}")
             self.embeddings = HuggingFaceEmbeddings(
@@ -104,7 +115,7 @@ class VectorstoreManager:
                 chunk_overlap=CHUNK_OVERLAP
             )
             
-            logger.info("✅ VectorstoreManager initialized with Arabic embeddings!")
+            logger.info("✅ VectorstoreManager initialized with Arabic embeddings and Gemini!")
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize VectorstoreManager: {e}")
@@ -121,6 +132,10 @@ class VectorstoreManager:
     def get_text_splitter(self) -> RecursiveCharacterTextSplitter:
         """Get text splitter instance."""
         return self.text_splitter
+    
+    def get_gemini_client(self):
+        """Get Gemini client instance."""
+        return self.gemini_client
 
 # Global instance
 vectorstore_manager = VectorstoreManager()
@@ -1355,20 +1370,20 @@ class DocumentUploadService:
     
     async def answer_query(self, query: str, document_id: Optional[int] = None, top_k: int = 5) -> Dict[str, Any]:
         """
-        Answer a query using Chroma vectorstore search.
+        Answer a query using Chroma vectorstore search and Gemini AI.
         
-        This method searches the Chroma vectorstore for relevant chunks
-        and returns them as potential answers.
+        This method searches the Chroma vectorstore for relevant chunks,
+        then uses Gemini to generate a clear, contextualized answer.
         
         Args:
             query: The search query/question
             document_id: Optional document ID to filter results by specific document
-            top_k: Number of top results to return (default: 5)
+            top_k: Number of top results to retrieve (default: 5)
             
         Returns:
-            Dictionary with query results and relevant chunks
+            Dictionary with generated answer and metadata
         """
-        logger.info(f"🔍 Searching for query: '{query[:100]}...'")
+        logger.info(f"🔍 Processing query: '{query[:100]}...'")
         
         try:
             # Check if dual_db_manager is initialized
@@ -1377,52 +1392,54 @@ class DocumentUploadService:
                 return {
                     "success": False,
                     "query": query,
-                    "message": "Database manager not initialized",
-                    "results_count": 0,
-                    "chunks": []
+                    "answer": "النظام غير جاهز. يرجى المحاولة مرة أخرى لاحقاً.",
+                    "message": "Database manager not initialized"
+                }
+            
+            # Check if Gemini client is available
+            gemini_client = vectorstore_manager.get_gemini_client()
+            if not gemini_client:
+                logger.error("❌ Gemini client not initialized")
+                return {
+                    "success": False,
+                    "query": query,
+                    "answer": "خدمة الذكاء الاصطناعي غير متوفرة حالياً.",
+                    "message": "Gemini API key not configured"
                 }
             
             # Check if Chroma collection has any data
-            logger.info("📊 Accessing Chroma collection...")
-            chroma_collection = self.dual_db_manager.vectorstore._collection
-            
-            # Try to peek at collection to check if it's empty
+            logger.info("📊 Checking Chroma collection...")
             try:
-                logger.info("📊 Checking if Chroma collection has data...")
+                chroma_collection = self.dual_db_manager.vectorstore._collection
                 peek_result = chroma_collection.peek(limit=1)
                 if peek_result and 'ids' in peek_result and len(peek_result['ids']) == 0:
                     logger.warning("⚠️ Chroma collection is empty")
                     return {
-                        "success": True,
+                        "success": False,
                         "query": query,
-                        "results_count": 0,
-                        "chunks": [],
-                        "message": "No documents in Chroma database. Please generate embeddings first using /generate-embeddings endpoint."
+                        "answer": "لا توجد مستندات في قاعدة البيانات. يرجى رفع المستندات القانونية أولاً.",
+                        "message": "No documents in database"
                     }
-                logger.info(f"📊 Chroma collection has data")
             except Exception as peek_error:
                 logger.warning(f"⚠️ Could not check Chroma collection: {peek_error}")
-                # Continue anyway
             
-            # Prepare search filters if document_id is specified
+            # Step 1: Perform similarity search
+            logger.info("🔍 Performing similarity search...")
             where_filter = {"document_id": document_id} if document_id else None
             
-            # Perform similarity search in Chroma
-            logger.info("🔍 Performing similarity search...")
             try:
                 search_results = self.dual_db_manager.vectorstore.similarity_search_with_score(
                     query=query,
                     k=top_k,
                     filter=where_filter
                 )
-                logger.info(f"✅ Search completed, found {len(search_results)} results")
+                logger.info(f"✅ Found {len(search_results)} relevant documents")
             except Exception as search_error:
                 logger.error(f"❌ Similarity search failed: {search_error}")
                 return {
                     "success": False,
                     "query": query,
-                    "results_count": 0,
-                    "chunks": [],
+                    "answer": "حدث خطأ أثناء البحث في قاعدة البيانات.",
                     "message": f"Search failed: {str(search_error)}"
                 }
             
@@ -1430,47 +1447,116 @@ class DocumentUploadService:
                 return {
                     "success": True,
                     "query": query,
-                    "results_count": 0,
-                    "chunks": [],
+                    "answer": "لم يتم العثور على نصوص قانونية ذات صلة بسؤالك. يرجى إعادة صياغة السؤال أو استخدام كلمات مفتاحية أخرى.",
                     "message": "No relevant results found"
                 }
             
-            # Process search results
-            results = []
+            # Step 2: Build context from retrieved documents
+            logger.info("📝 Building context from retrieved documents...")
+            context_parts = []
+            retrieved_context = []
+            
             for doc, score in search_results:
-                # Extract metadata from the document
                 metadata = doc.metadata
                 
-                result = {
-                    "content": doc.page_content,
-                    "score": float(score),
-                    "document_id": metadata.get("document_id"),
-                    "chunk_id": metadata.get("chunk_id"),
-                    "chunk_index": metadata.get("chunk_index"),
-                    "law_name": metadata.get("law_name", ""),
-                    "article_number": metadata.get("article_number", ""),
-                    "article_title": metadata.get("article_title", ""),
-                    "jurisdiction": metadata.get("jurisdiction", ""),
-                }
+                # Format context for Gemini
+                context_part = f"""
+== **{metadata.get('law_name', 'غير محدد')}** ==
+**المادة:** {metadata.get('article', metadata.get('article_number', 'غير محدد'))}
+**عنوان المادة:** {metadata.get('article_title', '')}
+**النص:** {doc.page_content}
+**الجهة المصدرة:** {metadata.get('issuing_authority', 'غير محدد')}
+**تاريخ الإصدار:** {metadata.get('issue_date', 'غير محدد')}
+**الاختصاص:** {metadata.get('jurisdiction', 'غير محدد')}
+"""
+                context_parts.append(context_part.strip())
                 
-                results.append(result)
+                # Store for potential return (optional)
+                retrieved_context.append({
+                    "article": metadata.get('article', metadata.get('article_number', 'غير محدد')),
+                    "law_name": metadata.get('law_name', 'غير محدد'),
+                    "text": doc.page_content,
+                    "score": float(score)
+                })
             
-            logger.info(f"✅ Found {len(results)} relevant chunks")
+            context_text = "\n\n" + "="*50 + "\n\n".join(context_parts) + "\n" + "="*50
             
+            # Truncate if too long
+            if len(context_text) > 4000:
+                context_text = context_text[:4000] + "\n... (محتوى إضافي متاح)"
+                logger.info("✂️ Context truncated for processing")
+            
+            # Step 3: Generate answer using Gemini
+            logger.info("🤖 Generating answer with Gemini...")
+            
+            prompt = f"""
+أنت مساعد قانوني متخصص في الأنظمة القانونية السعودية. مهمتك هي تقديم إجابات دقيقة وواضحة بناءً على النصوص القانونية المقدمة.
+
+**تعليمات مهمة:**
+1. استخرج الإجابة من النصوص القانونية المقدمة **فقط** - لا تستخدم معلوماتك العامة
+2. اذكر رقم المادة ذات الصلة في إجابتك
+3. قدم إجابة واضحة ومباشرة باللغة العربية الفصحى
+4. إذا كانت الإجابة تتطلب عدة مواد، اذكرها جميعاً
+5. إذا لم تجد إجابة في النصوص المقدمة، قل ذلك بوضوح
+
+**النصوص القانونية المرجعية:**
+{context_text}
+
+**السؤال:**
+{query}
+
+**الإجابة:**
+"""
+            
+            try:
+                # Call Gemini API with timeout
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        gemini_client.models.generate_content,
+                        model="gemini-2.0-flash-exp",
+                        contents=prompt,
+                        config={
+                            "temperature": 0.2,
+                            "max_output_tokens": 2000,
+                            "top_p": 0.9
+                        }
+                    ),
+                    timeout=20.0
+                )
+                
+                if response and hasattr(response, 'text') and response.text:
+                    answer = response.text.strip()
+                    logger.info("✅ Answer generated successfully")
+                else:
+                    raise ValueError("Empty response from Gemini")
+                    
+            except asyncio.TimeoutError:
+                logger.error("❌ Gemini API timeout")
+                answer = "عذراً، استغرق توليد الإجابة وقتاً طويلاً. يرجى المحاولة مرة أخرى."
+            except Exception as gemini_error:
+                logger.error(f"❌ Gemini generation failed: {gemini_error}")
+                # Provide fallback response with context
+                answer = f"""
+بناءً على النصوص القانونية المسترجعة، وجدت المواد التالية ذات الصلة بسؤالك:
+
+{chr(10).join([f"• **{ctx['law_name']}** - المادة {ctx['article']}" for ctx in retrieved_context[:3]])}
+
+**ملاحظة:** لم يتمكن النظام من توليد إجابة مفصلة. يرجى مراجعة المواد المذكورة أعلاه.
+"""
+            
+            # Return the answer
             return {
                 "success": True,
                 "query": query,
-                "results_count": len(results),
-                "chunks": results,
-                "message": f"Found {len(results)} relevant results"
+                "answer": answer,
+                "message": f"Found {len(search_results)} relevant results"
             }
             
         except Exception as e:
-            logger.error(f"❌ Failed to search for query: {e}", exc_info=True)
+            logger.error(f"❌ Query processing failed: {e}", exc_info=True)
             return {
                 "success": False,
                 "query": query,
-                "message": f"Search failed: {str(e)}",
-                "results_count": 0,
-                "chunks": []
+                "answer": "حدث خطأ أثناء معالجة السؤال. يرجى المحاولة مرة أخرى.",
+                "message": f"Error: {str(e)}"
             }

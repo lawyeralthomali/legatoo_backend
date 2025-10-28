@@ -1040,28 +1040,43 @@ async def generate_embeddings_for_document(
 async def answer_query(
     query: str = Query(..., description="Search query or question"),
     document_id: Optional[int] = Query(None, description="Optional document ID to filter results"),
-    top_k: int = Query(5, ge=1, le=20, description="Number of results to return (1-20)"),
+    top_k: int = Query(5, ge=1, le=20, description="Number of results to retrieve (1-20)"),
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
 ):
     """
-    Answer a query using Chroma similarity search.
+    Answer a query using Chroma similarity search and Gemini AI.
     
     **How it works:**
     - Searches the Chroma vectorstore for chunks similar to your query
-    - Returns the most relevant chunks ranked by similarity score
-    - Can filter results to a specific document (if document_id provided)
-    - Returns full context including law name, article number, and source
+    - Uses Gemini AI to generate a clear, contextualized answer
+    - Returns a professional legal answer in Arabic
     
-    **Use this to:**
-    - Search across all uploaded documents
-    - Find specific articles or content
-    - Get legal information related to your query
+    **Features:**
+    - Semantic search across all uploaded legal documents
+    - AI-generated answers based on relevant articles
+    - Cites specific article numbers and law sources
+    - Optional filtering by document ID
     
     **Returns:**
-    - Query results with content and metadata
-    - Similarity scores for each result
-    - Law and article information for each result
+    - `answer`: A clear, AI-generated answer to your question
+    - `query`: The original question
+    - `message`: Status message
+    
+    **Example Query:**
+    "ماهي مهام واختصاصات مفتشي العمل؟"
+    
+    **Example Response:**
+    ```json
+    {
+      "success": true,
+      "message": "Found 5 relevant results",
+      "data": {
+        "answer": "بناءً على المادة 138 من نظام العمل السعودي...",
+        "query": "ماهي مهام واختصاصات مفتشي العمل؟"
+      }
+    }
+    ```
     """
     try:
         from ..services.legal.knowledge.document_parser_service import DocumentUploadService
@@ -1069,7 +1084,7 @@ async def answer_query(
         # Initialize the service
         service = DocumentUploadService(db)
         
-        # Perform the query
+        # Perform the query (now returns AI-generated answer)
         result = await service.answer_query(
             query=query,
             document_id=document_id,
@@ -1077,14 +1092,18 @@ async def answer_query(
         )
         
         if result.get("success"):
+            # Return only the answer and query (no raw chunks)
             return create_success_response(
-                message=result.get("message", "Query completed successfully"),
-                data=result
+                message=result.get("answer", "تم معالجة السؤال بنجاح"),
+                data={
+                    "answer": result.get("answer", ""),
+                    "query": result.get("query", query)
+                }
             )
         else:
             from fastapi.responses import JSONResponse
             error_response = create_error_response(
-                message=result.get("message", "Query failed")
+                message=result.get("answer", result.get("message", "فشل في معالجة السؤال"))
             )
             return JSONResponse(
                 status_code=400,
@@ -1095,7 +1114,7 @@ async def answer_query(
         logger.error(f"❌ Query failed: {e}", exc_info=True)
         from fastapi.responses import JSONResponse
         error_response = create_error_response(
-            message=f"Query failed: {str(e)}"
+            message="حدث خطأ أثناء معالجة السؤال. يرجى المحاولة مرة أخرى."
         )
         return JSONResponse(status_code=500, content=error_response.model_dump())
 
