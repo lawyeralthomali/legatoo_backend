@@ -177,7 +177,7 @@ def is_origin_allowed(origin: str) -> bool:
 # Add CORS middleware with comprehensive settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^(http://192\.168\.100\.\d+:\d+|http://localhost:\d+|http://127\.0\.0\.1:\d+)$",  # Allow local network IPs
+    allow_origin_regex=r"^(https?://192\.168\.100\.\d+:\d+|https?://localhost:\d+|https?://127\.0\.0\.1:\d+|https://[a-zA-Z0-9\-\.]+\.fastestfranchise\.net)$",  # Allow local network IPs and production domains
     allow_origins=allow_origins,  # Fallback to configured origins list
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
