@@ -448,11 +448,12 @@ class AuthService:
             
             if not refresh_token_record:
                 # Token doesn't exist, is expired, or is already revoked
-                # Check if token exists at all to provide better error message
+                # For better UX, treat logout as idempotent - if already logged out, return success
                 token_record = await self.refresh_token_repository.get_by_token_hash(token_hash)
                 
                 if not token_record:
                     # Token never existed (was never issued by server)
+                    # This could indicate a security issue, but for logout we'll be graceful
                     self.logger.warning(f"Logout attempt with non-existent refresh token: {refresh_token[:10]}...")
                     log_security_event(
                         self.logger,
@@ -460,28 +461,28 @@ class AuthService:
                         correlation_id=self.correlation_id,
                         reason="token_not_found"
                     )
-                    raise_error_response(
-                        status_code=401,
-                        message="Invalid refresh token",
-                        field="refresh_token"
+                    # Return success anyway - logout should be idempotent
+                    return create_success_response(
+                        message="Logged out successfully",
+                        data={"status": "already_logged_out", "reason": "token_not_found"}
                     )
                 elif not token_record.is_active:
-                    # Token was already revoked
-                    self.logger.warning(f"Logout attempt with already revoked refresh token: {refresh_token[:10]}...")
+                    # Token was already revoked - user is already logged out
+                    self.logger.info(f"Logout attempt with already revoked token - treating as success: {refresh_token[:10]}...")
                     log_security_event(
                         self.logger,
-                        "logout_revoked_token",
+                        "logout_already_revoked",
                         correlation_id=self.correlation_id,
                         reason="already_revoked"
                     )
-                    raise_error_response(
-                        status_code=401,
-                        message="Refresh token has already been revoked",
-                        field="refresh_token"
+                    # Return success - user is already logged out
+                    return create_success_response(
+                        message="Logged out successfully",
+                        data={"status": "already_logged_out", "reason": "token_already_revoked"}
                     )
                 elif token_record.expires_at <= datetime.utcnow():
-                    # Token has expired
-                    self.logger.warning(f"Logout attempt with expired refresh token: {refresh_token[:10]}...")
+                    # Token has expired - can't be used anyway, so logout is successful
+                    self.logger.info(f"Logout with expired token - treating as success: {refresh_token[:10]}...")
                     log_security_event(
                         self.logger,
                         "logout_expired_token",
@@ -489,18 +490,17 @@ class AuthService:
                         reason="token_expired",
                         expired_at=token_record.expires_at
                     )
-                    raise_error_response(
-                        status_code=401,
-                        message="Refresh token has expired",
-                        field="refresh_token"
+                    # Return success - expired token is effectively logged out
+                    return create_success_response(
+                        message="Logged out successfully",
+                        data={"status": "already_logged_out", "reason": "token_expired"}
                     )
                 else:
-                    # Unknown validation failure
+                    # Unknown validation failure - still be graceful for logout
                     self.logger.warning(f"Logout attempt with invalid refresh token: {refresh_token[:10]}...")
-                    raise_error_response(
-                        status_code=401,
-                        message="Invalid or expired refresh token",
-                        field="refresh_token"
+                    return create_success_response(
+                        message="Logged out successfully",
+                        data={"status": "already_logged_out", "reason": "token_invalid"}
                     )
             
             # Step 3: Token is valid, now revoke it
