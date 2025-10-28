@@ -30,7 +30,7 @@ class LawSource(Base):
     description = Column(Text)
     source_url = Column(Text)
     knowledge_document_id = Column(Integer, ForeignKey("knowledge_documents.id", ondelete="SET NULL"), nullable=True, index=True)
-    status = Column(String(50), CheckConstraint("status IN ('raw', 'processed', 'indexed')"), default="raw", index=True)
+    status = Column(String(50), CheckConstraint("status IN ('raw', 'processing', 'processed', 'indexed')"), default="raw", index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
