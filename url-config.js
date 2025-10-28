@@ -21,7 +21,7 @@ class URLConfig {
         const hostname = window.location.hostname;
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
             return 'development';
-        } else if (hostname.includes('legatoo.westlinktowing.com')) {
+        } else if (hostname.includes('legatoo.fastestfranchise.net') || hostname.includes('legatoo.westlinktowing.com')) {
             return 'production';
         }
         return 'development';
@@ -44,14 +44,14 @@ class URLConfig {
 
     getDefaultFrontendUrl() {
         if (this.environment === 'production') {
-            return 'https://legatoo.westlinktowing.com';
+            return 'https://legatoo.fastestfranchise.net';
         }
         return 'http://localhost:3000';
     }
 
     getDefaultBackendUrl() {
         if (this.environment === 'production') {
-            return 'https://api.westlinktowing.com';
+            return 'https://api.fastestfranchise.net';
         }
         return 'http://127.0.0.1:8000';
     }

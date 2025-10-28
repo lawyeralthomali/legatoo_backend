@@ -18,7 +18,6 @@ class Plan(Base):
     report_limit = Column(Integer, nullable=True)  # عدد التقارير القابلة للتصدير
     token_limit = Column(Integer, nullable=True)  # حد التوكنات
     multi_user_limit = Column(Integer, nullable=True)  # عدد المستخدمين المسموح
-    government_integration = Column(Boolean, default=False)
     description = Column(Text, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
 

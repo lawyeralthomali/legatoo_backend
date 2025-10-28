@@ -28,8 +28,8 @@ class URLConfig:
         
         # Set default URLs based on environment
         if is_production:
-            self.frontend_url = os.getenv("FRONTEND_URL", "https://legatoo.westlinktowing.com")
-            self.backend_url = os.getenv("BACKEND_URL", "https://api.westlinktowing.com")
+            self.frontend_url = os.getenv("FRONTEND_URL", "https://legatoo.fastestfranchise.net")
+            self.backend_url = os.getenv("BACKEND_URL", "https://api.fastestfranchise.net")
         else:
             self.frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
             self.backend_url = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")

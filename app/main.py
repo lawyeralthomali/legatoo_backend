@@ -103,9 +103,13 @@ default_origins = [
     "http://localhost:8000",      # Self-reference local
     "http://127.0.0.1:8000",     # Self-reference local
     
-    # Production domains
+    # Production domains (old)
     "https://api.westlinktowing.com",
     "https://legatoo.westlinktowing.com",
+    
+    # Production domains (new)
+    "https://api.fastestfranchise.net",
+    "https://legatoo.fastestfranchise.net",
 ]
 
 # Use environment CORS origins if available, otherwise use defaults
@@ -149,10 +153,18 @@ else:
         "https://srv1022733.hstgr.cloud:8000",
         "http://srv1022733.hstgr.cloud",
         "https://srv1022733.hstgr.cloud",
+        
+        # Old domain
         "http://api.westlinktowing.com",
         "https://api.westlinktowing.com",
         "http://legatoo.westlinktowing.com",
-        "https://legatoo.westlinktowing.com"
+        "https://legatoo.westlinktowing.com",
+        
+        # New domain
+        "http://api.fastestfranchise.net",
+        "https://api.fastestfranchise.net",
+        "http://legatoo.fastestfranchise.net",
+        "https://legatoo.fastestfranchise.net"
     ]
 
 # Custom CORS origin validator for development
