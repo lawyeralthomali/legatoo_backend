@@ -1,6 +1,6 @@
 import os, tempfile, json, re
 from langchain_core.documents import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
