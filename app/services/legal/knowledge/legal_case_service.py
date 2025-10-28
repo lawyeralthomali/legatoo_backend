@@ -480,7 +480,7 @@ class LegalCaseService:
                     file_hash=f"{unique_hash}_{total_cases}",  # Unique hash per case
                     source_type="uploaded",
                     uploaded_by=uploaded_by,
-                    status="processed",
+                    status="raw",  # Start as raw, will become 'processed' after embeddings are generated
                     document_metadata={
                         "source": "json_upload",
                         "case_type": case_data.get("case_type"),
@@ -509,7 +509,7 @@ class LegalCaseService:
                     decision_date=decision_date,
                     case_type=case_data.get("case_type"),
                     court_level=case_data.get("court_level"),
-                    status="processed",
+                    status="raw",  # Start as raw, will become 'processed' after embeddings are generated
                     created_at=datetime.utcnow()
                 )
                 

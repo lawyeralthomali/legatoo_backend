@@ -858,12 +858,12 @@ class LegalCaseIngestionService:
                 case_metadata, sections, knowledge_doc.id
             )
             
-            # Update KnowledgeDocument status
-            knowledge_doc.status = 'processed'
-            knowledge_doc.processed_at = datetime.utcnow()
+            # Keep status as 'raw' - will be updated to 'processed' after embeddings are generated
+            # Status stays 'raw' until /generate-embeddings endpoint is called
+            knowledge_doc.status = 'raw'
             
-            # Update LegalCase status
-            legal_case.status = 'processed'
+            # Keep LegalCase status as 'raw' too
+            legal_case.status = 'raw'
             
             # Commit transaction
             await self.db.commit()

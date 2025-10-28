@@ -574,7 +574,7 @@ class LegalDocumentParser:
                 description=law_source_data.get('description'),
                 source_url=law_source_data.get('source_url'),
                 knowledge_document_id=document.id,
-                status='processed'
+                status='raw'  # Start as raw, will become 'processed' after embeddings are generated
             )
             
             self.db.add(new_source)
@@ -736,7 +736,8 @@ class LegalDocumentParser:
             metadatas.append(clean_metadata)
             sql_chunks.append(chunk)
         
-        # Batch process: Add all chunks to SQL first
+        # Add chunks to SQL database only (NOT Chroma yet)
+        # Chroma embeddings will be generated later via /generate-embeddings endpoint
         try:
             for chunk in sql_chunks:
                 self.db.add(chunk)
@@ -746,31 +747,9 @@ class LegalDocumentParser:
             for chunk in sql_chunks:
                 await self.db.refresh(chunk)
             
-            logger.info(f"✅ Added {len(sql_chunks)} chunks to SQL database")
+            logger.info(f"✅ Added {len(sql_chunks)} chunks to SQL database (status: raw, embeddings not yet generated)")
             
-        except Exception as sql_error:
-            logger.error(f"❌ Failed to add chunks to SQL: {sql_error}")
-            await self.db.rollback()
-            return chunks_summary
-        
-        # Batch process: Add all chunks to Chroma (like optimized_knowledge_service.py)
-        try:
-            # Prepare IDs for Chroma (use SQL chunk IDs)
-            chunk_ids = [str(chunk.id) for chunk in sql_chunks]
-            
-            # Add all chunks to Chroma at once
-            self.dual_db_manager.vectorstore.add_texts(
-                texts=texts,
-                metadatas=metadatas,
-                ids=chunk_ids
-            )
-            
-            # Persist Chroma changes
-            self.dual_db_manager.vectorstore.persist()
-            
-            logger.info(f"✅ Added {len(texts)} chunks to Chroma vectorstore")
-            
-            # Create summaries for successful chunks
+            # Create summaries for SQL chunks
             for chunk in sql_chunks:
                 chunks_summary.append(KnowledgeChunkSummary(
                     id=chunk.id,
@@ -780,16 +759,10 @@ class LegalDocumentParser:
                     article_id=chunk.article_id
                 ))
             
-        except Exception as chroma_error:
-            logger.error(f"❌ Failed to add chunks to Chroma: {chroma_error}")
-            # Rollback SQL changes if Chroma fails
-            try:
-                for chunk in sql_chunks:
-                    await self.db.delete(chunk)
-                await self.db.commit()
-                logger.info("🔄 Rolled back SQL changes due to Chroma failure")
-            except Exception as rollback_error:
-                logger.error(f"❌ Failed to rollback SQL changes: {rollback_error}")
+        except Exception as sql_error:
+            logger.error(f"❌ Failed to add chunks to SQL: {sql_error}")
+            await self.db.rollback()
+            return chunks_summary
         
         logger.info(f"📦 Created {len(chunks_summary)} chunks for article {article.article_number}")
         return chunks_summary
@@ -916,14 +889,14 @@ class DocumentUploadService:
                 title, category, file_path, file_hash, uploaded_by
             )
             
-            # Step 4: Parse document content
+            # Step 4: Parse document content (creates SQL entries only, no embeddings yet)
             law_sources, articles, chunks = await self.parser.parse_document(
                 file_path, document, {"filename": filename}
             )
             
-            # Step 5: Update document status
-            document.status = 'processed'
-            document.processed_at = datetime.utcnow()
+            # Step 5: Keep status as 'raw' - embeddings not generated yet
+            # Will be updated to 'processed' after embeddings generation
+            document.status = 'raw'
             await self.db.commit()
             
             # Step 6: Prepare response
@@ -933,7 +906,7 @@ class DocumentUploadService:
                 "category": document.category,
                 "file_path": document.file_path,
                 "file_hash": document.file_hash,
-                "status": document.status,
+                "status": document.status,  # 'raw' - embeddings not generated yet
                 "uploaded_at": document.uploaded_at,
                 "chunks_created": len(chunks),
                 "law_sources_processed": len(law_sources),
@@ -943,10 +916,12 @@ class DocumentUploadService:
                 "chunks": [chunk.model_dump() for chunk in chunks],
                 "processing_time_seconds": 0.0,  # TODO: Implement timing
                 "file_size_bytes": file_size,
-                "duplicate_detected": duplicate_detected
+                "duplicate_detected": duplicate_detected,
+                "next_step": f"Call POST /api/v1/laws/{document.id}/generate-embeddings to generate embeddings and make searchable"
             }
             
-            logger.info(f"✅ Document upload completed: {len(chunks)} chunks created")
+            logger.info(f"✅ Document upload completed: {len(chunks)} chunks created in SQL (status: raw, embeddings not yet generated)")
+            logger.info(f"📌 Next step: Call POST /api/v1/laws/{document.id}/generate-embeddings to generate embeddings")
             return result
             
         except Exception as e:

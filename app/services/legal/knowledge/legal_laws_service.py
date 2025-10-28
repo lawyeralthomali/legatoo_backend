@@ -200,7 +200,7 @@ class LegalLawsService:
                 last_update=self._parse_date(law_source_data.get("last_update")),
                 description=law_source_data.get("description"),
                 source_url=law_source_data.get("source_url"),
-                status="processed"
+                status="raw"  # Start as raw, will become 'processed' after embeddings are generated
             )
             
             self.db.add(law_source)
@@ -290,11 +290,11 @@ class LegalLawsService:
                 }
             }
             
-            logger.info(f"✅ Successfully processed JSON law structure: {total_articles} articles, {chunk_index} chunks")
+            logger.info(f"✅ Successfully uploaded JSON law structure: {total_articles} articles, {chunk_index} chunks (status: raw)")
             
             return {
                 "success": True,
-                "message": f"Successfully processed JSON law structure: {total_articles} articles, {chunk_index} chunks",
+                "message": f"Successfully uploaded JSON law structure: {total_articles} articles, {chunk_index} chunks. Status: raw. Use /generate-embeddings endpoint to process and make searchable.",
                 "data": response_data
             }
             
@@ -516,7 +516,7 @@ class LegalLawsService:
             category = 'law'  # Default category for laws
             
             # Use DocumentUploadService to process the JSON file
-            # This will create entries in both SQL and Chroma
+            # This will create entries in SQL but NOT in Chroma yet
             result = await upload_service.upload_document(
                 file_content=file_content,
                 filename=os.path.basename(file_path),
@@ -525,23 +525,23 @@ class LegalLawsService:
                 uploaded_by=uploaded_by
             )
             
-            # Update law_source status
-            law_source.status = 'processed'
-            knowledge_doc.status = 'processed'
-            knowledge_doc.processed_at = datetime.utcnow()
+            # Keep status as 'raw' - will be updated to 'processed' after embeddings generation
+            law_source.status = 'raw'
+            knowledge_doc.status = 'raw'
             await self.db.commit()
             
             # Return the result
             return {
                 "success": True,
-                "message": f"JSON file processed successfully with dual-database support. Created {result.get('chunks_created', 0)} chunks.",
+                "message": f"JSON file uploaded successfully. Created {result.get('chunks_created', 0)} chunks in SQL. Status: raw. Use /generate-embeddings endpoint to generate embeddings and make searchable.",
                 "data": {
                     "law_source_id": law_source.id,
                     "document_id": knowledge_doc.id,
                     "total_articles": result.get('articles_processed', 0),
                     "total_chunks": result.get('chunks_created', 0),
-                    "parser_used": "document_upload_service",
-                    "dual_database": True
+                    "status": "raw",
+                    "next_step": "Call POST /api/v1/laws/{document_id}/generate-embeddings to generate embeddings",
+                    "parser_used": "document_upload_service"
                 }
             }
             
@@ -568,9 +568,9 @@ class LegalLawsService:
         try:
             logger.info(f"⏳ Processing {file_extension} file (parsing deferred)")
             
-            # Mark as pending parsing
-            knowledge_doc.status = 'pending_parsing'
-            law_source.status = 'pending_parsing'
+            # Mark as raw (unprocessed, no embeddings yet)
+            knowledge_doc.status = 'raw'
+            law_source.status = 'raw'
             
             # Update metadata
             knowledge_doc.document_metadata = {
@@ -722,6 +722,7 @@ class LegalLawsService:
                     "description": law.description,
                     "source_url": law.source_url,
                     "status": law.status,
+                    "knowledge_document_id": law.knowledge_document_id,  # Needed for generate-embeddings endpoint
                     "created_at": law.created_at.isoformat() if law.created_at else None,
                     "updated_at": law.updated_at.isoformat() if law.updated_at else None
                 })
