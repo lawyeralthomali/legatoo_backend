@@ -134,41 +134,70 @@ class LegalLawsService:
             existing_doc = duplicate_check.scalar_one_or_none()
             
             if existing_doc:
-                logger.warning(f"⚠️ Duplicate file detected: hash {unique_hash[:16]}...")
-                
-                # Get the related law source if it exists
+                # Check if there's an active law source for this document
                 law_source_result = await self.db.execute(
                     select(LawSource).where(LawSource.knowledge_document_id == existing_doc.id)
                 )
                 existing_law_source = law_source_result.scalar_one_or_none()
                 
-                # Build detailed error message
-                error_message = (
-                    f"❌ Duplicate file detected: This document has already been uploaded. "
-                    f"File hash: {unique_hash[:16]}... "
-                    f"Original document ID: {existing_doc.id}, "
-                    f"Title: '{existing_doc.title}', "
-                    f"Uploaded at: {existing_doc.uploaded_at}"
-                )
+                # If no law source exists, the law was deleted - allow re-upload by cleaning up orphaned document
+                if not existing_law_source:
+                    logger.info(f"🗑️ Orphaned KnowledgeDocument {existing_doc.id} found (no active law source) - cleaning up to allow re-upload")
+                    try:
+                        # Delete chunks from Chroma if they exist
+                        from .document_parser_service import vectorstore_manager
+                        chunks_result = await self.db.execute(
+                            select(KnowledgeChunk).where(KnowledgeChunk.document_id == existing_doc.id)
+                        )
+                        orphaned_chunks = chunks_result.scalars().all()
+                        if orphaned_chunks:
+                            chunk_ids = [str(chunk.id) for chunk in orphaned_chunks]
+                            try:
+                                vectorstore = vectorstore_manager.get_vectorstore()
+                                if vectorstore:
+                                    vectorstore.delete(ids=chunk_ids)
+                                    logger.info(f"✅ Cleaned up {len(chunk_ids)} orphaned chunks from Chroma")
+                            except Exception as chroma_error:
+                                logger.warning(f"⚠️ Failed to clean up Chroma chunks: {chroma_error}")
+                        
+                        # Delete the orphaned document
+                        await self.db.delete(existing_doc)
+                        await self.db.flush()
+                        logger.info(f"✅ Cleaned up orphaned KnowledgeDocument {existing_doc.id}")
+                        existing_doc = None  # Allow upload to proceed
+                    except Exception as cleanup_error:
+                        logger.error(f"❌ Failed to clean up orphaned document: {cleanup_error}")
+                        existing_doc = None  # Still allow upload to proceed
                 
-                if existing_law_source:
-                    error_message += f", Law Source: '{existing_law_source.name}' (ID: {existing_law_source.id})"
-                
-                return {
-                    "success": False,
-                    "message": error_message,
-                    "data": {
-                        "document_id": existing_doc.id,
-                        "document_title": existing_doc.title,
-                        "uploaded_at": existing_doc.uploaded_at.isoformat() if existing_doc.uploaded_at else None,
-                        "law_source_id": existing_law_source.id if existing_law_source else None,
-                        "law_source_name": existing_law_source.name if existing_law_source else None
-                    },
-                    "errors": [{
-                        "field": "file",
-                        "message": "This file has already been uploaded. Upload a different file or use the existing document."
-                    }]
-                }
+                # Only return error if there's an active law source
+                if existing_doc and existing_law_source:
+                    logger.warning(f"⚠️ Duplicate file detected: hash {unique_hash[:16]}...")
+                    
+                    # Build detailed error message
+                    error_message = (
+                        f"❌ Duplicate file detected: This document has already been uploaded. "
+                        f"File hash: {unique_hash[:16]}... "
+                        f"Original document ID: {existing_doc.id}, "
+                        f"Title: '{existing_doc.title}', "
+                        f"Uploaded at: {existing_doc.uploaded_at}, "
+                        f"Law Source: '{existing_law_source.name}' (ID: {existing_law_source.id})"
+                    )
+                    
+                    return {
+                        "success": False,
+                        "message": error_message,
+                        "data": {
+                            "document_id": existing_doc.id,
+                            "document_title": existing_doc.title,
+                            "uploaded_at": existing_doc.uploaded_at.isoformat() if existing_doc.uploaded_at else None,
+                            "law_source_id": existing_law_source.id,
+                            "law_source_name": existing_law_source.name
+                        },
+                        "errors": [{
+                            "field": "file",
+                            "message": "This file has already been uploaded. Upload a different file or use the existing document."
+                        }]
+                    }
             
             # Create KnowledgeDocument (no file, just metadata)
             knowledge_doc = KnowledgeDocument(
@@ -379,41 +408,70 @@ class LegalLawsService:
             existing_doc = duplicate_check.scalar_one_or_none()
             
             if existing_doc:
-                logger.warning(f"⚠️ Duplicate file detected: hash {file_hash[:16]}...")
-                
-                # Get the related law source if it exists
+                # Check if there's an active law source for this document
                 law_source_result = await self.db.execute(
                     select(LawSource).where(LawSource.knowledge_document_id == existing_doc.id)
                 )
                 existing_law_source = law_source_result.scalar_one_or_none()
                 
-                # Build detailed error message
-                error_message = (
-                    f"❌ Duplicate file detected: This document has already been uploaded. "
-                    f"File hash: {file_hash[:16]}... "
-                    f"Original document ID: {existing_doc.id}, "
-                    f"Title: '{existing_doc.title}', "
-                    f"Uploaded at: {existing_doc.uploaded_at}"
-                )
+                # If no law source exists, the law was deleted - allow re-upload by cleaning up orphaned document
+                if not existing_law_source:
+                    logger.info(f"🗑️ Orphaned KnowledgeDocument {existing_doc.id} found (no active law source) - cleaning up to allow re-upload")
+                    try:
+                        # Delete chunks from Chroma if they exist
+                        from .document_parser_service import vectorstore_manager
+                        chunks_result = await self.db.execute(
+                            select(KnowledgeChunk).where(KnowledgeChunk.document_id == existing_doc.id)
+                        )
+                        orphaned_chunks = chunks_result.scalars().all()
+                        if orphaned_chunks:
+                            chunk_ids = [str(chunk.id) for chunk in orphaned_chunks]
+                            try:
+                                vectorstore = vectorstore_manager.get_vectorstore()
+                                if vectorstore:
+                                    vectorstore.delete(ids=chunk_ids)
+                                    logger.info(f"✅ Cleaned up {len(chunk_ids)} orphaned chunks from Chroma")
+                            except Exception as chroma_error:
+                                logger.warning(f"⚠️ Failed to clean up Chroma chunks: {chroma_error}")
+                        
+                        # Delete the orphaned document
+                        await self.db.delete(existing_doc)
+                        await self.db.flush()
+                        logger.info(f"✅ Cleaned up orphaned KnowledgeDocument {existing_doc.id}")
+                        existing_doc = None  # Allow upload to proceed
+                    except Exception as cleanup_error:
+                        logger.error(f"❌ Failed to clean up orphaned document: {cleanup_error}")
+                        existing_doc = None  # Still allow upload to proceed
                 
-                if existing_law_source:
-                    error_message += f", Law Source: '{existing_law_source.name}' (ID: {existing_law_source.id})"
-                
-                return {
-                    "success": False,
-                    "message": error_message,
-                    "data": {
-                        "document_id": existing_doc.id,
-                        "document_title": existing_doc.title,
-                        "uploaded_at": existing_doc.uploaded_at.isoformat() if existing_doc.uploaded_at else None,
-                        "law_source_id": existing_law_source.id if existing_law_source else None,
-                        "law_source_name": existing_law_source.name if existing_law_source else None
-                    },
-                    "errors": [{
-                        "field": "file",
-                        "message": "This file has already been uploaded. Upload a different file or use the existing document."
-                    }]
-                }
+                # Only return error if there's an active law source
+                if existing_doc and existing_law_source:
+                    logger.warning(f"⚠️ Duplicate file detected: hash {file_hash[:16]}...")
+                    
+                    # Build detailed error message
+                    error_message = (
+                        f"❌ Duplicate file detected: This document has already been uploaded. "
+                        f"File hash: {file_hash[:16]}... "
+                        f"Original document ID: {existing_doc.id}, "
+                        f"Title: '{existing_doc.title}', "
+                        f"Uploaded at: {existing_doc.uploaded_at}, "
+                        f"Law Source: '{existing_law_source.name}' (ID: {existing_law_source.id})"
+                    )
+                    
+                    return {
+                        "success": False,
+                        "message": error_message,
+                        "data": {
+                            "document_id": existing_doc.id,
+                            "document_title": existing_doc.title,
+                            "uploaded_at": existing_doc.uploaded_at.isoformat() if existing_doc.uploaded_at else None,
+                            "law_source_id": existing_law_source.id,
+                            "law_source_name": existing_law_source.name
+                        },
+                        "errors": [{
+                            "field": "file",
+                            "message": "This file has already been uploaded. Upload a different file or use the existing document."
+                        }]
+                    }
             
             logger.info(f"🚀 Starting law upload and parsing: {law_source_details.get('name')} (Type: {file_extension})")
             
@@ -950,8 +1008,40 @@ class LegalLawsService:
                     logger.error(f"❌ Failed to delete from Chroma: {chroma_error}")
                     # Continue with SQL deletion even if Chroma fails
             
-            # Step 4: Delete law from SQL (cascade will delete articles, chunks, etc.)
+            # Step 4: Check if KnowledgeDocument should be deleted (before deleting law)
+            should_delete_knowledge_doc = False
+            knowledge_doc_to_delete = None
+            if knowledge_doc_id:
+                knowledge_doc_result = await self.db.execute(
+                    select(KnowledgeDocument).where(KnowledgeDocument.id == knowledge_doc_id)
+                )
+                knowledge_doc_to_delete = knowledge_doc_result.scalar_one_or_none()
+                
+                if knowledge_doc_to_delete:
+                    # Check if there are any other law sources using this document (excluding the one we're deleting)
+                    other_law_sources_result = await self.db.execute(
+                        select(LawSource).where(
+                            LawSource.knowledge_document_id == knowledge_doc_id,
+                            LawSource.id != law_id  # Exclude the law we're about to delete
+                        )
+                    )
+                    other_law_sources = other_law_sources_result.scalars().all()
+                    
+                    # Only delete if no other law sources are using it
+                    if len(other_law_sources) == 0:
+                        should_delete_knowledge_doc = True
+                        logger.info(f"🗑️ Will delete KnowledgeDocument {knowledge_doc_id} (no other law sources)")
+                    else:
+                        logger.info(f"⚠️ Keeping KnowledgeDocument {knowledge_doc_id} (used by {len(other_law_sources)} other law sources)")
+            
+            # Step 5: Delete law from SQL (cascade will delete articles, chunks, etc.)
             await self.db.delete(law)
+            
+            # Step 6: Delete KnowledgeDocument if needed
+            if should_delete_knowledge_doc and knowledge_doc_to_delete:
+                await self.db.delete(knowledge_doc_to_delete)
+                logger.info(f"✅ Deleted KnowledgeDocument {knowledge_doc_id}")
+            
             await self.db.commit()
             
             logger.info(f"✅ Deleted law {law_id}: {law_name} from SQL database")
