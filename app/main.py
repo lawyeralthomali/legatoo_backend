@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 import uuid
@@ -112,10 +112,20 @@ default_origins = [
 ]
 
 # Use environment CORS origins if available, otherwise use defaults
+# Always ensure production domains are included
+production_origins = [
+    "https://legatoo.fastestfranchise.net",
+    "https://api.fastestfranchise.net",
+    "http://legatoo.fastestfranchise.net",
+    "http://api.fastestfranchise.net",
+]
+
 if cors_origins and cors_origins[0]:
     # Filter out empty strings
     cors_origins = [origin.strip() for origin in cors_origins if origin.strip()]
-    allow_origins = cors_origins
+    # Merge environment origins with production origins (no duplicates)
+    allow_origins = list(set(cors_origins + production_origins))
+    print(f"🌐 CORS: Loaded {len(allow_origins)} origins (env + production)")
 else:
     # Production mode - allow common origins
     allow_origins = [
@@ -155,12 +165,16 @@ else:
         
   
         
-        # New domain
+        # New domain - PRODUCTION (CRITICAL)
         "http://api.fastestfranchise.net",
         "https://api.fastestfranchise.net",
         "http://legatoo.fastestfranchise.net",
         "https://legatoo.fastestfranchise.net"
     ]
+    # Always add production origins to defaults as well
+    allow_origins.extend(production_origins)
+    allow_origins = list(set(allow_origins))  # Remove duplicates
+    print(f"🌐 CORS: Using default origins list with production: {len(allow_origins)} origins")
 
 # Custom CORS origin validator for development
 def is_origin_allowed(origin: str) -> bool:
@@ -175,10 +189,12 @@ def is_origin_allowed(origin: str) -> bool:
     return origin in allow_origins
 
 # Add CORS middleware with comprehensive settings
+# IMPORTANT: allow_origin_regex and allow_origins should not both be set
+# We'll use allow_origins with explicit production domains + regex for dev
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^(http://192\.168\.100\.\d+:\d+|http://localhost:\d+|http://127\.0\.0\.1:\d+)$",  # Allow local network IPs
-    allow_origins=allow_origins,  # Fallback to configured origins list
+    allow_origins=allow_origins,  # Explicit list of allowed origins (including production)
+    allow_origin_regex=r"^(http://192\.168\.100\.\d+:\d+|http://localhost:\d+|http://127\.0\.0\.1:\d+)$",  # Allow local network IPs for development
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=[
@@ -193,12 +209,56 @@ app.add_middleware(
         "Origin",
         "Access-Control-Request-Method",
         "Access-Control-Request-Headers",
-        "*",  # Allow all headers
+        "Access-Control-Allow-Origin",
+        "Access-Control-Allow-Methods",
+        "Access-Control-Allow-Headers",
     ],
-    expose_headers=["*"],
+    expose_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "X-Correlation-ID",
+    ],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
-# CORS middleware handles OPTIONS requests automatically, no need for explicit handler
+# Explicit OPTIONS handler as fallback (middleware should handle, but this ensures it)
+@app.options("/{full_path:path}")
+async def options_handler(request: Request, full_path: str):
+    """
+    Handle OPTIONS preflight requests explicitly.
+    This ensures CORS preflight requests are always handled correctly.
+    """
+    origin = request.headers.get("origin")
+    
+    # Check if origin is allowed
+    is_allowed = (
+        origin in allow_origins if origin else False
+    ) or (
+        origin and any(origin.startswith(pattern.replace("*", "")) for pattern in allow_origins if "*" in pattern)
+    )
+    
+    # Check regex match for development origins
+    if origin and not is_allowed:
+        import re
+        dev_regex = r"^(http://192\.168\.100\.\d+:\d+|http://localhost:\d+|http://127\.0\.0\.1:\d+)$"
+        if re.match(dev_regex, origin):
+            is_allowed = True
+    
+    response_headers = {}
+    
+    if is_allowed:
+        response_headers["Access-Control-Allow-Origin"] = origin
+        response_headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
+        response_headers["Access-Control-Allow-Headers"] = "Accept, Accept-Language, Content-Language, Content-Type, Authorization, X-Requested-With, X-CSRF-Token, X-Correlation-ID, Origin"
+        response_headers["Access-Control-Allow-Credentials"] = "true"
+        response_headers["Access-Control-Max-Age"] = "3600"
+    
+    return Response(
+        content="",
+        status_code=200,
+        headers=response_headers
+    )
 
 # Add a simple CORS test endpoint
 @app.get("/cors-test")
@@ -214,7 +274,8 @@ async def cors_test(request: Request):
             "cors_origins": allow_origins,
             "request_origin": origin,
             "origin_allowed": origin in allow_origins if origin != "No origin header" else "N/A",
-            "credentials_enabled": True
+            "credentials_enabled": True,
+            "all_origins_count": len(allow_origins)
         }
     }
 
