@@ -900,8 +900,16 @@ class LegalLawsService:
             }
 
     async def delete_law(self, law_id: int) -> Dict[str, Any]:
-        """Delete law and cascade delete hierarchy."""
+        """
+        Delete law and cascade delete from both SQL and Chroma databases.
+        
+        Steps:
+        1. Get all chunks associated with this law
+        2. Delete chunks from Chroma vectorstore
+        3. Delete law from SQL (cascade deletes articles, chunks, etc.)
+        """
         try:
+            # Step 1: Get law details
             result = await self.db.execute(
                 select(LawSource).where(LawSource.id == law_id)
             )
@@ -915,21 +923,52 @@ class LegalLawsService:
                 }
             
             law_name = law.name
+            knowledge_doc_id = law.knowledge_document_id
             
-            # Delete will cascade to branches, chapters, articles, chunks
+            # Step 2: Get all chunks for this law source
+            chunks_result = await self.db.execute(
+                select(KnowledgeChunk).where(KnowledgeChunk.law_source_id == law_id)
+            )
+            chunks = chunks_result.scalars().all()
+            chunk_ids = [str(chunk.id) for chunk in chunks]
+            
+            logger.info(f"🗑️ Deleting law {law_id}: {law_name} ({len(chunk_ids)} chunks)")
+            
+            # Step 3: Delete chunks from Chroma vectorstore
+            if chunk_ids:
+                try:
+                    from .document_parser_service import vectorstore_manager
+                    vectorstore = vectorstore_manager.get_vectorstore()
+                    
+                    if vectorstore:
+                        vectorstore.delete(ids=chunk_ids)
+                        logger.info(f"✅ Deleted {len(chunk_ids)} chunks from Chroma vectorstore")
+                    else:
+                        logger.warning("⚠️ Vectorstore not available, skipping Chroma deletion")
+                        
+                except Exception as chroma_error:
+                    logger.error(f"❌ Failed to delete from Chroma: {chroma_error}")
+                    # Continue with SQL deletion even if Chroma fails
+            
+            # Step 4: Delete law from SQL (cascade will delete articles, chunks, etc.)
             await self.db.delete(law)
             await self.db.commit()
             
-            logger.info(f"Deleted law {law_id}: {law_name}")
+            logger.info(f"✅ Deleted law {law_id}: {law_name} from SQL database")
             
             return {
                 "success": True,
-                "message": f"Law '{law_name}' deleted successfully",
-                "data": {"deleted_law_id": law_id, "deleted_law_name": law_name}
+                "message": f"Law '{law_name}' deleted successfully from both databases",
+                "data": {
+                    "deleted_law_id": law_id,
+                    "deleted_law_name": law_name,
+                    "deleted_chunks_count": len(chunk_ids),
+                    "knowledge_document_id": knowledge_doc_id
+                }
             }
             
         except Exception as e:
-            logger.error(f"Failed to delete law: {str(e)}")
+            logger.error(f"❌ Failed to delete law: {str(e)}")
             await self.db.rollback()
             return {
                 "success": False,
