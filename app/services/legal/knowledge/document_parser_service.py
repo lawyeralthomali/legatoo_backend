@@ -1197,15 +1197,15 @@ class DocumentUploadService:
                     "chunks_processed": 0
                 }
             
-            # Update law source status to 'processing' if it exists
+            # Get law source if it exists (status will be updated to 'processed' after success)
             law_source_result = await self.db.execute(
                 select(LawSource).where(LawSource.knowledge_document_id == document_id)
             )
             law_source = law_source_result.scalar_one_or_none()
+            
+            # Note: Status remains 'raw' during processing, will be updated to 'processed' when complete
             if law_source:
-                law_source.status = 'processing'
-                await self.db.commit()
-                logger.info(f"📝 Updated law source {law_source.id} status to 'processing'")
+                logger.info(f"📝 Processing law source {law_source.id} (status will remain 'raw' until complete)")
             
             # Get all chunks for this document from SQL
             chunks_result = await self.db.execute(

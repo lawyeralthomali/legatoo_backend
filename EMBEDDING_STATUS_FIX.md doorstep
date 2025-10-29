@@ -1,0 +1,96 @@
+# 🔧 Embedding Generation Status Fix
+
+## 🐛 Problem
+
+When generating embeddings, the code tried to set status to `'processing'`, but the database CHECK constraint only allows:
+- `'raw'`
+- `'processed'`
+- `'indexed'`
+
+**Error:**
+```
+sqlalchemy.exc.IntegrityError: CHECK constraint failed: status IN ('raw', 'processed', 'indexed')
+```
+
+## 🔍 Root Cause
+
+The `LawSource` model definition allows `'processing'`:
+```python
+status = Column(String(50), CheckConstraint("status IN ('raw', 'processing', 'processed', 'indexed')"))
+```
+
+However, the actual database was created with an older constraint that doesn't include `'processing'`. The model definition doesn't match the actual database schema.
+
+## ✅ Solution
+
+Removed the status update to `'processing'` during embedding generation. The status now:
+- **Remains `'raw'`** during processing
+- **Changes to `'processed'`** when embeddings are successfully generated
+- **Reverts to `'raw'`** if generation fails
+
+### Code Change
+
+**File:** `app/services/legal/knowledge/document_parser_service.py`
+
+**Before:**
+```python
+if law_source:
+    law_source.status = 'processing'  # ❌ Not allowed by DB constraint
+    await self.db.commit()
+```
+
+**After:**
+```python
+# Note: Status remains 'raw' during processing, will be updated to 'processed' when complete
+if law_source:
+    logger.info(f"📝 Processing law source {law_source.id} (status will remain 'raw' until complete)")
+```
+
+## 📊 Status Flow
+
+```
+Initial: status = 'raw'
+    ↓
+User clicks "Generate Embeddings"
+    ↓
+Status stays 'raw' (no change during processing)
+    ↓
+Embeddings generated successfully
+    ↓
+Status = 'processed' ✅
+```
+
+## 🔄 Alternative Solution (Future)
+
+If you want to track "processing" status, you would need to:
+
+1. **Create a database migration** to update the CHECK constraint:
+   ```sql
+   ALTER TABLE law_sources DROP CONSTRAINT check_status;
+   ALTER TABLE law_sources ADD CONSTRAINT check_status 
+       CHECK (status IN ('raw', 'processing', 'processed', 'indexed'));
+   ```
+
+2. **Use Alembic migration:**
+   ```bash
+   alembic revision -m "add_processing_status"
+   ```
+
+For now, keeping the status as `'raw'` until complete works fine, as:
+- Users can see it's not processed yet (`'raw'`)
+- After completion, they see it's ready (`'processed'`)
+- No database constraint errors
+
+## 🧪 Testing
+
+After this fix:
+1. ✅ Generate embeddings - should work without constraint error
+2. ✅ Status changes from `'raw'` to `'processed'` on success
+3. ✅ Status stays `'raw'` if generation fails
+
+---
+
+**Fixed:** October 29, 2025  
+**Status:** ✅ Implemented  
+**Breaking Change:** No (improves reliability)
+

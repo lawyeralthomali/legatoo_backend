@@ -979,10 +979,9 @@ async def upload_law_json(
 # CHROMA EMBEDDINGS AND QUERY
 # ===========================================
 
-@router.post("/{document_id}/generate-embeddings", response_model=ApiResponse)
+@router.post("/{law_id}/generate-embeddings", response_model=ApiResponse)
 async def generate_embeddings_for_document(
-    document_id: int = Path(..., gt=0, description="Document ID to generate embeddings for"),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
+    law_id: int = Path(..., gt=0, description="Law Source ID to generate embeddings for"),
     db: AsyncSession = Depends(get_db),
     current_user: TokenData = Depends(get_current_user)
 ):
@@ -1008,19 +1007,49 @@ async def generate_embeddings_for_document(
     - Processing message
     """
     try:
+        from sqlalchemy import select
+        from ..models import LawSource
         from ..services.legal.knowledge.document_parser_service import DocumentUploadService
         
-        # Initialize the service
+        # Step 1: Get the law source to find the document ID
+        law_result = await db.execute(
+            select(LawSource).where(LawSource.id == law_id)
+        )
+        law = law_result.scalar_one_or_none()
+        
+        if not law:
+            return create_error_response(
+                message=f"Law with ID {law_id} not found"
+            )
+        
+        if not law.knowledge_document_id:
+            return create_error_response(
+                message=f"Law {law_id} has no associated document"
+            )
+        
+        document_id = law.knowledge_document_id
+        logger.info(f"📋 Law {law_id} -> Document {document_id} for embedding generation")
+        
+        # Step 2: Initialize the service
         service = DocumentUploadService(db)
         
-        # Run embedding generation in background to prevent server hang
-        background_tasks.add_task(service.generate_embeddings_for_document, document_id)
+        # Step 3: Run embedding generation in background (async task)
+        async def run_embeddings():
+            try:
+                await service.generate_embeddings_for_document(document_id)
+            except Exception as e:
+                logger.error(f"❌ Background embedding generation failed for law {law_id}: {e}", exc_info=True)
         
-        logger.info(f"🚀 Started background embedding generation for document {document_id}")
+        import asyncio
+        asyncio.create_task(run_embeddings())
+        
+        logger.info(f"🚀 Started background embedding generation for law {law_id} (document {document_id})")
         
         return create_success_response(
-            message=f"Embedding generation started in background for document {document_id}",
+            message=f"Embedding generation started in background for law '{law.name}'",
             data={
+                "law_id": law_id,
+                "law_name": law.name,
                 "document_id": document_id,
                 "status": "processing",
                 "message": "Embeddings are being generated in the background. Check logs for progress."
