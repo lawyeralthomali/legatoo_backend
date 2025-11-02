@@ -204,4 +204,50 @@ class SubscriptionRepository(BaseRepository):
             .where(Subscription.subscription_id == subscription_id)
         )
         return result.scalar_one_or_none()
+    
+    async def get_all_subscribers_with_details(self, skip: int = 0, limit: int = 100) -> List[Subscription]:
+        """
+        Get all subscriptions with profile and plan details.
+        
+        Args:
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            
+        Returns:
+            List of Subscription models with loaded relationships
+        """
+        from ..models.profile import Profile
+        
+        result = await self.db.execute(
+            select(Subscription)
+            .options(
+                selectinload(Subscription.plan),
+                selectinload(Subscription.profile)
+            )
+            .join(Profile, Subscription.user_id == Profile.id)
+            .order_by(Subscription.start_date.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return result.scalars().all()
+    
+    async def get_subscriber_by_subscription_id(self, subscription_id: UUID) -> Optional[Subscription]:
+        """
+        Get subscription with profile and plan details by subscription ID.
+        
+        Args:
+            subscription_id: Subscription UUID
+            
+        Returns:
+            Subscription with loaded relationships if found, None otherwise
+        """
+        result = await self.db.execute(
+            select(Subscription)
+            .options(
+                selectinload(Subscription.plan),
+                selectinload(Subscription.profile)
+            )
+            .where(Subscription.subscription_id == subscription_id)
+        )
+        return result.scalar_one_or_none()
 

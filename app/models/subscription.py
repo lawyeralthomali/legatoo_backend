@@ -24,6 +24,7 @@ class Subscription(Base):
 
     # Relationships
     plan = relationship("Plan", back_populates="subscriptions")
+    profile = relationship("Profile", foreign_keys=[user_id])
     # Note: usage_records relationship removed due to missing foreign key constraints
     # Can be added back after running add_missing_foreign_keys.sql
 

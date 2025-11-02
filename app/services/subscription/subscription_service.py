@@ -324,3 +324,83 @@ class SubscriptionService:
             return False
         subscription = await self.subscription_repository.get_user_active_subscription(user_id)
         return subscription is not None
+    
+    async def get_all_subscribers(self, skip: int = 0, limit: int = 100) -> List[Subscription]:
+        """Get all subscribers with profile and plan details."""
+        return await self.subscription_repository.get_all_subscribers_with_details(skip=skip, limit=limit)
+    
+    async def get_subscriber_by_id(self, subscription_id: UUID) -> Optional[Subscription]:
+        """Get subscriber details by subscription ID."""
+        return await self.subscription_repository.get_subscriber_by_subscription_id(subscription_id)
+    
+    async def update_subscription(
+        self,
+        subscription_id: UUID,
+        plan_id: UUID = None,
+        status: str = None,
+        end_date: datetime = None,
+        auto_renew: bool = None
+    ) -> Optional[Subscription]:
+        """Update subscription details."""
+        subscription = await self.subscription_repository.get_subscription_by_id(subscription_id)
+        
+        if not subscription:
+            return None
+        
+        if plan_id:
+            # Validate plan exists and is active
+            if not await self.plan_repository.is_plan_active(plan_id):
+                raise ValueError(f"Plan {plan_id} does not exist or is not active")
+            subscription.plan_id = plan_id
+        
+        if status:
+            from ...models.subscription import StatusType
+            try:
+                subscription.status = StatusType(status)
+            except ValueError:
+                raise ValueError(f"Invalid status: {status}")
+        
+        if end_date is not None:
+            subscription.end_date = end_date
+        
+        if auto_renew is not None:
+            subscription.auto_renew = auto_renew
+        
+        await self.db.commit()
+        await self.db.refresh(subscription)
+        return subscription
+    
+    async def delete_subscription(self, subscription_id: UUID) -> bool:
+        """Delete a subscription."""
+        from sqlalchemy import delete
+        from ...models.subscription import Subscription
+        
+        subscription = await self.subscription_repository.get_subscription_by_id(subscription_id)
+        
+        if not subscription:
+            return False
+        
+        await self.db.delete(subscription)
+        await self.db.commit()
+        return True
+    
+    async def create_subscription_for_user(
+        self,
+        user_id: UUID,
+        plan_id: UUID,
+        duration_days: int = None
+    ) -> Subscription:
+        """Create a subscription for a specific user (admin function)."""
+        # Validate plan exists and is active
+        if not await self.plan_repository.is_plan_active(plan_id):
+            raise ValueError(f"Plan {plan_id} does not exist or is not active")
+        
+        # Deactivate any existing active subscriptions for this user
+        await self.subscription_repository.deactivate_user_subscriptions(user_id)
+        
+        # Create new subscription
+        return await self.subscription_repository.create_subscription(
+            user_id=user_id,
+            plan_id=plan_id,
+            duration_days=duration_days
+        )

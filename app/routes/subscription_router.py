@@ -414,3 +414,246 @@ async def get_usage_stats(
             message="Failed to get usage stats",
             errors=[ErrorDetail(field="admin", message=f"Internal server error: {str(e)}")]
         )
+
+
+# Subscribers management endpoints
+@router.get("/subscribers", response_model=ApiResponse)
+async def get_all_subscribers(
+    skip: int = 0,
+    limit: int = 100,
+    current_user: TokenData = Depends(get_current_user),
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
+) -> ApiResponse:
+    """Get all subscribers with their subscription and plan details"""
+    try:
+        subscriptions = await subscription_service.get_all_subscribers(skip=skip, limit=limit)
+        subscribers_data = []
+        
+        for sub in subscriptions:
+            subscriber_info = {
+                "subscription_id": str(sub.subscription_id),
+                "user_id": str(sub.user_id),
+                "name": f"{sub.profile.first_name} {sub.profile.last_name}" if sub.profile else "Unknown",
+                "email": sub.profile.email if sub.profile else None,
+                "phone_number": sub.profile.phone_number if sub.profile else None,
+                "plan_name": sub.plan.plan_name if sub.plan else None,
+                "plan_type": sub.plan.plan_type if sub.plan else None,
+                "price": float(sub.plan.price) if sub.plan else 0,
+                "billing_cycle": sub.plan.billing_cycle if sub.plan else None,
+                "start_date": sub.start_date.isoformat() if sub.start_date else None,
+                "end_date": sub.end_date.isoformat() if sub.end_date else None,
+                "status": sub.status.value if sub.status else None,
+                "is_active": sub.is_active,
+                "days_remaining": sub.days_remaining,
+                "auto_renew": sub.auto_renew
+            }
+            subscribers_data.append(subscriber_info)
+        
+        return create_success_response(
+            message="Subscribers retrieved successfully",
+            data={"subscribers": subscribers_data, "count": len(subscribers_data)}
+        )
+    except Exception as e:
+        return create_error_response(
+            message="Failed to retrieve subscribers",
+            errors=[ErrorDetail(field="subscribers", message=f"Internal server error: {str(e)}")]
+        )
+
+
+@router.get("/subscribers/{subscription_id}", response_model=ApiResponse)
+async def get_subscriber(
+    subscription_id: UUID,
+    current_user: TokenData = Depends(get_current_user),
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
+) -> ApiResponse:
+    """Get details of a specific subscriber"""
+    try:
+        subscription = await subscription_service.get_subscriber_by_id(subscription_id)
+        
+        if not subscription:
+            return create_not_found_response(
+                resource="Subscriber",
+                field="subscription_id"
+            )
+        
+        subscriber_data = {
+            "subscription_id": str(subscription.subscription_id),
+            "user_id": str(subscription.user_id),
+            "name": f"{subscription.profile.first_name} {subscription.profile.last_name}" if subscription.profile else "Unknown",
+            "email": subscription.profile.email if subscription.profile else None,
+            "phone_number": subscription.profile.phone_number if subscription.profile else None,
+            "account_type": subscription.profile.account_type if subscription.profile else None,
+            "plan_id": str(subscription.plan_id),
+            "plan_name": subscription.plan.plan_name if subscription.plan else None,
+            "plan_type": subscription.plan.plan_type if subscription.plan else None,
+            "price": float(subscription.plan.price) if subscription.plan else 0,
+            "billing_cycle": subscription.plan.billing_cycle if subscription.plan else None,
+            "start_date": subscription.start_date.isoformat() if subscription.start_date else None,
+            "end_date": subscription.end_date.isoformat() if subscription.end_date else None,
+            "status": subscription.status.value if subscription.status else None,
+            "is_active": subscription.is_active,
+            "is_expired": subscription.is_expired,
+            "is_cancelled": subscription.is_cancelled,
+            "days_remaining": subscription.days_remaining,
+            "auto_renew": subscription.auto_renew
+        }
+        
+        return create_success_response(
+            message="Subscriber details retrieved successfully",
+            data=subscriber_data
+        )
+    except Exception as e:
+        return create_error_response(
+            message="Failed to retrieve subscriber details",
+            errors=[ErrorDetail(field="subscriber", message=f"Internal server error: {str(e)}")]
+        )
+
+
+@router.post("/subscribers", response_model=ApiResponse)
+async def create_subscriber(
+    user_id: UUID,
+    plan_id: UUID,
+    duration_days: int = None,
+    current_user: TokenData = Depends(get_current_user),
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
+) -> ApiResponse:
+    """Create a new subscription for a user (admin endpoint)"""
+    try:
+        subscription = await subscription_service.create_subscription_for_user(
+            user_id=user_id,
+            plan_id=plan_id,
+            duration_days=duration_days
+        )
+        
+        # Reload with relationships
+        subscription = await subscription_service.get_subscriber_by_id(subscription.subscription_id)
+        
+        subscriber_data = {
+            "subscription_id": str(subscription.subscription_id),
+            "user_id": str(subscription.user_id),
+            "name": f"{subscription.profile.first_name} {subscription.profile.last_name}" if subscription.profile else "Unknown",
+            "email": subscription.profile.email if subscription.profile else None,
+            "plan_name": subscription.plan.plan_name if subscription.plan else None,
+            "plan_type": subscription.plan.plan_type if subscription.plan else None,
+            "price": float(subscription.plan.price) if subscription.plan else 0,
+            "billing_cycle": subscription.plan.billing_cycle if subscription.plan else None,
+            "start_date": subscription.start_date.isoformat() if subscription.start_date else None,
+            "end_date": subscription.end_date.isoformat() if subscription.end_date else None,
+            "status": subscription.status.value if subscription.status else None
+        }
+        
+        return create_success_response(
+            message="Subscriber created successfully",
+            data=subscriber_data
+        )
+    except ValueError as e:
+        return create_error_response(
+            message="Failed to create subscriber",
+            errors=[ErrorDetail(field="subscription", message=str(e))]
+        )
+    except Exception as e:
+        return create_error_response(
+            message="Failed to create subscriber",
+            errors=[ErrorDetail(field="subscription", message=f"Internal server error: {str(e)}")]
+        )
+
+
+@router.put("/subscribers/{subscription_id}", response_model=ApiResponse)
+async def update_subscriber(
+    subscription_id: UUID,
+    plan_id: UUID = None,
+    status: str = None,
+    end_date: str = None,
+    auto_renew: bool = None,
+    current_user: TokenData = Depends(get_current_user),
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
+) -> ApiResponse:
+    """Update subscriber subscription details"""
+    try:
+        from datetime import datetime
+        
+        end_date_dt = None
+        if end_date:
+            try:
+                end_date_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            except ValueError:
+                return create_error_response(
+                    message="Invalid end_date format",
+                    errors=[ErrorDetail(field="end_date", message="end_date must be in ISO format")]
+                )
+        
+        subscription = await subscription_service.update_subscription(
+            subscription_id=subscription_id,
+            plan_id=plan_id,
+            status=status,
+            end_date=end_date_dt,
+            auto_renew=auto_renew
+        )
+        
+        if not subscription:
+            return create_not_found_response(
+                resource="Subscription",
+                field="subscription_id"
+            )
+        
+        # Reload with relationships
+        subscription = await subscription_service.get_subscriber_by_id(subscription_id)
+        
+        subscriber_data = {
+            "subscription_id": str(subscription.subscription_id),
+            "user_id": str(subscription.user_id),
+            "name": f"{subscription.profile.first_name} {subscription.profile.last_name}" if subscription.profile else "Unknown",
+            "email": subscription.profile.email if subscription.profile else None,
+            "plan_name": subscription.plan.plan_name if subscription.plan else None,
+            "plan_type": subscription.plan.plan_type if subscription.plan else None,
+            "price": float(subscription.plan.price) if subscription.plan else 0,
+            "billing_cycle": subscription.plan.billing_cycle if subscription.plan else None,
+            "start_date": subscription.start_date.isoformat() if subscription.start_date else None,
+            "end_date": subscription.end_date.isoformat() if subscription.end_date else None,
+            "status": subscription.status.value if subscription.status else None,
+            "is_active": subscription.is_active,
+            "days_remaining": subscription.days_remaining,
+            "auto_renew": subscription.auto_renew
+        }
+        
+        return create_success_response(
+            message="Subscriber updated successfully",
+            data=subscriber_data
+        )
+    except ValueError as e:
+        return create_error_response(
+            message="Failed to update subscriber",
+            errors=[ErrorDetail(field="subscription", message=str(e))]
+        )
+    except Exception as e:
+        return create_error_response(
+            message="Failed to update subscriber",
+            errors=[ErrorDetail(field="subscription", message=f"Internal server error: {str(e)}")]
+        )
+
+
+@router.delete("/subscribers/{subscription_id}", response_model=ApiResponse)
+async def delete_subscriber(
+    subscription_id: UUID,
+    current_user: TokenData = Depends(get_current_user),
+    subscription_service: SubscriptionService = Depends(get_subscription_service)
+) -> ApiResponse:
+    """Delete a subscriber subscription"""
+    try:
+        success = await subscription_service.delete_subscription(subscription_id)
+        
+        if not success:
+            return create_not_found_response(
+                resource="Subscription",
+                field="subscription_id"
+            )
+        
+        return create_success_response(
+            message="Subscriber subscription deleted successfully",
+            data={"deleted": True, "subscription_id": str(subscription_id)}
+        )
+    except Exception as e:
+        return create_error_response(
+            message="Failed to delete subscriber",
+            errors=[ErrorDetail(field="subscription", message=f"Internal server error: {str(e)}")]
+        )

@@ -78,12 +78,19 @@ class PlanRepository(BaseRepository):
     
     async def get_free_plan(self) -> Optional[Plan]:
         """
-        Get the free plan.
+        Get the active free plan.
         
         Returns:
-            Free Plan if found, None otherwise
+            Active Free Plan if found, None otherwise
         """
-        return await self.get_by_plan_type("free")
+        result = await self.db.execute(
+            select(Plan)
+            .where(Plan.plan_type == "free")
+            .where(Plan.is_active == True)
+            .order_by(Plan.plan_id)  # Get the first free plan if multiple exist
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
     
     async def get_active_plans_by_type(self, plan_type: str) -> List[Plan]:
         """

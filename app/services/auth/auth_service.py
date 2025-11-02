@@ -161,6 +161,46 @@ class AuthService:
             
             await self.db.commit()
             
+            # Automatically create free plan subscription for new user
+            try:
+                from ...services.subscription.plan_service import PlanService
+                from ...models.subscription import Subscription, StatusType
+                from datetime import timedelta
+                
+                plan_service = PlanService(self.db)
+                
+                # Get the active free plan
+                free_plan = await plan_service.get_free_plan()
+                
+                if free_plan:
+                    # Create subscription directly since subscription.user_id references profiles.id (Integer)
+                    # and plan_id is also Integer
+                    start_date = datetime.utcnow()
+                    end_date = start_date + timedelta(days=7)  # 7-day free trial
+                    
+                    subscription = Subscription(
+                        user_id=profile.id,  # Profile ID (Integer)
+                        plan_id=free_plan.plan_id,  # Plan ID (Integer)
+                        start_date=start_date,
+                        end_date=end_date,
+                        status=StatusType.ACTIVE,
+                        auto_renew=False  # Free trial doesn't auto-renew
+                    )
+                    
+                    self.db.add(subscription)
+                    await self.db.commit()
+                    await self.db.refresh(subscription)
+                    
+                    self.logger.info(f"Free plan subscription created for new user: {mask_email(user.email)}, plan: {free_plan.plan_name}")
+                else:
+                    self.logger.warning(f"Free plan not found, skipping subscription creation for: {mask_email(user.email)}")
+                    
+            except Exception as e:
+                # Log error but don't fail signup if subscription creation fails
+                self.logger.error(f"Failed to create free subscription for new user {mask_email(user.email)}: {str(e)}")
+                await self.db.rollback()  # Rollback subscription creation attempt
+                # Continue with signup even if subscription creation fails
+            
             # Send verification email with retry logic
             email_sent = False
             try:
