@@ -30,8 +30,8 @@ class SuperAdminService:
         self.logger = get_logger("super_admin", correlation_id)
         
         # Super admin credentials from environment
-        self.super_admin_email = os.getenv("SUPER_ADMIN_EMAIL", "info@legatoo.westlinktowing.com")
-        self.super_admin_password = os.getenv("SUPER_ADMIN_PASSWORD", "Zaq1zaq1")
+        self.super_admin_email = os.getenv("SUPER_ADMIN_EMAIL")
+        self.super_admin_password = os.getenv("SUPER_ADMIN_PASSWORD")
     
     async def create_super_admin(self, db: AsyncSession) -> ApiResponse:
         """

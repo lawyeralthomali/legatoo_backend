@@ -10,7 +10,7 @@
         getEnvironment: function() {
             const hostname = window.location.hostname;
             
-            if (hostname.includes('fastestfranchise.net') || hostname.includes('westlinktowing.com') || hostname.includes('srv1022733.hstgr.cloud')) {
+            if (hostname.includes('fastestfranchise.net') || hostname.includes('srv1022733.hstgr.cloud')) {
                 return 'production';
             } else if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) {
                 return 'development';

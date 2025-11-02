@@ -165,7 +165,6 @@ class AuthService:
             try:
                 from ...services.subscription.plan_service import PlanService
                 from ...models.subscription import Subscription, StatusType
-                from datetime import timedelta
                 
                 plan_service = PlanService(self.db)
                 

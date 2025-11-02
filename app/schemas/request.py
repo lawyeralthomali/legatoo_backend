@@ -103,10 +103,11 @@ class SignupRequest(BaseModel):
     @field_validator('first_name', 'last_name')
     @classmethod
     def validate_names(cls, v: Optional[str]) -> Optional[str]:
-        """Validate names format"""
+        """Validate names format - supports English and Arabic characters"""
         if v:
             v = v.strip()
-            if not re.match(r"^[a-zA-Z\s\-']+$", v):
+            # Allow English letters, Arabic characters (\u0600-\u06FF), spaces, hyphens, and apostrophes
+            if not re.match(r"^[a-zA-Z\u0600-\u06FF\s\-']+$", v):
                 raise ValueError("Name can only contain letters, spaces, hyphens, and apostrophes")
             if len(v) < 1:
                 raise ValueError("Name cannot be empty")
@@ -205,10 +206,11 @@ class ProfileUpdateRequest(BaseModel):
     @field_validator('first_name', 'last_name')
     @classmethod
     def validate_names(cls, v: Optional[str]) -> Optional[str]:
-        """Validate names format"""
+        """Validate names format - supports English and Arabic characters"""
         if v:
             v = v.strip()
-            if not re.match(r"^[a-zA-Z\s\-']+$", v):
+            # Allow English letters, Arabic characters (\u0600-\u06FF), spaces, hyphens, and apostrophes
+            if not re.match(r"^[a-zA-Z\u0600-\u06FF\s\-']+$", v):
                 raise ValueError("Name can only contain letters, spaces, hyphens, and apostrophes")
             if len(v) < 1:
                 raise ValueError("Name cannot be empty")

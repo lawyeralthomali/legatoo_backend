@@ -280,7 +280,7 @@ class EmailService:
             <div class="email-container">
                 <div class="header">
                     <div class="logo">
-                        <img src="https://legatoo.westlinktowing.com/logo.png" alt="Legatoo Logo">
+                        <img src="https://legatoo.fastestfranchise.net/logo.png" alt="Legatoo Logo">
                     </div>
                     <div class="brand-name">Legatoo</div>
                     <div class="tagline">Your Legal Assistant | مساعدك القانوني</div>
@@ -540,7 +540,7 @@ class EmailService:
             <div class="email-container">
                 <div class="header">
                     <div class="logo">
-                        <img src="https://legatoo.westlinktowing.com/logo.png" alt="Legatoo Logo">
+                        <img src="https://legatoo.fastestfranchise.net/logo.png" alt="Legatoo Logo">
                     </div>
                     <div class="brand-name">Legatoo</div>
                     <div class="tagline">Your Legal Assistant</div>
@@ -764,7 +764,7 @@ class EmailService:
             <div class="email-container">
                 <div class="header">
                     <div class="logo">
-                        <img src="https://legatoo.westlinktowing.com/logo.png" alt="Legatoo Logo">
+                        <img src="https://legatoo.fastestfranchise.net/logo.png" alt="Legatoo Logo">
                     </div>
                     <div class="brand-name">Legatoo</div>
                     <div class="tagline">مساعدك القانوني</div>
@@ -1204,7 +1204,7 @@ Your trusted legal assistant platform
             <div class="email-container">
                 <div class="header">
                     <div class="logo">
-                        <img src="https://legatoo.westlinktowing.com/logo.png" alt="Legatoo Logo">
+                        <img src="https://legatoo.fastestfranchise.net/logo.png" alt="Legatoo Logo">
                     </div>
                     <div class="brand-name">Legatoo</div>
                     <div class="tagline">Your Legal Assistant</div>

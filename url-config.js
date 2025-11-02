@@ -21,7 +21,7 @@ class URLConfig {
         const hostname = window.location.hostname;
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
             return 'development';
-        } else if (hostname.includes('legatoo.fastestfranchise.net') || hostname.includes('legatoo.westlinktowing.com')) {
+        } else if (hostname.includes('legatoo.fastestfranchise.net') ) {
             return 'production';
         }
         return 'development';
