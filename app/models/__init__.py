@@ -13,6 +13,7 @@ from .legal_knowledge import (
     KnowledgeDocument, KnowledgeChunk
 )
 from .query_log import QueryLog
+from .case_analysis import CaseAnalysis
 
 # Import all models to ensure they are registered with SQLAlchemy
 __all__ = [
@@ -45,6 +46,8 @@ __all__ = [
     "KnowledgeChunk",
     # Query logging
     "QueryLog",
+    # Case Analysis
+    "CaseAnalysis",
 ]
 
 

@@ -93,3 +93,19 @@ class PlanService:
         """
         features = await self.repository.get_plan_features(plan_id)
         return features if features else {}
+    
+    async def create_plan(self, plan_data: dict) -> Plan:
+        """
+        Create a new plan.
+        
+        Args:
+            plan_data: Dictionary containing plan information
+            
+        Returns:
+            Created Plan model
+        """
+        plan = Plan(**plan_data)
+        self.db.add(plan)
+        await self.db.commit()
+        await self.db.refresh(plan)
+        return plan

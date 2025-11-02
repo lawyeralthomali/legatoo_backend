@@ -212,12 +212,13 @@ class AuthService:
                 
                 if email_sent:
                     await self.user_repository.mark_email_sent(user.id)
+                    await self.db.commit()
                     self.logger.info(f"Verification email sent successfully to {mask_email(signup_data.email)}")
                 else:
-                    self.logger.warning(f"Email service not configured, verification email not sent to {mask_email(signup_data.email)}")
+                    self.logger.warning(f"Verification email not sent to {mask_email(signup_data.email)} - check SMTP configuration or logs for details")
                     
             except Exception as e:
-                self.logger.error(f"Failed to send verification email to {mask_email(signup_data.email)}: {str(e)}")
+                self.logger.error(f"Failed to send verification email to {mask_email(signup_data.email)}: {str(e)}", exc_info=True)
             
             self.logger.info(f"User registered successfully: {mask_email(user.email)}")
             

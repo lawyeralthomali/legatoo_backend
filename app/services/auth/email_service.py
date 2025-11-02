@@ -958,12 +958,10 @@ Your trusted legal assistant platform
             return True
             
         except Exception as e:
-            logger.error(f"Failed to send verification email to {to_email}: {str(e)}")
-            raise_error_response(
-                status_code=500,
-                message="Failed to send verification email",
-                field="email"
-            )
+            logger.error(f"Failed to send verification email to {to_email}: {str(e)}", exc_info=True)
+            # Don't raise exception - return False so signup can continue
+            # The calling code can handle the failure gracefully
+            return False
     
     async def send_password_reset_email(self, to_email: str, user_name: str, reset_token: str) -> bool:
         """

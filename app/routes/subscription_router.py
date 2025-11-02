@@ -48,7 +48,7 @@ async def get_my_subscription_status(
 
 @router.get("/plans", response_model=ApiResponse)
 async def get_available_plans(
-    active_only: bool = True,
+    active_only: bool = False,  # Changed to False to show all plans for admin
     plan_service: PlanService = Depends(get_plan_service)
 ) -> ApiResponse:
     """Get all available subscription plans"""
@@ -67,7 +67,7 @@ async def get_available_plans(
                 "report_limit": plan.report_limit,
                 "token_limit": plan.token_limit,
                 "multi_user_limit": plan.multi_user_limit,
-                "government_integration": plan.government_integration,
+                "government_integration": getattr(plan, 'government_integration', None),
                 "description": plan.description,
                 "is_active": plan.is_active
             }
@@ -81,6 +81,54 @@ async def get_available_plans(
         return create_error_response(
             message="Failed to retrieve plans",
             errors=[ErrorDetail(field="plans", message=f"Internal server error: {str(e)}")]
+        )
+
+
+@router.post("/plans", response_model=ApiResponse)
+async def create_plan(
+    plan_data: dict,
+    current_user: TokenData = Depends(get_current_user),
+    plan_service: PlanService = Depends(get_plan_service)
+) -> ApiResponse:
+    """Create a new subscription plan (admin only)"""
+    try:
+        # Validate required fields
+        required_fields = ["plan_name", "plan_type", "price", "billing_cycle"]
+        for field in required_fields:
+            if field not in plan_data:
+                return create_error_response(
+                    message="Missing required field",
+                    errors=[ErrorDetail(field=field, message=f"{field} is required")]
+                )
+        
+        # Create plan
+        plan = await plan_service.create_plan(plan_data)
+        
+        plan_response = {
+            "plan_id": str(plan.plan_id),
+            "plan_name": plan.plan_name,
+            "plan_type": plan.plan_type,
+            "price": float(plan.price),
+            "billing_cycle": plan.billing_cycle,
+            "file_limit": plan.file_limit,
+            "ai_message_limit": plan.ai_message_limit,
+            "contract_limit": plan.contract_limit,
+            "report_limit": plan.report_limit,
+            "token_limit": plan.token_limit,
+            "multi_user_limit": plan.multi_user_limit,
+            "government_integration": getattr(plan, 'government_integration', None),
+            "description": plan.description,
+            "is_active": plan.is_active
+        }
+        
+        return create_success_response(
+            message="Plan created successfully",
+            data=plan_response
+        )
+    except Exception as e:
+        return create_error_response(
+            message="Failed to create plan",
+            errors=[ErrorDetail(field="plan", message=f"Internal server error: {str(e)}")]
         )
 
 
