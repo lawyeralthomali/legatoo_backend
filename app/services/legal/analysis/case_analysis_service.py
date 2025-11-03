@@ -117,11 +117,17 @@ class CaseAnalysisService:
             logger.info(f"Starting Gemini AI analysis for: {filename}")
             logger.info(f"Analysis type: {analysis_type}, Lawsuit type: {lawsuit_type}")
             
-            # Handle DOCX files differently - extract text first since Gemini doesn't support DOCX directly
+            # Handle different file types appropriately
             from google.genai import types
             
-            if file_ext in ['docx', 'doc']:
-                # Extract text from DOCX/DOC file
+            if file_ext == 'pdf':
+                # For PDF files, send the binary file directly to Gemini
+                logger.info(f"Sending PDF file directly to Gemini for analysis")
+                file_part = types.Part.from_bytes(data=file_content, mime_type=mime_type)
+                content_parts = [file_part, prompt]
+                
+            elif file_ext in ['docx', 'doc']:
+                # Extract text from DOCX/DOC file (Gemini doesn't support DOCX directly)
                 logger.info(f"Extracting text from {file_ext.upper()} file before sending to Gemini")
                 extracted_text = await self._extract_text_from_docx(file_content, filename)
                 
@@ -134,37 +140,34 @@ class CaseAnalysisService:
                 
                 logger.info(f"Extracted {len(extracted_text)} characters from {file_ext.upper()} file")
                 
-                # Send extracted text to Gemini instead of binary file
+                # Send extracted text to Gemini
                 content_parts = [
                     f"Document Content from {filename}:\n\n{extracted_text}",
                     prompt
                 ]
                 
-            else:
-                # For PDF and TXT files, send directly to Gemini
-                if file_ext == 'pdf':
-                    file_part = types.Part.from_bytes(data=file_content, mime_type=mime_type)
-                    content_parts = [file_part, prompt]
-                elif file_ext == 'txt':
-                    # For TXT files, decode and send as text
+            elif file_ext == 'txt':
+                # For TXT files, decode and send as text
+                try:
+                    text_content = file_content.decode('utf-8')
+                except UnicodeDecodeError:
                     try:
-                        text_content = file_content.decode('utf-8')
+                        text_content = file_content.decode('utf-8-sig')  # Handle BOM
                     except UnicodeDecodeError:
-                        try:
-                            text_content = file_content.decode('utf-8-sig')  # Handle BOM
-                        except UnicodeDecodeError:
-                            text_content = file_content.decode('latin-1')  # Fallback
-                    
-                    content_parts = [
-                        f"Document Content from {filename}:\n\n{text_content}",
-                        prompt
-                    ]
-                else:
-                    return {
-                        "success": False,
-                        "message": f"Unsupported file type for direct processing: {file_ext}",
-                        "data": None
-                    }
+                        text_content = file_content.decode('latin-1')  # Fallback
+                
+                logger.info(f"Decoded {len(text_content)} characters from TXT file")
+                
+                content_parts = [
+                    f"Document Content from {filename}:\n\n{text_content}",
+                    prompt
+                ]
+            else:
+                return {
+                    "success": False,
+                    "message": f"Unsupported file type for processing: {file_ext}",
+                    "data": None
+                }
             
             # Call Gemini API with timeout
             try:

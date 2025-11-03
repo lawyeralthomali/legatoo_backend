@@ -8,6 +8,7 @@ Follows clean architecture with thin routes delegating to service layer.
 import logging
 import json
 from typing import Optional, List
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -824,59 +825,187 @@ async def download_analysis_pdf(
         # Create PDF buffer
         buffer = BytesIO()
         
-        # Create PDF document
-        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        # Create PDF document with RTL-friendly margins
+        # For RTL text, we want text to start from right edge
+        doc = SimpleDocTemplate(
+            buffer, 
+            pagesize=A4, 
+            topMargin=0.5*inch, 
+            bottomMargin=0.5*inch,
+            leftMargin=0.75*inch,   # Standard left margin
+            rightMargin=0.75*inch   # Standard right margin (text aligns to this for RTL)
+        )
         styles = getSampleStyleSheet()
         
-        # Define custom styles
+        # Register Arabic font - always use Arabic as default
+        arabic_font_name = None
+        try:
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+            
+            import os
+            import platform
+            from pathlib import Path
+            
+            # First, try to load font from app/fonts directory (bundled with app)
+            app_dir = Path(__file__).parent.parent  # Go up from routes/ to app/
+            fonts_dir = app_dir / "fonts"
+            
+            # Common Arabic font filenames to try
+            font_files = [
+                "NotoSansArabic-Regular.ttf",
+                "NotoSansArabic.ttf",
+                "DejaVuSans.ttf",
+                "arial-unicode-ms.ttf",
+                "ARIALUNI.TTF",
+            ]
+            
+            # Try bundled fonts first
+            for font_file in font_files:
+                font_path = fonts_dir / font_file
+                if font_path.exists():
+                    try:
+                        font_name = "ArabicFont"  # Use consistent name
+                        pdfmetrics.registerFont(TTFont(font_name, str(font_path)))
+                        arabic_font_name = font_name
+                        logger.info(f"Registered bundled Arabic font: {font_name} from {font_path}")
+                        break
+                    except Exception as e:
+                        logger.warning(f"Failed to register bundled font {font_file}: {e}")
+                        continue
+            
+            # If no bundled font, try system fonts
+            if not arabic_font_name:
+                system = platform.system()
+                
+                # Define font paths based on operating system
+                if system == "Windows":
+                    font_paths_to_try = [
+                        ('ArabicFont', 'C:/Windows/Fonts/DejaVuSans.ttf'),
+                        ('ArabicFont', 'C:/Windows/Fonts/ARIALUNI.TTF'),
+                        ('ArabicFont', 'C:/Windows/Fonts/arialuni.ttf'),
+                    ]
+                elif system == "Linux":
+                    font_paths_to_try = [
+                        ('ArabicFont', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'),
+                        ('ArabicFont', '/usr/share/fonts/TTF/DejaVuSans.ttf'),
+                        ('ArabicFont', '/usr/share/fonts/DejaVuSans.ttf'),
+                    ]
+                else:  # macOS or other
+                    font_paths_to_try = [
+                        ('ArabicFont', '/System/Library/Fonts/DejaVuSans.ttf'),
+                        ('ArabicFont', '/System/Library/Fonts/Supplemental/Arial Unicode.ttf'),
+                    ]
+                
+                for font_name, font_path in font_paths_to_try:
+                    try:
+                        if os.path.exists(font_path):
+                            pdfmetrics.registerFont(TTFont(font_name, font_path))
+                            arabic_font_name = font_name
+                            logger.info(f"Registered system Arabic font: {font_name} from {font_path}")
+                            break
+                    except Exception as e:
+                        logger.warning(f"Failed to register {font_name} from {font_path}: {e}")
+                        continue
+            
+            if not arabic_font_name:
+                logger.error("CRITICAL: No Arabic-supporting font found. Arabic text will display as rectangles in PDF.")
+                logger.error(f"Please download Noto Sans Arabic and place it in: {fonts_dir}")
+        except ImportError:
+            logger.error("Cannot register custom fonts - reportlab.pdfbase not available")
+        
+        # Helper function to detect Arabic text
+        def contains_arabic(text):
+            if not text:
+                return False
+            text_str = str(text)
+            # Check for Arabic Unicode range
+            return any('\u0600' <= char <= '\u06FF' for char in text_str)
+        
+        # Always use Arabic font as default (or Helvetica as fallback)
+        base_font = arabic_font_name if arabic_font_name else 'Helvetica'
+        if not arabic_font_name:
+            logger.warning("Using Helvetica as fallback - Arabic text may not display correctly!")
+        
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
+            fontName=base_font,  # Always use Arabic font
             fontSize=18,
             textColor='#1f2937',
             spaceAfter=12,
-            alignment=TA_LEFT
+            alignment=TA_RIGHT  # Right-align for Arabic support
         )
         
         heading_style = ParagraphStyle(
             'CustomHeading',
             parent=styles['Heading2'],
+            fontName=base_font,  # Always use Arabic font
             fontSize=14,
             textColor='#374151',
             spaceAfter=8,
             spaceBefore=12,
-            alignment=TA_LEFT
+            alignment=TA_RIGHT  # Right-align for Arabic support
         )
         
+        # Default style - always use Arabic font and right alignment
         normal_style = ParagraphStyle(
             'CustomNormal',
             parent=styles['Normal'],
+            fontName=base_font,  # Always use Arabic font
             fontSize=10,
             textColor='#4b5563',
             spaceAfter=6,
-            alignment=TA_LEFT,
+            alignment=TA_RIGHT,  # Right-align as default for Arabic support
             leading=14
         )
         
-        # Build PDF content
-        story = []
-        
-        # Title
-        story.append(Paragraph(f"<b>Legal Case Analysis Report</b>", title_style))
-        story.append(Spacer(1, 0.2*inch))
-        
-        # File Information
-        story.append(Paragraph(f"<b>File:</b> {analysis.filename}", normal_style))
-        story.append(Paragraph(f"<b>Analysis Type:</b> {analysis.analysis_type}", normal_style))
-        story.append(Paragraph(f"<b>Lawsuit Type:</b> {analysis.lawsuit_type}", normal_style))
-        story.append(Paragraph(f"<b>Date:</b> {analysis.created_at.strftime('%Y-%m-%d %H:%M:%S')}", normal_style))
-        if analysis.risk_score is not None:
-            story.append(Paragraph(f"<b>Risk Score:</b> {analysis.risk_score}% ({analysis.risk_label})", normal_style))
-        story.append(Spacer(1, 0.2*inch))
+        # Arabic-specific style (same as normal now since we always use Arabic)
+        arabic_normal_style = normal_style
         
         # Get analysis data
         analysis_data = analysis.analysis_data
         sections = analysis_data.get("analysis", {}).get("sections", {})
+        
+        # Import Arabic text processing libraries
+        try:
+            import arabic_reshaper
+            from bidi.algorithm import get_display
+            ARABIC_PROCESSING_AVAILABLE = True
+        except ImportError:
+            ARABIC_PROCESSING_AVAILABLE = False
+            logger.warning("arabic-reshaper or python-bidi not available. Arabic text may not connect properly.")
+        
+        # Helper function to process Arabic text (reshape and BiDi)
+        def process_arabic_text(text):
+            """Process Arabic text to ensure proper character connection and RTL display.
+            Adds RTL marks to ensure text flows from right to left and aligns properly."""
+            if not text or not ARABIC_PROCESSING_AVAILABLE:
+                return str(text) if text else ""
+            
+            text_str = str(text)
+            
+            # Check if text contains Arabic characters
+            if not contains_arabic(text_str):
+                return text_str  # Return as-is if no Arabic
+            
+            try:
+                # Reshape Arabic text so characters connect properly
+                reshaped_text = arabic_reshaper.reshape(text_str)
+                
+                # Apply bidirectional algorithm for proper RTL display
+                bidi_text = get_display(reshaped_text)
+                
+                # Add RTL override marks to ensure proper right-to-left flow
+                # \u202E = Right-to-Left Override (forces RTL direction)
+                # \u202C = Pop Directional Formatting (ends RTL override)
+                # This ensures text starts from right and flows leftward
+                rtl_text = '\u202E' + bidi_text + '\u202C'
+                
+                return rtl_text
+            except Exception as e:
+                logger.warning(f"Failed to process Arabic text: {e}")
+                return text_str  # Fallback to original text
         
         # Helper function to safely escape HTML
         def escape_html(text):
@@ -884,83 +1013,339 @@ async def download_analysis_pdf(
                 return ""
             return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         
+        # Helper function to convert markdown to ReportLab HTML format
+        def markdown_to_reportlab(text):
+            """Convert markdown formatting to ReportLab Paragraph-compatible HTML.
+            Preserves line breaks and formatting for proper RTL alignment.
+            This matches the frontend's <pre> whitespace-pre-wrap display."""
+            if not text:
+                return ""
+            
+            import re
+            text_str = str(text)
+            
+            # Convert markdown bold **text** to <b>text</b> (handle multiline properly)
+            # Use non-greedy matching to handle multiple bold sections
+            text_str = re.sub(r'\*\*([^*]+?)\*\*', r'<b>\1</b>', text_str)
+            
+            # Convert markdown bullets * item or - item to bullet points
+            # For RTL Arabic, bullet should be on the right, so we'll use • 
+            text_str = re.sub(r'^\s*[-*]\s+', '• ', text_str, flags=re.MULTILINE)
+            
+            # Preserve numbered lists (1. 2. etc.) - keep as is for RTL
+            # They're already formatted correctly
+            
+            # Convert line breaks to <br/> tags for ReportLab
+            # Preserve empty lines as single <br/> to maintain spacing
+            lines = text_str.split('\n')
+            formatted_lines = []
+            
+            for i, line in enumerate(lines):
+                if not line.strip():
+                    # Empty line - add break (but not at start/end if not needed)
+                    if formatted_lines:  # Only add if we have content before
+                        formatted_lines.append("<br/>")
+                else:
+                    # Non-empty line - add it with proper formatting
+                    formatted_lines.append(line)
+            
+            # Join with <br/> tags to preserve line structure
+            return '<br/>'.join(formatted_lines)
+        
+        # Helper function to prepare text for PDF (process Arabic + convert markdown + escape HTML)
+        def prepare_text_for_pdf(text):
+            """Process Arabic text, convert markdown, and escape HTML for safe PDF rendering.
+            Returns properly formatted text for ReportLab Paragraph with RTL support."""
+            if not text:
+                return ""
+            
+            # First process Arabic (reshape + bidi) - this handles character connection and RTL direction
+            processed_text = process_arabic_text(text)
+            
+            # Convert markdown to ReportLab HTML format
+            markdown_processed = markdown_to_reportlab(processed_text)
+            
+            # Escape HTML entities but preserve ReportLab formatting tags
+            # Escape & first, then < and >
+            markdown_processed = markdown_processed.replace("&", "&amp;")
+            # Now escape < and > that are NOT part of our formatting tags
+            import re
+            # Protect our formatting tags first
+            protected = []
+            tag_pattern = r'(<(?:b|br|/b|br/)[^>]*>)'
+            for match in re.finditer(tag_pattern, markdown_processed, re.IGNORECASE):
+                placeholder = f"__TAG_{len(protected)}__"
+                protected.append((placeholder, match.group(0)))
+                markdown_processed = markdown_processed.replace(match.group(0), placeholder, 1)
+            
+            # Escape remaining < and >
+            markdown_processed = markdown_processed.replace("<", "&lt;").replace(">", "&gt;")
+            
+            # Restore protected tags
+            for placeholder, tag in protected:
+                markdown_processed = markdown_processed.replace(placeholder, tag)
+            
+            return markdown_processed
+        
+        # Helper function to choose appropriate style based on content
+        # Always use Arabic font style (default is Arabic)
+        def get_paragraph_style(text):
+            return arabic_normal_style  # Always use Arabic style
+        
+        # Build PDF content - match frontend display order exactly
+        story = []
+        
+        # Title
+        story.append(Paragraph(f"<b>Legal Case Analysis Report</b>", title_style))
+        story.append(Spacer(1, 0.2*inch))
+        
+        # File Information (process Arabic text in filename and labels)
+        filename_display = prepare_text_for_pdf(analysis.filename)
+        analysis_type_display = prepare_text_for_pdf(analysis.analysis_type)
+        lawsuit_type_display = prepare_text_for_pdf(analysis.lawsuit_type)
+        risk_label_display = prepare_text_for_pdf(analysis.risk_label) if analysis.risk_label else ""
+        
+        story.append(Paragraph(f"<b>File:</b> {filename_display}", normal_style))
+        story.append(Paragraph(f"<b>Analysis Type:</b> {analysis_type_display}", normal_style))
+        story.append(Paragraph(f"<b>Lawsuit Type:</b> {lawsuit_type_display}", normal_style))
+        story.append(Paragraph(f"<b>Date:</b> {analysis.created_at.strftime('%Y-%m-%d %H:%M:%S')}", normal_style))
+        if analysis.risk_score is not None:
+            story.append(Paragraph(f"<b>Risk Score:</b> {analysis.risk_score}% ({risk_label_display})", normal_style))
+        story.append(Spacer(1, 0.2*inch))
+        
+        # IMPORTANT: Match frontend display order exactly
+        # Frontend shows: formatted_analysis first, then sections
+        
+        # 1. Full Analysis Text (formatted_analysis) - shown FIRST like frontend
+        # Frontend displays this in <pre> with whitespace-pre-wrap, preserving exact formatting
+        formatted_analysis_text = None
+        if sections.get("formatted_analysis"):
+            formatted_analysis_text = sections.get("formatted_analysis")
+        elif analysis_data.get("formatted_analysis"):
+            formatted_analysis_text = analysis_data.get("formatted_analysis")
+        
+        if formatted_analysis_text:
+            story.append(Paragraph("<b>Complete Analysis</b>", heading_style))
+            full_text = str(formatted_analysis_text)
+            
+            # Frontend displays this in <pre> with whitespace-pre-wrap, preserving exact formatting
+            # We need to preserve line breaks and structure exactly as frontend shows it
+            # Split the text by lines to preserve structure
+            lines = full_text.split('\n')
+            
+            current_section = []
+            for line in lines:
+                line_stripped = line.strip()
+                
+                # Handle markdown headers
+                if line_stripped.startswith('##'):
+                    # Add any accumulated content first
+                    if current_section:
+                        section_text = '\n'.join(current_section)
+                        if section_text.strip():
+                            story.append(Paragraph(prepare_text_for_pdf(section_text), normal_style))
+                            story.append(Spacer(1, 0.05*inch))
+                        current_section = []
+                    
+                    # Extract header text (remove ##, ###, ####)
+                    header_text = re.sub(r'^#+\s*', '', line_stripped)
+                    if header_text:
+                        # Determine header style based on level
+                        if line_stripped.startswith('####'):
+                            story.append(Paragraph(f"<b>{prepare_text_for_pdf(header_text)}</b>", normal_style))
+                        elif line_stripped.startswith('###'):
+                            story.append(Paragraph(f"<b>{prepare_text_for_pdf(header_text)}</b>", heading_style))
+                        else:  # ##
+                            story.append(Paragraph(f"<b>{prepare_text_for_pdf(header_text)}</b>", title_style))
+                        story.append(Spacer(1, 0.1*inch))
+                else:
+                    # Regular content line - preserve it
+                    current_section.append(line)
+            
+            # Add remaining content
+            if current_section:
+                section_text = '\n'.join(current_section)
+                if section_text.strip():
+                    story.append(Paragraph(prepare_text_for_pdf(section_text), normal_style))
+            
+            story.append(Spacer(1, 0.2*inch))
+        
+        # 2. Individual Sections - Only display if formatted_analysis is NOT available
+        # Frontend shows formatted_analysis first (which contains everything), 
+        # then individual sections only if formatted_analysis is not present
+        # Since formatted_analysis contains all content, we skip individual sections
+        
+        # Frontend shows formatted_analysis first, then ALSO shows individual sections below.
+        # We match this behavior - show both formatted_analysis AND individual sections
+        # Individual sections will only display if they have content (not empty strings)
+        
+        # Show individual sections (like frontend does)
+        # These provide structured breakdown even if formatted_analysis exists
+        
         # Executive Summary
-        if sections.get("executive_summary"):
+        if sections.get("executive_summary") and sections.get("executive_summary").strip():
             story.append(Paragraph("<b>1. Executive Summary</b>", heading_style))
-            story.append(Paragraph(escape_html(sections["executive_summary"]), normal_style))
+            summary_text = sections["executive_summary"]
+            story.append(Paragraph(prepare_text_for_pdf(summary_text), get_paragraph_style(summary_text)))
             story.append(Spacer(1, 0.1*inch))
         
         # Legal Analysis sections
         if sections.get("legal_analysis") or sections.get("legal_status"):
             story.append(Paragraph("<b>2. Detailed Legal Analysis</b>", heading_style))
             
-            if sections.get("legal_status"):
+            if sections.get("legal_status") and sections.get("legal_status").strip():
                 story.append(Paragraph("<b>a. Current Legal Status</b>", normal_style))
-                story.append(Paragraph(escape_html(sections["legal_status"]), normal_style))
+                status_text = sections["legal_status"]
+                story.append(Paragraph(prepare_text_for_pdf(status_text), get_paragraph_style(status_text)))
                 story.append(Spacer(1, 0.05*inch))
             
-            if sections.get("weak_points"):
+            if sections.get("weak_points") and sections.get("weak_points").strip():
                 story.append(Paragraph("<b>b. Weak Points in the Case</b>", normal_style))
-                story.append(Paragraph(escape_html(sections["weak_points"]), normal_style))
+                weak_points_text = sections["weak_points"]
+                story.append(Paragraph(prepare_text_for_pdf(weak_points_text), get_paragraph_style(weak_points_text)))
                 story.append(Spacer(1, 0.05*inch))
             
-            if sections.get("strong_points"):
+            if sections.get("strong_points") and sections.get("strong_points").strip():
                 story.append(Paragraph("<b>c. Strong Points in the Case</b>", normal_style))
-                story.append(Paragraph(escape_html(sections["strong_points"]), normal_style))
+                strong_points_text = sections["strong_points"]
+                story.append(Paragraph(prepare_text_for_pdf(strong_points_text), get_paragraph_style(strong_points_text)))
                 story.append(Spacer(1, 0.05*inch))
             
-            if sections.get("legal_basis"):
+            if sections.get("legal_basis") and sections.get("legal_basis").strip():
                 story.append(Paragraph("<b>d. Saudi Legal Basis</b>", normal_style))
-                story.append(Paragraph(escape_html(sections["legal_basis"]), normal_style))
+                legal_basis_text = sections["legal_basis"]
+                story.append(Paragraph(prepare_text_for_pdf(legal_basis_text), get_paragraph_style(legal_basis_text)))
                 story.append(Spacer(1, 0.05*inch))
             
-            if sections.get("risk_analysis"):
+            if sections.get("risk_analysis") and sections.get("risk_analysis").strip():
                 story.append(Paragraph("<b>e. Legal Risk Analysis</b>", normal_style))
-                story.append(Paragraph(escape_html(sections["risk_analysis"]), normal_style))
+                risk_text = sections["risk_analysis"]
+                story.append(Paragraph(prepare_text_for_pdf(risk_text), get_paragraph_style(risk_text)))
+                story.append(Spacer(1, 0.05*inch))
+            
+            if sections.get("obligations_rights") and sections.get("obligations_rights").strip():
+                story.append(Paragraph("<b>f. Obligations and Rights</b>", normal_style))
+                obligations_text = sections["obligations_rights"]
+                story.append(Paragraph(prepare_text_for_pdf(obligations_text), get_paragraph_style(obligations_text)))
                 story.append(Spacer(1, 0.05*inch))
             
             story.append(Spacer(1, 0.1*inch))
         
         # Recommendations
-        if sections.get("recommendations"):
+        if (sections.get("recommendations") or 
+            sections.get("settlement_recommendations") or 
+            sections.get("legal_action_recommendations") or 
+            sections.get("protection_recommendations")):
             story.append(Paragraph("<b>3. Practical Recommendations</b>", heading_style))
-            story.append(Paragraph(escape_html(sections["recommendations"]), normal_style))
+            
+            if sections.get("settlement_recommendations") and sections.get("settlement_recommendations").strip():
+                story.append(Paragraph("<b>a. Settlement Recommendations</b>", normal_style))
+                settlement_text = sections["settlement_recommendations"]
+                story.append(Paragraph(prepare_text_for_pdf(settlement_text), get_paragraph_style(settlement_text)))
+                story.append(Spacer(1, 0.05*inch))
+            
+            if sections.get("legal_action_recommendations") and sections.get("legal_action_recommendations").strip():
+                story.append(Paragraph("<b>b. Legal Action Recommendations</b>", normal_style))
+                legal_action_text = sections["legal_action_recommendations"]
+                story.append(Paragraph(prepare_text_for_pdf(legal_action_text), get_paragraph_style(legal_action_text)))
+                story.append(Spacer(1, 0.05*inch))
+            
+            if sections.get("protection_recommendations") and sections.get("protection_recommendations").strip():
+                story.append(Paragraph("<b>c. Protection Recommendations</b>", normal_style))
+                protection_text = sections["protection_recommendations"]
+                story.append(Paragraph(prepare_text_for_pdf(protection_text), get_paragraph_style(protection_text)))
+                story.append(Spacer(1, 0.05*inch))
+            
+            if sections.get("recommendations") and sections.get("recommendations").strip():
+                recommendations_text = sections["recommendations"]
+                story.append(Paragraph(prepare_text_for_pdf(recommendations_text), get_paragraph_style(recommendations_text)))
+            
             story.append(Spacer(1, 0.1*inch))
         
         # Client Information
-        if sections.get("client_information") or sections.get("next_steps"):
+        if (sections.get("client_information") or 
+            sections.get("simple_explanation") or 
+            sections.get("next_steps")):
             story.append(Paragraph("<b>4. Information for Client/User</b>", heading_style))
-            if sections.get("client_information"):
-                story.append(Paragraph(escape_html(sections["client_information"]), normal_style))
-            if sections.get("next_steps"):
-                story.append(Paragraph("<b>Next Steps:</b>", normal_style))
-                story.append(Paragraph(escape_html(sections["next_steps"]), normal_style))
+            
+            if sections.get("simple_explanation") and sections.get("simple_explanation").strip():
+                story.append(Paragraph("<b>a. Simple Explanation</b>", normal_style))
+                explanation_text = sections["simple_explanation"]
+                story.append(Paragraph(prepare_text_for_pdf(explanation_text), get_paragraph_style(explanation_text)))
+                story.append(Spacer(1, 0.05*inch))
+            
+            if sections.get("next_steps") and sections.get("next_steps").strip():
+                story.append(Paragraph("<b>b. Next Steps</b>", normal_style))
+                next_steps_text = sections["next_steps"]
+                story.append(Paragraph(prepare_text_for_pdf(next_steps_text), get_paragraph_style(next_steps_text)))
+                story.append(Spacer(1, 0.05*inch))
+            
+            if sections.get("client_information") and sections.get("client_information").strip():
+                client_info_text = sections["client_information"]
+                story.append(Paragraph(prepare_text_for_pdf(client_info_text), get_paragraph_style(client_info_text)))
+            
+            story.append(Spacer(1, 0.1*inch))
+        
+        # Advanced Analysis for Lawyers
+        if (sections.get("legal_strategy") or 
+            sections.get("legal_research") or 
+            sections.get("professional_risks")):
+            story.append(Paragraph("<b>5. Advanced Analysis for Lawyers</b>", heading_style))
+            
+            if sections.get("legal_strategy") and sections.get("legal_strategy").strip():
+                story.append(Paragraph("<b>a. Legal Strategy</b>", normal_style))
+                strategy_text = sections["legal_strategy"]
+                story.append(Paragraph(prepare_text_for_pdf(strategy_text), get_paragraph_style(strategy_text)))
+                story.append(Spacer(1, 0.05*inch))
+            
+            if sections.get("legal_research") and sections.get("legal_research").strip():
+                story.append(Paragraph("<b>b. Required Legal Research</b>", normal_style))
+                research_text = sections["legal_research"]
+                story.append(Paragraph(prepare_text_for_pdf(research_text), get_paragraph_style(research_text)))
+                story.append(Spacer(1, 0.05*inch))
+            
+            if sections.get("professional_risks") and sections.get("professional_risks").strip():
+                story.append(Paragraph("<b>c. Professional Risks</b>", normal_style))
+                prof_risks_text = sections["professional_risks"]
+                story.append(Paragraph(prepare_text_for_pdf(prof_risks_text), get_paragraph_style(prof_risks_text)))
+                story.append(Spacer(1, 0.05*inch))
+            
+            story.append(Spacer(1, 0.1*inch))
+        
+        # Quantitative Assessment
+        if sections.get("quantitative_assessment") and sections.get("quantitative_assessment").strip():
+            story.append(Paragraph("<b>6. Quantitative Assessment</b>", heading_style))
+            quantitative_text = sections["quantitative_assessment"]
+            story.append(Paragraph(prepare_text_for_pdf(quantitative_text), get_paragraph_style(quantitative_text)))
             story.append(Spacer(1, 0.1*inch))
         
         # Legal References
-        if sections.get("legal_references"):
-            story.append(Paragraph("<b>Legal References</b>", heading_style))
-            story.append(Paragraph(escape_html(sections["legal_references"]), normal_style))
+        if sections.get("legal_references") and sections.get("legal_references").strip():
+            story.append(Paragraph("<b>7. Legal References</b>", heading_style))
+            references_text = sections["legal_references"]
+            story.append(Paragraph(prepare_text_for_pdf(references_text), get_paragraph_style(references_text)))
             story.append(Spacer(1, 0.1*inch))
         
-        # Full Analysis (fallback)
-        if analysis.raw_response and not sections.get("executive_summary"):
-            story.append(Paragraph("<b>Complete Analysis</b>", heading_style))
-            full_text = escape_html(analysis.raw_response[:5000])  # Limit to avoid huge PDFs
-            story.append(Paragraph(full_text, normal_style))
         
         # Build PDF
         doc.build(story)
         buffer.seek(0)
         
-        # Generate filename
+        # Generate filename - use ASCII-safe filename for Content-Disposition
         safe_filename = "".join(c for c in analysis.filename if c.isalnum() or c in (' ', '-', '_')).strip()
+        # Replace any remaining non-ASCII characters
+        safe_filename = safe_filename.encode('ascii', 'ignore').decode('ascii')
         filename = f"analysis_{analysis_id}_{safe_filename}_{analysis.created_at.strftime('%Y%m%d')}.pdf"
+        
+        # Use RFC 5987 format for filename with UTF-8 encoding to support Arabic characters
+        encoded_filename = quote(filename, safe='')
         
         return StreamingResponse(
             buffer,
             media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+            }
         )
     
     except HTTPException:
