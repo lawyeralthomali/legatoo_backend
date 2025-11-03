@@ -14,6 +14,7 @@ from .legal_knowledge import (
 )
 from .query_log import QueryLog
 from .case_analysis import CaseAnalysis
+from .support_ticket import SupportTicket, TicketStatus, TicketPriority
 
 # Import all models to ensure they are registered with SQLAlchemy
 __all__ = [
@@ -48,6 +49,10 @@ __all__ = [
     "QueryLog",
     # Case Analysis
     "CaseAnalysis",
+    # Support Tickets
+    "SupportTicket",
+    "TicketStatus",
+    "TicketPriority",
 ]
 
 

@@ -116,11 +116,13 @@ class SignupRequest(BaseModel):
     @field_validator('phone_number')
     @classmethod
     def validate_phone_number(cls, v: Optional[str]) -> Optional[str]:
-        """Validate Saudi phone number format"""
+        """Validate Saudi phone number format - must be exactly 10 digits starting with 05"""
         if v:
             digits = re.sub(r'\D', '', v)
-            if len(digits) != 10 or not digits.startswith("05"):
-                raise ValueError("Phone number must be Saudi format: 05xxxxxxxx")
+            if len(digits) != 10:
+                raise ValueError("Phone number must be exactly 10 digits")
+            if not digits.startswith("05"):
+                raise ValueError("Phone number must start with 05 (e.g., 0501234567)")
         return v
 
 
@@ -219,9 +221,11 @@ class ProfileUpdateRequest(BaseModel):
     @field_validator('phone_number')
     @classmethod
     def validate_phone_number(cls, v: Optional[str]) -> Optional[str]:
-        """Validate Saudi phone number format"""
+        """Validate Saudi phone number format - must be exactly 10 digits starting with 05"""
         if v:
             digits = re.sub(r'\D', '', v)
-            if len(digits) != 10 or not digits.startswith("05"):
-                raise ValueError("Phone number must be Saudi format: 05xxxxxxxx")
+            if len(digits) != 10:
+                raise ValueError("Phone number must be exactly 10 digits")
+            if not digits.startswith("05"):
+                raise ValueError("Phone number must start with 05 (e.g., 0501234567)")
         return v

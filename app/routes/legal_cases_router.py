@@ -15,6 +15,7 @@ from ..db.database import get_db
 from ..services.legal.ingestion.legal_case_ingestion_service import LegalCaseIngestionService
 from ..services.legal.knowledge.legal_case_service import LegalCaseService
 from ..services.legal.analysis.case_analysis_service import CaseAnalysisService
+from ..services.legal.analysis.contract_analysis_service import ContractAnalysisService
 from ..services.case_analysis.case_analysis_history_service import CaseAnalysisHistoryService
 from ..services.user_management.profile_service import ProfileService
 from ..utils.auth import get_current_user, get_current_user_id, TokenData
@@ -1041,6 +1042,102 @@ async def delete_analysis(
             detail={
                 "success": False,
                 "message": f"Failed to delete analysis: {str(e)}",
+                "data": None,
+                "errors": [{"field": None, "message": str(e)}]
+            }
+        )
+
+
+@router.post("/analyse-contract", response_model=None)
+async def analyse_contract(
+    file: UploadFile = File(..., description="Contract file (PDF, DOCX, DOC)"),
+    current_user: TokenData = Depends(get_current_user)
+):
+    """
+    Analyze a contract file using Gemini AI.
+    Sends the file directly to Gemini and returns structured analysis with weak points, risks, and suggestions.
+    """
+    try:
+        if not file.filename:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": "No file provided",
+                    "data": None,
+                    "errors": [{"field": "file", "message": "No file provided"}]
+                }
+            )
+        
+        valid_extensions = ['pdf', 'docx', 'doc', 'txt']
+        file_extension = file.filename.lower().split('.')[-1]
+        
+        if file_extension not in valid_extensions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": f"Invalid file type: {file.filename}. Only PDF, DOCX, DOC, and TXT are supported.",
+                    "data": None,
+                    "errors": [{"field": "file", "message": f"Invalid file type: {file.filename}"}]
+                }
+            )
+        
+        file_content = await file.read()
+        file_size_mb = len(file_content) / (1024 * 1024)
+        
+        if file_size_mb > 20:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "message": f"File {file.filename} is too large ({file_size_mb:.1f}MB). Maximum size is 20MB.",
+                    "data": None,
+                    "errors": [{"field": "file", "message": f"File {file.filename} exceeds size limit"}]
+                }
+            )
+        
+        contract_service = ContractAnalysisService()
+        
+        logger.info(f"Starting contract analysis for file: {file.filename}")
+        
+        result = await contract_service.analyze_contract(
+            file_content=file_content,
+            filename=file.filename
+        )
+        
+        logger.info(f"Contract analysis result - success: {result.get('success')}, has data: {'data' in result}")
+        
+        if result.get("success") and result.get("data"):
+            return {
+                "success": True,
+                "message": result.get("message", "Contract analysis completed successfully"),
+                "data": result.get("data"),
+                "errors": []
+            }
+        else:
+            error_message = result.get("message", "Contract analysis failed")
+            logger.error(f"Contract analysis failed: {error_message}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "success": False,
+                    "message": error_message,
+                    "data": None,
+                    "errors": [{"field": None, "message": error_message}]
+                }
+            )
+    
+    except HTTPException:
+        raise
+    
+    except Exception as e:
+        logger.exception("Unexpected error during contract analysis")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "success": False,
+                "message": f"Failed to analyze contract: {str(e)}",
                 "data": None,
                 "errors": [{"field": None, "message": str(e)}]
             }
