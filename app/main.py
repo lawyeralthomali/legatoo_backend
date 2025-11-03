@@ -19,6 +19,7 @@ from .models import (
     LawSource, LawArticle, LegalCase,
     CaseSection, LegalTerm, KnowledgeDocument, KnowledgeChunk,
     SupportTicket,
+    ContractTemplate, Contract,
 )
 
 # Import routers
@@ -32,6 +33,7 @@ from .routes.premium_router import router as premium_router
 from .routes.legal_laws_router import router as legal_laws_router
 from .routes.legal_cases_router import router as legal_cases_router
 from .routes.support_router import router as support_router
+from .routes.templates_router import router as templates_router
 #from .routes.rag_router import router as rag_router
 from pydantic import BaseModel
 from typing import List
@@ -340,6 +342,7 @@ app.include_router(premium_router, prefix="/api/v1")
 app.include_router(legal_laws_router)  # Legal Laws Management (includes document upload)
 app.include_router(legal_cases_router)  # Legal Cases Ingestion Pipeline
 app.include_router(support_router, prefix="/api/v1")  # Support Tickets Management
+app.include_router(templates_router)  # Contract Templates Management
 #app.include_router(rag_router)  # RAG Management
 @app.on_event("startup")
 async def startup_event():

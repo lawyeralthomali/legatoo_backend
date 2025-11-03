@@ -1,0 +1,9 @@
+Non-Disclosure Agreement (NDA)
+
+Comprehensive NDA template for business partnerships
+
+{{ partyA_name }}
+{{ partyB_name }}
+{{ effective_date }}
+{{ duration_months }}
+{{ confidential_info }}

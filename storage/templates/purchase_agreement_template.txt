@@ -1,0 +1,9 @@
+Purchase Agreement Template
+
+Standard purchase agreement for goods and services
+
+{{ seller_name }}
+{{ buyer_name }}
+{{ purchase_date }}
+{{ item_description }}
+{{ purchase_amount }}

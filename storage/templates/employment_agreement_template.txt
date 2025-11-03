@@ -1,0 +1,9 @@
+Employment Agreement Template
+
+Standard employment agreement with customizable terms
+
+{{ partyA_name }}
+{{ partyB_name }}
+{{ start_date }}
+{{ salary }}
+{{ position }}
