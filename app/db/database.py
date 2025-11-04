@@ -58,6 +58,8 @@ async def create_tables():
         CaseSection, LegalTerm, KnowledgeDocument, KnowledgeChunk,
         QueryLog,
         ContractTemplate, Contract,
+        ContractLibrary, ContractTemplateLibrary, ContractRevision, ContractAIRequest,
+        UserSession, LoginHistory, SystemLog,
     )
     
     async with engine.begin() as conn:

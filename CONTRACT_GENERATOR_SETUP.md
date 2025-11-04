@@ -15,28 +15,43 @@ The following tables are automatically created on startup:
 - `contract_templates` - Stores template definitions
 - `contracts` - Stores generated contracts
 
-### Optional Dependencies
+### Required Dependencies for PDF Generation
 
-For full functionality, install these optional packages:
+For PDF contract generation, install the following:
 
+#### Python Packages
 ```bash
-# For DOCX template rendering (recommended)
-pip install docxtpl
+# Install Python dependencies (already in requirements.txt)
+pip install docxtpl docx2pdf weasyprint
+```
 
-# For HTML to PDF conversion (recommended)
-pip install weasyprint
+#### System Dependencies (Required for DOCX to PDF conversion)
 
-# LibreOffice for DOCX to PDF conversion (system-level, optional)
-# Install via system package manager:
-# Ubuntu/Debian: sudo apt-get install libreoffice
-# macOS: brew install libreoffice
-# Windows: Download from https://www.libreoffice.org/
+**Windows:**
+1. **LibreOffice (Recommended):**
+   - Download and install from https://www.libreoffice.org/
+   - Install to default location: `C:\Program Files\LibreOffice\`
+   - The system will automatically detect it
+
+2. **Alternative: Microsoft Word**
+   - If you have Microsoft Word installed, `docx2pdf` can use it via COM
+   - No additional installation needed
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt-get update
+sudo apt-get install libreoffice
+```
+
+**macOS:**
+```bash
+brew install libreoffice
 ```
 
 **Note:** The service includes fallbacks:
 - Without `docxtpl`: Uses basic python-docx for simple text replacement
 - Without `weasyprint`: Generates HTML files instead of PDFs
-- Without LibreOffice: Returns DOCX files instead of converting to PDF
+- **Without LibreOffice/Word: PDF conversion will fail** - This is a hard requirement for DOCX templates
 
 ### Environment Variables
 
@@ -141,9 +156,47 @@ The frontend is already integrated. Users can:
 ## Troubleshooting
 
 ### PDF generation fails
-- Check if LibreOffice is installed (for DOCX conversion)
+
+**Error: "PDF conversion failed. Please ensure LibreOffice is installed"**
+
+**On Windows:**
+1. Install LibreOffice:
+   - Download from https://www.libreoffice.org/download/
+   - Install to default location: `C:\Program Files\LibreOffice\`
+   - Restart your Python application/server after installation
+
+2. Verify installation:
+   ```powershell
+   # Check if LibreOffice is accessible
+   & "C:\Program Files\LibreOffice\program\soffice.exe" --version
+   ```
+
+3. Install Python package (if not already installed):
+   ```bash
+   pip install docx2pdf
+   ```
+
+4. If you have Microsoft Word installed instead:
+   - The `docx2pdf` package will automatically use Word via COM
+   - No additional configuration needed
+   - Just ensure `docx2pdf` is installed: `pip install docx2pdf`
+
+**On Linux/macOS:**
+```bash
+# Ubuntu/Debian
+sudo apt-get install libreoffice
+
+# macOS
+brew install libreoffice
+
+# Verify installation
+libreoffice --version
+```
+
+**Other checks:**
 - Check file permissions on storage directory
 - Review logs for specific error messages
+- Ensure the Python package is installed: `pip install docx2pdf`
 
 ### Template variables not loading
 - Verify template exists and is active

@@ -334,12 +334,27 @@ class TemplateService:
             else:
                 raise ValueError(f"Unsupported template format: {template.format}")
             
-            # Create contract record
+            # Ensure we store absolute path for reliable file access
+            pdf_path_abs = os.path.abspath(str(pdf_path))
+            
+            # Verify file exists before storing
+            if not os.path.exists(pdf_path_abs):
+                logger.error(f"Generated file does not exist at: {pdf_path_abs}")
+                raise RuntimeError(f"Generated contract file not found at: {pdf_path_abs}")
+            
+            # Determine file type for the response message
+            file_extension = Path(pdf_path_abs).suffix.lower()
+            is_pdf = file_extension == '.pdf'
+            is_docx = file_extension == '.docx'
+            
+            logger.info(f"Storing contract with file path: {pdf_path_abs} (exists: {os.path.exists(pdf_path_abs)})")
+            
+            # Create contract record with absolute path
             contract = await self.repository.create_contract(
                 template_id=template_id,
                 owner_id=owner_id,
                 filled_data=filled_data,
-                pdf_path=str(pdf_path),
+                pdf_path=pdf_path_abs,  # Store absolute path
                 status="generated"
             )
             
@@ -347,13 +362,24 @@ class TemplateService:
             
             # Generate URL (adjust based on your deployment)
             base_url = os.getenv("BACKEND_URL", "http://localhost:8000")
-            pdf_url = f"{base_url}/api/v1/templates/contracts/{contract.id}/download"
+            download_url = f"{base_url}/api/v1/templates/contracts/{contract.id}/download"
             
-            return {
+            result = {
                 "contract_id": contract.id,
-                "pdf_url": pdf_url,
+                "pdf_url": download_url,  # Keep pdf_url for backwards compatibility
+                "download_url": download_url,
                 "success": True
             }
+            
+            # Add file type information
+            if is_docx:
+                result["file_type"] = "docx"
+                result["message"] = "Contract generated successfully (DOCX format - PDF conversion not available)"
+                logger.warning(f"Contract {contract.id} generated as DOCX instead of PDF. LibreOffice/Word required for PDF conversion.")
+            elif is_pdf:
+                result["file_type"] = "pdf"
+            
+            return result
             
         except Exception as e:
             await self.db.rollback()
@@ -422,12 +448,22 @@ class TemplateService:
             temp_docx.close()
             
             # Convert DOCX to PDF using LibreOffice (or alternative)
-            pdf_path = await self._convert_docx_to_pdf(temp_docx.name)
-            
-            # Clean up temp DOCX
-            os.unlink(temp_docx.name)
-            
-            return pdf_path
+            try:
+                pdf_path = await self._convert_docx_to_pdf(temp_docx.name)
+                # Clean up temp DOCX if PDF conversion succeeded
+                os.unlink(temp_docx.name)
+                return pdf_path
+            except RuntimeError as e:
+                # PDF conversion failed - return DOCX as fallback
+                logger.warning(f"PDF conversion failed, returning DOCX file instead: {str(e)}")
+                # Keep the DOCX file and return its path
+                # Rename to a proper location instead of temp
+                docx_filename = f"{uuid.uuid4()}.docx"
+                docx_path = self.storage_path / docx_filename
+                import shutil
+                shutil.move(temp_docx.name, str(docx_path))
+                logger.info(f"Generated DOCX file at: {docx_path}")
+                return str(docx_path)
             
         except ImportError:
             # Fallback: use python-docx if docxtpl not available
@@ -452,10 +488,19 @@ class TemplateService:
             doc.save(temp_docx.name)
             temp_docx.close()
             
-            pdf_path = await self._convert_docx_to_pdf(temp_docx.name)
-            os.unlink(temp_docx.name)
-            
-            return pdf_path
+            try:
+                pdf_path = await self._convert_docx_to_pdf(temp_docx.name)
+                os.unlink(temp_docx.name)
+                return pdf_path
+            except RuntimeError as e:
+                # PDF conversion failed - return DOCX as fallback
+                logger.warning(f"PDF conversion failed, returning DOCX file instead: {str(e)}")
+                docx_filename = f"{uuid.uuid4()}.docx"
+                docx_path = self.storage_path / docx_filename
+                import shutil
+                shutil.move(temp_docx.name, str(docx_path))
+                logger.info(f"Generated DOCX file at: {docx_path}")
+                return str(docx_path)
     
     async def _generate_from_html(
         self,
@@ -532,8 +577,14 @@ class TemplateService:
         """
         import subprocess
         import platform
+        import asyncio
         
-        pdf_path = docx_path.replace(".docx", ".pdf")
+        # Ensure docx_path is a string and normalize path separators
+        docx_path = str(docx_path).replace('/', os.sep)
+        
+        # Generate PDF path in the same directory as DOCX
+        docx_path_obj = Path(docx_path)
+        pdf_path = str(docx_path_obj.with_suffix('.pdf'))
         
         # Determine LibreOffice command based on OS
         if platform.system() == "Windows":
@@ -582,21 +633,80 @@ class TemplateService:
                 continue  # Try next command
         
         # Try docx2pdf as fallback (Python library)
+        # Run in executor since convert() is blocking
         try:
             from docx2pdf import convert
-            convert(docx_path, pdf_path)
-            if os.path.exists(pdf_path):
-                logger.info(f"Successfully converted DOCX to PDF using docx2pdf: {pdf_path}")
-                return pdf_path
+            logger.info(f"Attempting docx2pdf conversion: {docx_path} -> {pdf_path}")
+            
+            # Ensure paths are absolute and normalized
+            docx_abs = os.path.abspath(docx_path)
+            pdf_abs = os.path.abspath(pdf_path)
+            
+            logger.debug(f"Absolute paths - DOCX: {docx_abs}, PDF: {pdf_abs}")
+            
+            # Run convert in executor to avoid blocking the event loop
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, convert, docx_abs, pdf_abs)
+            
+            # Check for PDF in multiple possible locations
+            possible_pdf_paths = [
+                pdf_abs,
+                pdf_path,
+                str(Path(docx_abs).with_suffix('.pdf')),
+                os.path.join(os.path.dirname(docx_abs), Path(docx_abs).stem + '.pdf')
+            ]
+            
+            pdf_found = None
+            for possible_path in possible_pdf_paths:
+                if os.path.exists(possible_path):
+                    pdf_found = possible_path
+                    break
+            
+            if pdf_found:
+                logger.info(f"Successfully converted DOCX to PDF using docx2pdf: {pdf_found}")
+                return pdf_found
+            else:
+                logger.error(f"docx2pdf convert() completed but PDF file not found")
+                logger.error(f"Checked paths: {possible_pdf_paths}")
+                raise RuntimeError(f"PDF file not created. Expected at: {pdf_abs}")
         except ImportError:
-            logger.warning("docx2pdf not available")
+            logger.warning("docx2pdf not available. Install with: pip install docx2pdf")
         except Exception as e:
-            logger.warning(f"docx2pdf conversion failed: {str(e)}")
+            error_msg = str(e)
+            error_type = type(e).__name__
+            logger.error(f"docx2pdf conversion failed [Type: {error_type}]: {error_msg}")
+            # Log full exception details for debugging
+            import traceback
+            logger.debug(f"docx2pdf full traceback:\n{traceback.format_exc()}")
+            
+            # On Windows, docx2pdf requires LibreOffice or MS Word
+            if platform.system() == "Windows":
+                if "LibreOffice" in error_msg or "soffice" in error_msg.lower():
+                    logger.warning("docx2pdf requires LibreOffice on Windows. Install from https://www.libreoffice.org/")
+                elif "Word" in error_msg or "COM" in error_msg or "comtypes" in error_msg.lower():
+                    logger.warning("docx2pdf COM conversion failed. Ensure Word is installed and accessible via COM")
+                    logger.warning("Try: 1) Close any open Word instances, 2) Restart the Python server")
+                elif "Permission" in error_msg or "access" in error_msg.lower():
+                    logger.warning("Permission error accessing Word. Try running as administrator or check COM permissions")
         
         # If all conversion methods fail, raise an error with helpful message
-        logger.error("All PDF conversion methods failed. LibreOffice or docx2pdf required.")
-        raise RuntimeError(
-            "PDF conversion failed. Please ensure LibreOffice is installed, "
-            "or install docx2pdf: pip install docx2pdf"
-        )
+        logger.error("All PDF conversion methods failed.")
+        
+        # Provide OS-specific installation instructions
+        if platform.system() == "Windows":
+            error_message = (
+                "PDF conversion failed. On Windows, you need to install either:\n"
+                "1. LibreOffice (recommended): Download from https://www.libreoffice.org/\n"
+                "2. Microsoft Word (for COM-based conversion)\n"
+                "Then install the Python package: pip install docx2pdf"
+            )
+        else:
+            error_message = (
+                "PDF conversion failed. Please install LibreOffice:\n"
+                "Ubuntu/Debian: sudo apt-get install libreoffice\n"
+                "macOS: brew install libreoffice\n"
+                "Or install docx2pdf Python package: pip install docx2pdf"
+            )
+        
+        raise RuntimeError(error_message)
 

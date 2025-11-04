@@ -182,6 +182,29 @@ async def database_exception_handler(request: Request, exc: DatabaseException) -
         "details": exc.details
     })
     
+    # Log to system_logs database
+    try:
+        from ..utils.system_logger import log_error
+        import traceback
+        
+        correlation_id = request.headers.get("X-Correlation-ID", "no-correlation-id")
+        
+        user_id = getattr(request.state, 'user', None)
+        user_id = user_id.id if user_id and hasattr(user_id, 'id') else None
+        
+        stack_trace = traceback.format_exc()
+        
+        await log_error(
+            message=f"Database exception: {exc.message}",
+            endpoint=request.url.path,
+            method=request.method,
+            correlation_id=correlation_id,
+            user_id=user_id,
+            stack_trace=stack_trace
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to log database exception to database: {str(log_err)}")
+    
     response = ErrorResponse(
         message="Database operation failed",
         errors=[ErrorDetail(field=exc.field, message="An internal error occurred")],
@@ -210,6 +233,30 @@ async def external_service_exception_handler(request: Request, exc: ExternalServ
         "field": exc.field,
         "details": exc.details
     })
+    
+    # Log to system_logs database
+    try:
+        from ..utils.system_logger import log_error
+        import traceback
+        
+        correlation_id = request.headers.get("X-Correlation-ID", "no-correlation-id")
+        service_name = exc.details.get("service", "Unknown")
+        
+        user_id = getattr(request.state, 'user', None)
+        user_id = user_id.id if user_id and hasattr(user_id, 'id') else None
+        
+        stack_trace = traceback.format_exc()
+        
+        await log_error(
+            message=f"External service error ({service_name}): {exc.message}",
+            endpoint=request.url.path,
+            method=request.method,
+            correlation_id=correlation_id,
+            user_id=user_id,
+            stack_trace=stack_trace
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to log external service exception to database: {str(log_err)}")
     
     response = ErrorResponse(
         message=exc.message,
@@ -292,6 +339,21 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
     """
     logger.warning(f"Integrity error: {str(exc)}")
     
+    # Log to system_logs database (as warning, not error, since these are usually user errors)
+    try:
+        from ..utils.system_logger import log_warning
+        
+        correlation_id = request.headers.get("X-Correlation-ID", "no-correlation-id")
+        
+        await log_warning(
+            message=f"Database integrity error: {str(exc)}",
+            endpoint=request.url.path,
+            method=request.method,
+            correlation_id=correlation_id
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to log integrity error to database: {str(log_err)}")
+    
     # Check for common integrity constraint violations
     error_msg = str(exc.orig) if hasattr(exc, 'orig') else str(exc)
     
@@ -335,6 +397,29 @@ async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError) -> JS
     """
     logger.error(f"SQLAlchemy error: {str(exc)}")
     
+    # Log to system_logs database
+    try:
+        from ..utils.system_logger import log_error
+        import traceback
+        
+        correlation_id = request.headers.get("X-Correlation-ID", "no-correlation-id")
+        
+        user_id = getattr(request.state, 'user', None)
+        user_id = user_id.id if user_id and hasattr(user_id, 'id') else None
+        
+        stack_trace = traceback.format_exc()
+        
+        await log_error(
+            message=f"SQLAlchemy error: {str(exc)}",
+            endpoint=request.url.path,
+            method=request.method,
+            correlation_id=correlation_id,
+            user_id=user_id,
+            stack_trace=stack_trace
+        )
+    except Exception as log_err:
+        logger.warning(f"Failed to log SQLAlchemy error to database: {str(log_err)}")
+    
     response = ErrorResponse(
         message="Database operation failed",
         errors=[ErrorDetail(message="An internal database error occurred")],
@@ -359,6 +444,29 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
         JSONResponse with generic error
     """
     logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
+    
+    # Log to system_logs database using the utility function
+    try:
+        from ..utils.system_logger import log_error
+        import traceback
+        
+        correlation_id = request.headers.get("X-Correlation-ID", "no-correlation-id")
+        user_id = getattr(request.state, 'user', None)
+        user_id = user_id.id if user_id and hasattr(user_id, 'id') else None
+        
+        stack_trace = traceback.format_exc()
+        
+        await log_error(
+            message=f"Unhandled exception: {str(exc)}",
+            endpoint=request.url.path,
+            method=request.method,
+            correlation_id=correlation_id,
+            user_id=user_id,
+            stack_trace=stack_trace
+        )
+    except Exception as log_err:
+        # Don't fail if logging fails
+        logger.warning(f"Failed to log error to database: {str(log_err)}")
     
     response = ErrorResponse(
         message="Internal server error",

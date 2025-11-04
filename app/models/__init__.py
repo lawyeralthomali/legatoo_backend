@@ -16,6 +16,13 @@ from .query_log import QueryLog
 from .case_analysis import CaseAnalysis
 from .support_ticket import SupportTicket, TicketStatus, TicketPriority
 from .contract_template import ContractTemplate, Contract
+from .contracts_library import (
+    ContractLibrary, ContractTemplateLibrary, ContractRevision, 
+    ContractAIRequest, ContractStatus
+)
+from .user_session import UserSession
+from .login_history import LoginHistory, LoginStatus
+from .system_log import SystemLog, LogLevel
 
 # Import all models to ensure they are registered with SQLAlchemy
 __all__ = [
@@ -57,6 +64,18 @@ __all__ = [
     # Contract Templates
     "ContractTemplate",
     "Contract",
+    # Contracts Library (Enhanced)
+    "ContractLibrary",
+    "ContractTemplateLibrary",
+    "ContractRevision",
+    "ContractAIRequest",
+    "ContractStatus",
+    # Analytics & Monitoring
+    "UserSession",
+    "LoginHistory",
+    "LoginStatus",
+    "SystemLog",
+    "LogLevel",
 ]
 
 

@@ -20,6 +20,7 @@ from .models import (
     CaseSection, LegalTerm, KnowledgeDocument, KnowledgeChunk,
     SupportTicket,
     ContractTemplate, Contract,
+    ContractLibrary, ContractTemplateLibrary, ContractRevision, ContractAIRequest, ContractStatus,
 )
 
 # Import routers
@@ -34,6 +35,8 @@ from .routes.legal_laws_router import router as legal_laws_router
 from .routes.legal_cases_router import router as legal_cases_router
 from .routes.support_router import router as support_router
 from .routes.templates_router import router as templates_router
+from .routes.analytics_router import router as analytics_router
+from .routes.contracts_library_router import router as contracts_library_router
 #from .routes.rag_router import router as rag_router
 from pydantic import BaseModel
 from typing import List
@@ -343,6 +346,8 @@ app.include_router(legal_laws_router)  # Legal Laws Management (includes documen
 app.include_router(legal_cases_router)  # Legal Cases Ingestion Pipeline
 app.include_router(support_router, prefix="/api/v1")  # Support Tickets Management
 app.include_router(templates_router)  # Contract Templates Management
+app.include_router(contracts_library_router, prefix="/api/v1")  # Contracts Library (Enhanced)
+app.include_router(analytics_router)  # Admin Analytics
 #app.include_router(rag_router)  # RAG Management
 @app.on_event("startup")
 async def startup_event():
@@ -354,6 +359,18 @@ async def startup_event():
     EmbeddingConfig.log_configuration()
     
     await create_tables()
+    
+    # Log system startup event
+    try:
+        from .utils.system_logger import log_info
+        await log_info(
+            message="Application started successfully",
+            endpoint="/startup",
+            method="SYSTEM"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to log startup event: {str(e)}")
+    
     logger.info("Application started successfully!")
 
 @app.get("/")

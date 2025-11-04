@@ -70,7 +70,8 @@ async def signup(
 async def login(
     login_data: LoginRequest,
     request: Request,
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service: AuthService = Depends(get_auth_service),
+    db: AsyncSession = Depends(get_db)
 ) -> ApiResponse:
     """
     Authenticate user with enhanced security features.
@@ -79,6 +80,7 @@ async def login(
         login_data: Login credentials
         request: FastAPI request object for correlation ID
         auth_service: Authentication service (injected)
+        db: Database session
         
     Returns:
         ApiResponse with authentication data and tokens
@@ -86,12 +88,83 @@ async def login(
     Raises:
         HTTPException: For authentication errors
     """
+    from ..utils.session_tracker import log_login_attempt
+    from ..models.login_history import LoginStatus
+    
+    # Get IP address and user agent
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    
     try:
-        return await auth_service.login(login_data)
-    except ApiException:
+        result = await auth_service.login(login_data)
+        
+        # Log successful login
+        user_id = None
+        # ApiResponse is a Pydantic model, so access attributes directly
+        if result.success and result.data and isinstance(result.data, dict) and result.data.get("user"):
+            user_id = result.data["user"]["id"]
+        
+        if user_id:
+            await log_login_attempt(
+                db=db,
+                user_id=user_id,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                status=LoginStatus.SUCCESS
+            )
+            # Also log to system logs
+            try:
+                from ..utils.system_logger import log_info
+                correlation_id = request.headers.get("X-Correlation-ID", "no-correlation-id")
+                await log_info(
+                    message=f"User {user_id} logged in successfully",
+                    endpoint="/api/v1/auth/login",
+                    method="POST",
+                    user_id=user_id,
+                    correlation_id=correlation_id,
+                    db=db
+                )
+            except Exception:
+                pass  # Don't fail if system logging fails
+        
+        return result
+        
+    except ApiException as e:
+        # Log failed login attempt
+        failure_reason = str(e.payload.get("message", "Unknown error")) if hasattr(e, 'payload') and isinstance(e.payload, dict) else "Unknown error"
+        await log_login_attempt(
+            db=db,
+            user_id=None,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            status=LoginStatus.FAILED,
+            failure_reason=failure_reason
+        )
+        # Also log to system logs
+        try:
+            from ..utils.system_logger import log_warning
+            correlation_id = request.headers.get("X-Correlation-ID", "no-correlation-id")
+            await log_warning(
+                message=f"Failed login attempt: {failure_reason}",
+                endpoint="/api/v1/auth/login",
+                method="POST",
+                correlation_id=correlation_id,
+                db=db
+            )
+        except Exception:
+            pass  # Don't fail if system logging fails
         # Re-raise ApiException as-is (will be handled by global handler)
         raise
     except Exception as e:
+        # Log failed login attempt
+        await log_login_attempt(
+            db=db,
+            user_id=None,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            status=LoginStatus.FAILED,
+            failure_reason="Internal server error"
+        )
         logger.error(f"Unexpected error in login: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 

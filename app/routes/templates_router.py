@@ -285,9 +285,10 @@ async def download_contract(
     current_user_id: int = Depends(get_current_user_id)
 ):
     """
-    Download generated contract PDF.
+    Download generated contract (PDF or DOCX).
     
     Validates user owns the contract before serving.
+    Supports both PDF and DOCX file formats.
     """
     from fastapi.responses import FileResponse
     
@@ -307,17 +308,94 @@ async def download_contract(
                 detail="Access denied"
             )
         
-        if not contract.pdf_path or not os.path.exists(contract.pdf_path):
+        if not contract.pdf_path:
+            logger.error(f"Contract {contract_id} has no file path stored")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Contract file not found"
+                detail="Contract file path not found in database"
             )
         
-        return FileResponse(
-            contract.pdf_path,
-            media_type="application/pdf",
-            filename=f"contract_{contract_id}.pdf"
-        )
+        # Normalize the file path - handle both relative and absolute paths
+        file_path = str(contract.pdf_path)
+        
+        # Try absolute path first
+        if not os.path.isabs(file_path):
+            # Try relative to storage path
+            from pathlib import Path
+            storage_path = Path(os.getenv("CONTRACT_STORAGE_PATH", "./storage/generated"))
+            possible_paths = [
+                os.path.abspath(file_path),
+                str(storage_path / file_path),
+                os.path.join(str(storage_path), file_path),
+                file_path
+            ]
+        else:
+            possible_paths = [file_path]
+        
+        # Find the actual file
+        file_path = None
+        for path in possible_paths:
+            normalized_path = os.path.normpath(path)
+            if os.path.exists(normalized_path):
+                file_path = normalized_path
+                logger.info(f"Found contract file at: {file_path}")
+                break
+        
+        if not file_path or not os.path.exists(file_path):
+            logger.error(f"Contract file not found for contract {contract_id}")
+            logger.error(f"Stored path: {contract.pdf_path}")
+            logger.error(f"Checked paths: {possible_paths}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Contract file not found at stored path: {contract.pdf_path}"
+            )
+        
+        # Determine media type and filename based on file extension
+        if file_path.endswith('.pdf'):
+            media_type = "application/pdf"
+            filename = f"contract_{contract_id}.pdf"
+        elif file_path.endswith('.docx'):
+            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            filename = f"contract_{contract_id}.docx"
+        elif file_path.endswith('.html') or file_path.endswith('.htm'):
+            media_type = "text/html; charset=utf-8"
+            filename = f"contract_{contract_id}.html"
+        else:
+            # Default to PDF for backwards compatibility
+            media_type = "application/octet-stream"
+            filename = f"contract_{contract_id}"
+        
+        # Use Response with proper headers for download/inline viewing
+        import aiofiles
+        from fastapi.responses import Response
+        
+        try:
+            # Read file content
+            async with aiofiles.open(file_path, 'rb') as f:
+                file_content = await f.read()
+            
+            # Set appropriate Content-Disposition based on file type
+            # PDFs should display inline, DOCX should download
+            if file_path.endswith('.pdf'):
+                content_disposition = f'inline; filename="{filename}"'
+            else:
+                content_disposition = f'attachment; filename="{filename}"'
+            
+            return Response(
+                content=file_content,
+                media_type=media_type,
+                headers={
+                    "Content-Disposition": content_disposition,
+                    "Content-Length": str(len(file_content)),
+                    "Cache-Control": "private, max-age=3600"
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error reading contract file {file_path}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to read contract file: {str(e)}"
+            )
         
     except HTTPException:
         raise

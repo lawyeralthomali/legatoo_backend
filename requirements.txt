@@ -44,6 +44,7 @@ PyYAML==6.0.3
 regex==2025.9.18
 python-docx==1.1.2
 docxtpl>=0.20.1  # DOCX template rendering for contract generation
+docx2pdf>=0.1.8  # DOCX to PDF conversion (requires LibreOffice or MS Word on Windows)
 weasyprint>=66.0  # HTML to PDF conversion for contract generation
 openai==1.59.5
 google-genai>=0.3.0  # For File API (PDF/DOC extraction)
